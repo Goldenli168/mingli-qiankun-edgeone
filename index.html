@@ -193,6 +193,19 @@
   .shensha-name { font-weight: bold; }
   .shensha-pos { font-size: 0.82em; opacity: 0.7; }
 
+  .pillar-analysis { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+  .pillar-analysis h3 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 14px; }
+  .pillar-analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+  .pillar-analysis-card { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .pa-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .pa-pos { color: var(--gold); font-size: 0.9em; font-weight: bold; letter-spacing: 2px; }
+  .pa-ganzhi { color: var(--gold-light); font-size: 1.1em; font-weight: bold; }
+  .pa-wx { color: var(--text-dim); font-size: 0.78em; }
+  .pa-detail { color: var(--text); font-size: 0.85em; line-height: 1.7; }
+  .pa-sub { color: var(--text-dim); font-size: 0.76em; margin-top: 4px; }
+
+  .dayun-shensha { color: var(--purple); font-size: 0.8em; margin-top: 6px; line-height: 1.5; }
+
   .gan-jia,.gan-yi { color: #2ecc71; }
   .gan-bing,.gan-ding { color: #e74c3c; }
   .gan-wu,.gan-ji { color: #c9a84c; }
@@ -290,6 +303,26 @@
         <input type="text" id="birthplace" placeholder="如：北京、上海、广州…">
       </div>
     </div>
+    <div class="form-row" id="solarTimeRow">
+      <div class="form-group" style="flex:1">
+        <label>公历出生时间（选填）</label>
+        <input type="number" id="solarHour" min="1" max="12" placeholder="时" style="width:100%">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>&nbsp;</label>
+        <input type="number" id="solarMinute" min="0" max="59" placeholder="分" style="width:100%">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>&nbsp;</label>
+        <select id="ampm" style="width:100%">
+          <option value="AM">上午 AM</option>
+          <option value="PM">下午 PM</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1; display:flex;align-items:flex-end;padding-bottom:2px">
+        <small style="color:var(--text-dim)">填写后优先用于时辰计算</small>
+      </div>
+    </div>
     <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
   </div>
 </div>
@@ -301,6 +334,10 @@
 
 <div class="result-section" id="result">
   <div class="bazi-plate" id="baziPlate"></div>
+  <div class="pillar-analysis" id="pillarAnalysis" style="display:none">
+    <h3>☰ 四柱单独解读</h3>
+    <div class="pillar-analysis-grid" id="pillarAnalysisGrid"></div>
+  </div>
   <div class="overview-card" id="overviewCard" style="display:none">
     <h3>☰ 命理总论</h3>
     <div class="overview-text" id="overviewText"></div>
@@ -358,6 +395,16 @@ function doAnalyze() {
   var hour  = document.getElementById('hour').value;
   var minute = document.getElementById('minute').value || 0;
   var bp    = document.getElementById('birthplace').value;
+  // 公历时间：如填写则优先转换为24小时制
+  var sh = parseInt(document.getElementById('solarHour').value) || 0;
+  var sm = parseInt(document.getElementById('solarMinute').value) || 0;
+  var ampm = document.getElementById('ampm').value;
+  if (sh > 0) {
+    if (ampm === 'PM' && sh < 12) hour = sh + 12;
+    else if (ampm === 'AM' && sh === 12) hour = 0;
+    else hour = sh;
+    minute = sm;
+  }
   if (!year || !month || !day) { alert('请填写完整的出生日期'); return; }
 
   var btn = document.getElementById('btnAnalyze');
@@ -422,6 +469,32 @@ function renderResult(data, birthYear) {
     '</div>';
   }
   plate.innerHTML = plateHtml;
+
+  // 四柱单独分析
+  var paData = mp['四柱分析'] || [];
+  var paSection = document.getElementById('pillarAnalysis');
+  var paGrid = document.getElementById('pillarAnalysisGrid');
+  if (paData.length > 0) {
+    paGrid.innerHTML = paData.map(function(p) {
+      var g = p['干支'][0], z = p['干支'][1];
+      var shenshaTags = (p['神煞']||[]).map(function(s) {
+        return '<span style="color:var(--gold);font-size:0.75em">●' + s + '</span>';
+      }).join(' ');
+      return '<div class="pillar-analysis-card">' +
+        '<div class="pa-header">' +
+          '<span class="pa-pos">' + p['宫位'] + '</span>' +
+          '<span class="pa-ganzhi"><span class="' + ganCls(g) + '">' + g + '</span><span class="' + zhiCls(z) + '">' + z + '</span></span>' +
+          '<span class="pa-wx">' + (p['五行']||'') + ' · ' + (p['天干十神']||'') + '</span>' +
+        '</div>' +
+        '<div class="pa-detail">' + p['解读'] + '</div>' +
+        '<div class="pa-sub">藏干：' + (p['藏干']||'') + ' | 纳音：' + (p['纳音']||'') + (shenshaTags ? ' | 神煞：' + shenshaTags : '') + '</div>' +
+        '<div class="pa-sub" style="color:var(--purple)">宫位含义：' + (p['宫位含义']||'') + '</div>' +
+      '</div>';
+    }).join('');
+    paSection.style.display = 'block';
+  } else {
+    paSection.style.display = 'none';
+  }
 
   // 命理总论
   var overview = mp['命理总论'] || '';
@@ -556,7 +629,8 @@ function renderResult(data, birthYear) {
   // 大运卡片
   var dayunCards = document.getElementById('dayunCards');
   var dyList = mp['大运分析'] || [];
-  dayunCards.innerHTML = dyList.map(function(d) {
+  var dyShensha = mp['大运神煞'] || [];
+  dayunCards.innerHTML = dyList.map(function(d, idx) {
     var score = d['评分'] || 60;
     var scoreCls = score >= 75 ? 'score-daji' : (score >= 60 ? 'score-ji' : (score >= 45 ? 'score-ping' : (score >= 30 ? 'score-xj' : 'score-xiong')));
     var dims = d['各维度'] || {};
@@ -591,6 +665,7 @@ function renderResult(data, birthYear) {
       '<div class="dayun-summary">' + (d['概述']||'') + '</div>' +
       '<div class="dayun-dims">' + dimHtml + '</div>' +
       quoteHtml +
+      (dyShensha[idx] && dyShensha[idx].length > 0 ? '<div class="dayun-shensha">🔮 神煞影响：' + dyShensha[idx].join('；') + '</div>' : '') +
       '<button class="dayun-ln-btn" onclick="toggleLiunian(this, ' + d['步数'] + ')">📅 展开流年</button>' +
       '<table class="liunian-table" id="lnTable' + d['步数'] + '">' +
         '<thead><tr><th>年份</th><th>干支</th><th>天干十神</th><th>地支十神</th><th>评分</th><th>简评</th><th>四维指引</th></tr></thead>' +
