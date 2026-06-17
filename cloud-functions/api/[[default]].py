@@ -37,6 +37,7 @@ def analyze():
         month = int(data["month"])
         day   = int(data["day"])
         hour  = int(data.get("hour", 12))
+        minute = int(data.get("minute", 0) or 0)
         sex   = data.get("sex", "男")
         birthplace = data.get("birthplace", "")
     except (KeyError, ValueError):
@@ -49,7 +50,7 @@ def analyze():
     if not (1 <= day <= 31):
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
-    result = full_analysis(year, month, day, hour, sex, birthplace)
+    result = full_analysis(year, month, day, hour, sex, birthplace, minute)
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response

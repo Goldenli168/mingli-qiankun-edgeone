@@ -48,7 +48,7 @@ def lookup_coords(birthplace):
             return CITY_COORDS[city]
     return None, None
 
-def adjust_to_solar_time(beijing_hour, longitude, birth_year, birth_month, birth_day):
+def adjust_to_solar_time(beijing_hour, beijing_minute, longitude, birth_year, birth_month, birth_day):
     """
     根据出生地经度，将北京时间调整为当地真太阳时
     返回: (调整后的小时数, 是否跨日调整, 跨日偏移天数)
@@ -57,22 +57,24 @@ def adjust_to_solar_time(beijing_hour, longitude, birth_year, birth_month, birth
     公式: 真太阳时 ≈ 北京时间 + (经度 - 120) × 4分钟
     """
     if longitude is None:
-        return beijing_hour, False, 0  # 无出生地信息，默认北京时间
+        return beijing_hour, beijing_minute, False, 0
 
-    # 时间偏移（小时）
-    time_offset = (longitude - 120.0) * 4.0 / 60.0
-    true_hour = beijing_hour + time_offset
+    time_offset = (longitude - 120.0) * 4.0  # 分钟偏移
+    total_minutes = beijing_hour * 60 + beijing_minute + time_offset
+    true_hour = total_minutes / 60.0
+
+    true_minute = total_minutes % 60
 
     day_offset = 0
-    # 处理跨日
-    if true_hour >= 24:
-        true_hour -= 24
-        day_offset = 1
-    elif true_hour < 0:
-        true_hour += 24
-        day_offset = -1
+    if total_minutes >= 24 * 60:
+        true_hour = (total_minutes % (24 * 60)) / 60.0
+        day_offset = int(total_minutes / (24 * 60))
+    elif total_minutes < 0:
+        total_positive = total_minutes + ((-total_minutes // (24 * 60)) + 1) * 24 * 60
+        true_hour = total_positive / 60.0
+        day_offset = -((-total_minutes // (24 * 60)) + 1)
 
-    return true_hour, (day_offset != 0), day_offset
+    return true_hour, true_minute, (day_offset != 0), day_offset
 
 
 # ===== 天干地支 =====
@@ -498,14 +500,14 @@ def hour_pillar(day_gan, hour):
     return GAN[(base + zi) % 10], z
 
 
-def get_four_pillars(year, month, day, hour, birthplace=""):
+def get_four_pillars(year, month, day, hour, birthplace="", minute=0):
     """
     获取四柱，支持出生地真太阳时校正。
     birthplace: 出生城市名称，为空则默认北京时间（东八区标准时）
     """
     # 真太阳时校正
     lon, lat = lookup_coords(birthplace)
-    true_hour, crossed_day, day_offset = adjust_to_solar_time(hour, lon, year, month, day)
+    true_hour, true_minute, crossed_day, day_offset = adjust_to_solar_time(hour, minute, lon, year, month, day)
 
     # 如果跨日，调整日期
     actual_year, actual_month, actual_day = year, month, day
@@ -641,34 +643,45 @@ def analyze_bazi(fp, sex="男"):
           "申": "金", "酉": "金", "戌": "土", "亥": "水", "子": "水", "丑": "土"}
     deling = sw.get(mz) == dwx
 
-    # 得地: 日支藏干中有与日主同五行的天干
-    dc_list = ZHICANG[dz]
-    dedi = any(WXG.get(c, "") == dwx for c in dc_list)
+    # 得令: 月支本气（藏干首气）五行与日主相同即为得令
+    # 这才是子平真诠的"得月令之气"——不是看地支表面五行，而是看月支所藏之本气
+    mz_cang_benqi = ZHICANG[mz][0]  # 月支本气（藏干第一字）
+    deling = WXG.get(mz_cang_benqi, "") == dwx
 
-    # 得势: 其他三柱天干中有比劫或印绶
+    # 得地: 四柱任一地支藏干中包含与日主同五行的天干即为有根
+    # 传统以日支为主要根据地，但年、月、时支藏干有根也算得地
+    dedi_zhi = []  # 记录哪些地支有根
+    for p in POS:
+        pz = fp[p][1]
+        cang_list = ZHICANG[pz]
+        if any(WXG.get(c, "") == dwx for c in cang_list):
+            dedi_zhi.append({"柱": p, "地支": pz, "藏干": [c for c in cang_list if WXG.get(c, "") == dwx]})
+    dedi = len(dedi_zhi) > 0
+
+    # 得势: 其他三柱天干中有比劫或印绶（生扶日主者）
     others = [fp[p][0] for p in POS if p != "day"]
     bj = {"比肩", "劫财"}
     yn = {"正印", "偏印"}
-    deshi = any(SHISHEN[dg][g] in bj or SHISHEN[dg][g] in yn for g in others)
+    deshi_gans = [g for g in others if SHISHEN[dg][g] in bj or SHISHEN[dg][g] in yn]
+    deshi = len(deshi_gans) > 0
 
-    # 综合旺衰评分(考虑藏干力量)
-    # 得令(月令): 3分
-    # 得地(日支有根): 2分
-    # 得势(有比劫/印绶): 2分
-    # 月支藏干中有生扶: +1分
-    # 年支/时支藏干有生扶: 各+0.5分
-    # 生我者(印绶五行): 金->土, 木->水, 水->金, 火->木, 土->火
+    # 综合旺衰评分
+    # 得令(月支本气得令): 3分 — 最重要的判断因素
+    # 得地(有根): 日支有根2分，其他支有根各1分
+    # 得势(比劫印绶扶助): 每个扶助天干1分
     sheng_wo = {"金": "土", "木": "水", "水": "金", "火": "木", "土": "火"}
-    score = (3 if deling else 0) + (2 if dedi else 0) + (2 if deshi else 0)
-    # 月支藏干生扶加分(与日主同五行或生我者)
-    mz_cang = ZHICANG[mz]
-    if any(WXG.get(c, "") == dwx or WXG.get(c, "") == sheng_wo.get(dwx, "") for c in mz_cang):
-        score += 1
-    # 年支/时支藏干生扶加分
-    for pos_zhi in [fp["year"][1], fp["hour"][1]]:
-        cang = ZHICANG[pos_zhi]
-        if any(WXG.get(c, "") == dwx or WXG.get(c, "") == sheng_wo.get(dwx, "") for c in cang):
-            score += 0.5
+    score = (3 if deling else 0)
+    # 得地评分
+    for d in dedi_zhi:
+        if d["柱"] == "day":
+            score += 2  # 日支为自身坐根，力量最强
+        else:
+            score += 1  # 年、月、时支有根
+    # 得势评分
+    score += len(deshi_gans)
+    # 月支藏干生扶额外加分
+    if any(WXG.get(c, "") == dwx or WXG.get(c, "") == sheng_wo.get(dwx, "") for c in mz_cang_benqi):
+        score += 0.5
     rst = "身强" if score >= 5 else ("中和" if score >= 3 else "身弱")
 
     # 喜用神 — 子平命理核心算法
@@ -1308,6 +1321,33 @@ def _dayun_detail(ssg, ssz, bz, sex, score, age_start=0, age_end=9):
         "比肩": f"比肩运中体质不错，但竞争压力需调节。《滴天髓》言：「比肩帮身，身旺则忌。」建议：① 通过运动释放竞争焦虑 ② 团队运动（篮球、足球）有助于舒缓压力 ③ 避免因为攀比而过度训练导致运动损伤。",
         "劫财": f"劫财运中需防血光之灾和手术风险。《子平真诠》云：「劫财阳刃。」此运：① 远离危险场所 ② 如果不幸需要手术，选择口碑好的医院 ③ 购买意外险和医疗险作为保障。",
     }
+    # 子女专栏 — 替代原「学业」维度，根据年龄分流
+    children_desc_adult = {
+        "正官": "子女星得力，此运中子女缘分深厚，子女乖巧听话有上进心。《三命通会》云：「官杀为子息，得地则贤。」计划生育的绝佳时机，建议把握。",
+        "七杀": "七杀为子女星，此运中子女个性刚强有主见，管教需刚柔并济，不宜高压。子女成年后有出人头地之志，但也可能与你产生代际冲突。",
+        "正财": f"财星运中{'妻财得力' if sex == '男' else '自身经济稳定'}，为养育子女提供良好物质基础。此运适合计划生育，子女成长环境优渥，大中小学阶段的費用无忧。",
+        "偏财": f"偏财运中{'异性缘旺' if sex == '男' else '人脉广博'}，需平衡对子女的关注和社交的精力。子女在宽松环境中更能发挥创造性，但也要防范因疏于管教导致的偏差行为。",
+        "食神": "食神为子女福星，《滴天髓》言：「食神吐秀，福禄双全。」此运子女聪明伶俐，家庭氛围温馨融洽。若计划生育，此运是最佳时机——子女体质和智力都会有良好表现。夫妻性生活质量在此运中也处于高峰。",
+        "伤官": "伤官运中子女聪明但可能叛逆。《滴天髓》提醒：「伤官见官。」教育子女需讲究方式方法，正面引导优于高压管教。此运中若计划怀孕，需注意孕期情绪管理和产检规律。子女在创意、艺术领域可能有天赋。",
+        "正印": "印运中子女得长辈庇护，成长环境稳定。《滴天髓》云：「印绶相生。」此运子女学业运佳，易得名师指点和贵人扶持。如果你的子女正处于学龄期，此运中他们的成绩会有明显提升。夫妻性生活和谐但不频繁，更注重精神交流。",
+        "偏印": "偏印运中子女思维独特，可能在常规教育体系中不太适应，但在特定领域有超常天赋。家长应顺势引导而非强行纠正。《三命通会》云：「枭神夺食」，需注意子女饮食营养和身心健康发展。若备孕中，偏印运可能需要更多耐心——受孕可能需要借助现代医学辅助。",
+        "比肩": "比肩运中子女与同辈竞争意识强，兄弟姐妹之间可能互别苗头。《滴天髓》言：「比肩争财。」家长需公平对待每个孩子。此运中若有多子女家庭，建议给每个孩子单独的关注和鼓励，避免长期比较。",
+        "劫财": "劫财运中子女精力旺盛但可能有破坏倾向，需加强安全教育和纪律意识。《子平真诠》云：「劫财争财。」此运教育子女重在培养责任感和同理心。不建议此运中追加生育——经济压力可能增大。",
+    }
+    # 18岁以下 — 生殖健康/晚辈沟通
+    children_young_desc = {
+        "正官": "少年时期官星护身，生殖系统发育正常。与晚辈（表弟妹、学弟学妹等）关系融洽，有天然的领导气质，在集体活动中常被选为小组长或班干部。",
+        "七杀": "少年行七杀运需注意：① 青春期激素波动可能导致情绪起伏，家长应给予正确引导 ② 体育运动时注意防护生殖器区域 ③ 与年幼者相处时容易急躁主导，需要培养耐心和同理心。",
+        "正财": "少年体质发育良好、营养均衡，为成年后的生育能力打下良好基础。与晚辈沟通能力强，适合担任班干部或团队leader角色。家长可适时进行性教育启蒙。",
+        "偏财": "少年偏财运社交活跃，在同龄人中受欢迎。生殖健康方面需注意个人卫生习惯，青春期教育要及时跟上。与年幼者相处自然放松，容易成为孩子们的「大哥哥/大姐姐」。",
+        "食神": "少年食神运是生长发育的黄金期——胃口好、体质佳，生殖系统按正常节奏发育。与年幼者相处时温和体贴，父母可以放心让你帮忙照看更小的孩子。",
+        "伤官": "少年伤官运精力充沛但易冲动，需特别注意体育运动中的自我保护。与晚辈相处时有「老大」心态，容易发号施令而非平等沟通——学会倾听和分享是此运的重要成长课题。",
+        "正印": "少年印运中身体得到良好养护，生殖系统正常发育。与晚辈的关系建立在知识分享基础上——你可能会成为学弟学妹眼中的「学霸榜样」。家长注意不要给孩子过大学习压力。",
+        "偏印": "少年偏印运思维早熟，对性教育和生命科学可能产生超越年龄的好奇——家长应给予正确引导而非回避。与年幼者交流偏少，宜通过共同兴趣（如科幻、编程）建立连接。",
+        "比肩": "少年比肩运中与同龄人打成一片，在集体活动中自然学会与人合作和竞争。生殖发育正常。体育活动中注意运动强度，避免因为和同伴「较劲」而超量训练。",
+        "劫财": "少年劫财运活动量大、精力旺盛，需特别关注运动安全——尤其是足球、篮球等对抗性运动中保护关键部位。与年幼者可能有竞争意识——学会分享和谦让是此运的核心课题。家长的性教育和安全教育要及早跟上。",
+    }
+    # 学业描述（25岁前「事业」卡片使用）
     study_desc = {
         "正官": "官运中利考试、考编、公考。《滴天髓》云：「正官配印，名利双收。」适合：① 公务员/事业编考试 ② 行业资格认证 ③ 进修管理类课程。重点：守正笃学，不走捷径。",
         "七杀": "杀运中学习压力大但效率高，适合「高压集训」式学习。化压力为动力，可在短时间内突破瓶颈。适合：① 突击考证 ② 考研/考博 ③ 攻克技术难题。",
@@ -1336,13 +1376,29 @@ def _dayun_detail(ssg, ssz, bz, sex, score, age_start=0, age_end=9):
     def _pick(d, k1):
         return d.get(k1, "此运平稳，宜安分守己。")
 
-    # 根据天干十神为主、地支十神为辅生成分析
+    avg_age = (age_start + age_end) / 2
+
+    # 根据年龄分层决定「事业」和「子女」维度来源
+    if avg_age < 25:
+        # 25岁前：事业 = 学业/升学为主
+        career_text = _pick(study_desc, ssg)
+    else:
+        # 25岁后：正常事业分析
+        career_text = _pick(career_desc, ssg)
+
+    if avg_age >= 18:
+        # 18岁以上：子女/生育/夫妻生活质量
+        children_text = _pick(children_desc_adult, ssg)
+    else:
+        # 18岁以下：生殖健康/晚辈沟通
+        children_text = _pick(children_young_desc, ssg)
+
     detail = {
         "财富": _pick(wealth_desc, ssg),
-        "事业": _pick(career_desc, ssg),
+        "事业": career_text,
         "婚姻": _pick(marriage_desc, ssg),
         "健康": _pick(health_desc, ssg),
-        "学业": _pick(study_desc, ssg),
+        "子女": children_text,
         "人际": _pick(social_desc, ssg),
     }
 
@@ -1351,7 +1407,10 @@ def _dayun_detail(ssg, ssz, bz, sex, score, age_start=0, age_end=9):
         if ssz in ("偏财", "正财"):
             detail["财富"] += f" 地支{ssz}暗藏，有隐性财务机会或隐性支出，需仔细记账。"
         elif ssz in ("正印", "偏印"):
-            detail["学业"] += f" 地支{ssz}暗助，学习有暗中贵人或悟性超常。"
+            if avg_age < 25:
+                detail["事业"] += f" 地支{ssz}暗助，学习有暗中贵人或悟性超常。"
+            else:
+                detail["子女"] += f" 地支{ssz}暗助，子女或晚辈方面有贵人暗中扶持。"
         elif ssz == "七杀":
             detail["健康"] += " 地支暗藏七杀，需提防潜伏的健康风险和意外。"
         elif ssz in ("正官",):
@@ -1363,30 +1422,16 @@ def _dayun_detail(ssg, ssz, bz, sex, score, age_start=0, age_end=9):
 
     # 年龄阶段特殊补充
     stage, stage_desc = _age_stage(age_start, age_end)
-    avg_age = (age_start + age_end) / 2
     if stage == "少年":
-        # 少年期: 学业和健康最重要，偏印=聪明好学而非凶
         if ssg == "偏印":
-            detail["学业"] = detail["学业"].replace("偏印运中思维独特，适合研究创新。但需防枭神夺食，不宜贪多。",
+            detail["事业"] = detail["事业"].replace("偏印运中思维独特，适合研究创新。但需防枭神夺食，不宜贪多。",
                 "少年行偏印运，思维独特，领悟力极强，利读书学习。宜专心学业，可脱颖而出。")
         detail["婚姻"] = "少年时期婚姻尚早，此运主要影响家庭氛围和父母关系。"
     elif stage == "青春":
-        # 青春期: 学业+人际+感情萌芽
         if ssg in ("正财", "偏财") and sex == "男":
             detail["婚姻"] = "青春时期感情萌芽，异性缘初现。宜以学业为重，不可过早沉溺。"
-    elif stage == "青年":
-        # 青年期: 事业+婚姻
-        pass  # 默认描述已经很适合
-    elif stage == "壮年":
-        # 壮年期: 财富+事业+子女
-        pass
-    elif stage == "中年":
-        # 中年期: 健康+子女
-        if ssg == "伤官":
-            detail["健康"] += " 中年需特别注意身体信号，不宜过劳。"
     elif stage == "晚年":
-        # 晚年期: 健康+福泽
-        detail["学业"] = "晚年宜修身养性，含饴弄孙，享受人生智慧。"
+        detail["子女"] = "晚年含饴弄孙，子女已长大成人。此运重在享受天伦之乐，福泽安康为上。"
 
     return detail
 
@@ -1524,36 +1569,84 @@ def calc_liunian_list(birth_year, fp, bz, dy_step_info=None):
             score += 5
         score = max(10, min(95, score))
 
-        # 简评
-        if score >= 70:
-            brief = "流年吉利"
-        elif score >= 55:
-            brief = "流年平稳"
-        elif score >= 40:
-            brief = "流年欠佳"
-        else:
-            brief = "流年不利"
+        # 简评 — 结合冲合关系与十神含义生成有意义的概述
+        brief_parts = []
+        if ssg in ("正官", "七杀"):
+            brief_parts.append("事业上有变动或晋升机会" if score >= 55 else "职场压力增大需稳守")
+        if ssg in ("正财", "偏财"):
+            brief_parts.append("财运有起色宜把握" if score >= 55 else "财运波动需谨慎理财")
+        if ssg in ("正印", "偏印"):
+            brief_parts.append("学习充电贵人相助" if score >= 55 else "思虑过重宜简化事务")
+        if ssg in ("食神", "伤官"):
+            brief_parts.append("才华展露机遇显现" if score >= 55 else "言行需谨慎避免口舌")
+        if ssg in ("比肩", "劫财"):
+            brief_parts.append("人脉扩展合作共赢" if score >= 55 else "竞争激烈防破财纠纷")
+        if chong:
+            brief_parts.append(f"逢冲变动较大")
+        if he:
+            brief_parts.append(f"逢合有助力机缘")
+        brief = "；".join(brief_parts) if brief_parts else ("流年平稳" if score >= 55 else "流年需谨慎")
 
-        # 重点提示
+        # 四维核心指引 — 事业/财富/子女/健康
+        dim_tips = {}
+
+        # 事业维度
+        if ssg in ("正官", "七杀"):
+            dim_tips["事业"] = "💼 此年事业面临转折——" + ("把握晋升窗口或跳槽机会，主动争取关键项目" if score >= 55 else "不宜轻易跳槽，守住现有岗位为上。注意与上级沟通方式，避免正面冲突")
+        elif ssg in ("正印", "偏印"):
+            dim_tips["事业"] = "💼 " + ("充电进修、考证评职称的黄金年份。学习新技能为下一步晋升铺垫" if score >= 55 else "宜静心钻研专业，暂缓冒进的职业变动。注意避免信息过载导致决策犹豫")
+        elif ssg in ("食神", "伤官"):
+            dim_tips["事业"] = "💼 创意和表达力突出，" + ("适合推出新作品、新项目或转型创新领域" if score >= 55 else "才华有余但执行力不足，需落地具体行动而非空想。注意与团队协作时的语气分寸")
+        elif ssg in ("正财", "偏财"):
+            dim_tips["事业"] = "💼 事业与财务紧密挂钩——" + ("适合拓展业务、谈客户、签大单" if score >= 55 else "以守成为主，专注现有客户维护而非盲目扩张")
+        else:
+            dim_tips["事业"] = "💼 " + ("与人合作优于单打独斗，寻找志同道合的伙伴" if score >= 55 else "独立完成工作更高效，避免合伙纠纷")
+
+        # 财富维度
+        if ssg in ("正财", "偏财"):
+            dim_tips["财富"] = "💰 " + ("正偏财两旺，收入增长可期。适合谈加薪、开拓副业或投资" if score >= 55 else "财来财去，务必记账控制消费。避免借钱给他人或做担保")
+        elif ssg in ("正官", "七杀"):
+            dim_tips["财富"] = "💰 财富以工资性收入为主——" + ("争取绩效奖金或项目分红" if score >= 55 else "理财以储蓄和低风险产品为主，不宜投资")
+        elif ssg in ("食神", "伤官"):
+            dim_tips["财富"] = "💰 " + ("以才华技艺变现的好时机，知识付费、创作、技术咨询都是生财之道" if score >= 55 else "创意虽多但变现困难，需聚焦一两个可落地的项目")
+        elif ssg in ("劫财",):
+            dim_tips["财富"] = "💰 破财风险较高——务必控制消费欲望，不借钱不担保，警惕投资陷阱"
+        else:
+            dim_tips["财富"] = "💰 财运平稳——" + ("正财运稳定，工资性收入有保障" if score >= 55 else "收入增长缓慢但支出可控，做好预算管理")
+
+        # 子女维度
+        if ssg in ("食神", "伤官"):
+            dim_tips["子女"] = "👶 " + ("添丁之喜的好年份。食伤为子女星，此年有利于备孕、生育或子女升学" if score >= 55 else "注意子女健康和安全，减少高风险活动。教育方面宜多鼓励少批评")
+        elif ssg in ("正官", "七杀"):
+            dim_tips["子女"] = "👶 子女可能面临考试或升学关键期——" + ("给予实际支持而非施加压力" if score >= 55 else "多关注子女心理健康，避免因工作繁忙忽略陪伴")
+        elif ssg in ("正印", "偏印"):
+            dim_tips["子女"] = "👶 " + ("子女学业运势良好，适合在子女教育上加大投入（培训班、兴趣班）" if score >= 55 else "注意子女的营养和体质调理，印星护佑但需主动关注")
+        else:
+            dim_tips["子女"] = "👶 " + ("家庭氛围和谐，适合增进亲子关系" if score >= 55 else "关注子女身体健康，安排例行体检")
+
+        # 健康维度
+        if chong:
+            dim_tips["健康"] = "🏥 流年逢冲，" + ("注意安全防护，避免高风险运动和长途旅行中的意外" if score >= 55 else "防意外伤灾，驾车出行需格外小心。建议购买意外险")
+        elif ssg in ("七杀", "伤官"):
+            dim_tips["健康"] = "🏥 " + ("精神压力大容易引发失眠、焦虑，需主动调节——运动是最好的解压方式" if score >= 55 else "身体透支信号明显，务必减少熬夜和工作强度，必要时就医检查")
+        elif ssg in ("劫财",):
+            dim_tips["健康"] = "🏥 注意运动损伤和日常磕碰——避免危险运动和剧烈对抗性活动"
+        else:
+            dim_tips["健康"] = "🏥 " + ("身体状况总体平稳，保持规律作息和适度运动即可" if score >= 55 else "亚健康状态需要关注，年度体检不要拖延")
+
+        # 综合冲合提示
         tips = []
         if chong:
             tips.append("⚠️" + "；".join(chong))
         if he:
             tips.append("✅" + "；".join(he))
-        if ssg == "正财" or ssg == "偏财":
-            tips.append("💰利财运")
-        if ssg == "正官" or ssg == "七杀":
-            tips.append("💼事业变动")
-        if ssg == "正印":
-            tips.append("📚利学业")
-        if ssg == "伤官":
-            tips.append("⚡防口舌")
 
         result.append({
             "年份": y, "干支": f"{g}{z}",
             "天干十神": ssg, "地支十神": ssz,
             "评分": score, "简评": brief,
             "冲合": tips,
+            "四维指引": dim_tips,
             "五行": f"{WXG[g]}/{WXZ[z]}",
         })
 
@@ -1603,8 +1696,8 @@ def gen_overview(bz, sex):
 
 
 # ===== 主入口 =====
-def full_analysis(year, month, day, hour, sex, birthplace=""):
-    fp = get_four_pillars(year, month, day, hour, birthplace)
+def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
+    fp = get_four_pillars(year, month, day, hour, birthplace, minute)
     # 提取真太阳时校正后的实际日期（可能因跨日而不同）
     solar_info = fp.pop("_solar_info", None)
     actual_year = year

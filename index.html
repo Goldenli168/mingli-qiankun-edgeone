@@ -272,6 +272,10 @@
           <option value="21">亥时 (21-23点)</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>精确分钟（选填）</label>
+        <input type="number" id="minute" min="0" max="59" placeholder="0-59" style="width:100%">
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group" style="flex:1">
@@ -352,6 +356,7 @@ function doAnalyze() {
   var month = document.getElementById('month').value;
   var day   = document.getElementById('day').value;
   var hour  = document.getElementById('hour').value;
+  var minute = document.getElementById('minute').value || 0;
   var bp    = document.getElementById('birthplace').value;
   if (!year || !month || !day) { alert('请填写完整的出生日期'); return; }
 
@@ -363,7 +368,7 @@ function doAnalyze() {
   fetch('/api/analyze', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, birthplace:bp})
+    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp})
   })
   .then(function(resp) { return resp.json(); })
   .then(function(data) {
@@ -555,8 +560,8 @@ function renderResult(data, birthYear) {
     var score = d['评分'] || 60;
     var scoreCls = score >= 75 ? 'score-daji' : (score >= 60 ? 'score-ji' : (score >= 45 ? 'score-ping' : (score >= 30 ? 'score-xj' : 'score-xiong')));
     var dims = d['各维度'] || {};
-    var dimIcons = {'财富':'💰','事业':'⚒️','婚姻':'❤️','健康':'🏥','学业':'📚','人际':'🤝'};
-    var dimOrder = ['财富','事业','婚姻','健康','学业','人际'];
+    var dimIcons = {'财富':'💰','事业':'⚒️','婚姻':'❤️','健康':'🏥','子女':'👶','人际':'🤝'};
+    var dimOrder = ['财富','事业','婚姻','健康','子女','人际'];
     var dimHtml = '';
     for (var di = 0; di < dimOrder.length; di++) {
       var k = dimOrder[di];
@@ -588,7 +593,7 @@ function renderResult(data, birthYear) {
       quoteHtml +
       '<button class="dayun-ln-btn" onclick="toggleLiunian(this, ' + d['步数'] + ')">📅 展开流年</button>' +
       '<table class="liunian-table" id="lnTable' + d['步数'] + '">' +
-        '<thead><tr><th>年份</th><th>干支</th><th>天干十神</th><th>地支十神</th><th>评分</th><th>简评</th><th>冲合提示</th></tr></thead>' +
+        '<thead><tr><th>年份</th><th>干支</th><th>天干十神</th><th>地支十神</th><th>评分</th><th>简评</th><th>四维指引</th></tr></thead>' +
         '<tbody id="lnBody' + d['步数'] + '"></tbody>' +
       '</table>' +
     '</div>';
@@ -636,16 +641,21 @@ function renderLiunianTable(tbody, list) {
   tbody.innerHTML = list.map(function(ly) {
     var sc = ly['评分'] || 55;
     var cls = sc >= 70 ? 'ln-score-high' : (sc >= 55 ? 'ln-score-mid' : 'ln-score-low');
-    var chongHe = (ly['冲合'] || []).join(' ');
     var gz = ly['干支'] || '';
+    var dimTips = ly['四维指引'] || {};
+    var dimHtml = '';
+    if (dimTips['事业']) dimHtml += '<div>' + dimTips['事业'] + '</div>';
+    if (dimTips['财富']) dimHtml += '<div>' + dimTips['财富'] + '</div>';
+    if (dimTips['子女']) dimHtml += '<div>' + dimTips['子女'] + '</div>';
+    if (dimTips['健康']) dimHtml += '<div>' + dimTips['健康'] + '</div>';
     return '<tr>' +
       '<td>' + ly['年份'] + '</td>' +
       '<td><span class="' + ganCls(gz[0]) + '">' + gz[0] + '</span><span class="' + zhiCls(gz[1]) + '">' + gz[1] + '</span></td>' +
       '<td>' + (ly['天干十神']||'') + '</td>' +
       '<td>' + (ly['地支十神']||'') + '</td>' +
       '<td class="' + cls + '">' + sc + '分</td>' +
-      '<td>' + (ly['简评']||'') + '</td>' +
-      '<td style="text-align:left;font-size:0.82em;color:var(--text-dim)">' + chongHe + '</td>' +
+      '<td style="font-size:0.9em;max-width:180px">' + (ly['简评']||'') + '</td>' +
+      '<td style="text-align:left;font-size:0.78em;color:var(--text-dim);max-width:280px;line-height:1.5">' + dimHtml + '</td>' +
     '</tr>';
   }).join('');
 }
