@@ -489,7 +489,8 @@ function doAnalyze() {
   var sh = parseInt(document.getElementById('solarHour').value) || 0;
   var sm = parseInt(document.getElementById('solarMinute').value) || 0;
   var ampm = document.getElementById('ampm').value;
-  if (sh > 0) {
+  if (sh > 0 && bp && bp.trim()) {
+    // 公历时间 + 出生地都填了 → 用真太阳时
     if (ampm === 'PM' && sh < 12) hour = sh + 12;
     else if (ampm === 'AM' && sh === 12) hour = 0;
     else hour = sh;
