@@ -387,7 +387,7 @@
         </select>
       </div>
       <div class="form-group" style="flex:1; display:flex;align-items:flex-end;padding-bottom:2px">
-        <small style="color:var(--text-dim)">填写后优先用于时辰计算</small>
+        <small style="color:var(--text-dim)" id="solarHint">填写后优先用于时辰计算</small>
       </div>
     </div>
     <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
@@ -844,12 +844,6 @@ function renderLiunianTable(tbody, list) {
   }).join('');
 }
 
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && document.activeElement.tagName !== 'TEXTAREA') {
-    doAnalyze();
-  }
-});
-
 // ===== 今年运势快速卡片 =====
 function renderCurrentYear(data, birthYear) {
   var card = document.getElementById('thisyearCard');
@@ -1002,6 +996,65 @@ function renderTimeline(data) {
       '<div class="dt-seg-gan">'+d['大运']+'</div><div class="dt-seg-age">'+d['年龄']+'</div></div>';
   }).join('');
 }
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.activeElement.tagName !== 'TEXTAREA') {
+    doAnalyze();
+  }
+});
+
+// ===== 真太阳时实时预览 =====
+var CITY_COORDS_JS = {
+  "北京":[116.4,39.9],"上海":[121.5,31.2],"广州":[113.3,23.1],"深圳":[114.1,22.5],
+  "成都":[104.1,30.7],"重庆":[106.6,29.5],"西安":[108.9,34.3],"武汉":[114.3,30.6],
+  "杭州":[120.2,30.3],"南京":[118.8,32.1],"天津":[117.2,39.1],"沈阳":[123.4,41.8],
+  "哈尔滨":[126.6,45.8],"长春":[125.3,43.9],"大连":[121.6,38.9],"济南":[117.0,36.7],
+  "青岛":[120.4,36.1],"郑州":[113.7,34.8],"长沙":[113.0,28.2],"南昌":[115.9,28.7],
+  "福州":[119.3,26.1],"厦门":[118.1,24.5],"昆明":[102.7,25.0],"贵阳":[106.7,26.6],
+  "南宁":[108.3,22.8],"海口":[110.3,20.0],"兰州":[103.8,36.1],"西宁":[101.8,36.6],
+  "银川":[106.3,38.5],"乌鲁木齐":[87.6,43.8],"呼和浩特":[111.7,40.8],"拉萨":[91.1,29.7],
+  "石家庄":[114.5,38.0],"太原":[112.5,37.9],"合肥":[117.2,31.8],"苏州":[120.6,31.3],
+  "无锡":[120.3,31.6],"宁波":[121.5,29.9],"温州":[120.7,28.0],"东莞":[113.8,23.0],
+  "佛山":[113.1,23.0],"珠海":[113.6,22.3],"香港":[114.2,22.3],"澳门":[113.5,22.2],
+  "台北":[121.5,25.0],"高雄":[120.3,22.6],"台中":[120.7,24.1],"洛阳":[112.5,34.6],
+  "开封":[114.3,34.8],"扬州":[119.4,32.4],"绍兴":[120.6,30.0],"泉州":[118.6,24.9],
+  "桂林":[110.3,25.3],"大理":[100.2,25.6],"丽江":[100.2,26.9]
+};
+
+function lookupCity(bp) {
+  if (!bp || !bp.trim()) return null;
+  bp = bp.trim();
+  if (CITY_COORDS_JS[bp]) return CITY_COORDS_JS[bp];
+  for (var k in CITY_COORDS_JS) { if (bp.startsWith(k)) return CITY_COORDS_JS[k]; }
+  return null;
+}
+
+function updateSolarPreview() {
+  var sh = parseInt(document.getElementById('solarHour').value) || 0;
+  var sm = parseInt(document.getElementById('solarMinute').value) || 0;
+  var ampm = document.getElementById('ampm').value;
+  var bp = document.getElementById('birthplace').value;
+  var hint = document.getElementById('solarHint');
+  if (!sh || !bp) { hint.innerHTML = '填写后优先用于时辰计算'; hint.style.color = 'var(--text-dim)'; return; }
+  var coords = lookupCity(bp);
+  if (!coords) { hint.innerHTML = '填写后优先用于时辰计算'; hint.style.color = 'var(--text-dim)'; return; }
+  var lon = coords[0];
+  var h24 = sh;
+  if (ampm === 'PM' && sh < 12) h24 = sh + 12;
+  else if (ampm === 'AM' && sh === 12) h24 = 0;
+  var totalMin = h24 * 60 + sm + (lon - 120) * 4;
+  if (totalMin < 0) totalMin += 24 * 60;
+  if (totalMin >= 24 * 60) totalMin -= 24 * 60;
+  var th = Math.floor(totalMin / 60), tm = Math.round(totalMin % 60);
+  var offsetMin = Math.round((lon - 120) * 4);
+  var sign = offsetMin >= 0 ? '+' : '';
+  hint.innerHTML = '☀ 真太阳时 ' + String(th).padStart(2,'0') + ':' + String(tm).padStart(2,'0') + '（经度偏移 ' + sign + offsetMin + '分）';
+  hint.style.color = 'var(--gold-light)';
+}
+
+document.getElementById('solarHour').addEventListener('input', updateSolarPreview);
+document.getElementById('solarMinute').addEventListener('input', updateSolarPreview);
+document.getElementById('ampm').addEventListener('change', updateSolarPreview);
+document.getElementById('birthplace').addEventListener('input', updateSolarPreview);
 </script>
 </body>
 </html>
