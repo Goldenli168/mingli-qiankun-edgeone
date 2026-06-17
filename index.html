@@ -206,6 +206,73 @@
 
   .dayun-shensha { color: var(--purple); font-size: 0.8em; margin-top: 6px; line-height: 1.5; }
 
+  /* ===== 统一板块标题 ===== */
+  .section-hdr { color: var(--gold); font-size: 1.05em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(201,168,76,0.2); }
+
+  /* ===== 今年运势卡片 ===== */
+  .thisyear-card { background: linear-gradient(135deg, rgba(201,168,76,0.12) 0%, rgba(17,24,39,0.9) 60%, rgba(52,152,219,0.06) 100%); border: 1px solid rgba(201,168,76,0.35); border-radius: 14px; padding: 22px 24px; margin-bottom: 20px; position: relative; overflow: hidden; }
+  .thisyear-card::before { content: '今年运势'; position: absolute; top: 8px; right: 16px; color: rgba(201,168,76,0.25); font-size: 0.85em; letter-spacing: 4px; }
+  .thisyear-card::after { content: ''; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; background: radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%); border-radius: 50%; }
+  .thisyear-inner { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; position: relative; z-index: 1; }
+  .ty-main { flex: 1; min-width: 200px; }
+  .ty-ganzhi { font-size: 2.6em; font-weight: bold; line-height: 1.1; }
+  .ty-ss { font-size: 0.88em; color: var(--gold); margin-top: 6px; }
+  .ty-brief { font-size: 0.92em; color: var(--text); margin-top: 10px; line-height: 1.7; }
+  .ty-dims { display: flex; gap: 12px; flex-wrap: wrap; }
+  .ty-dim { text-align: center; padding: 14px 18px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; min-width: 72px; transition: all 0.3s; }
+  .ty-dim:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .ty-dim-icon { font-size: 1.6em; }
+  .ty-dim-label { font-size: 0.7em; color: var(--text-dim); margin-top: 4px; letter-spacing: 1px; }
+  .ty-dim-value { font-size: 0.85em; color: var(--gold); font-weight: bold; margin-top: 3px; }
+
+  /* ===== 日主性格名片 ===== */
+  .persona-card { background: linear-gradient(145deg, var(--bg-card) 0%, rgba(201,168,76,0.08) 100%); border: 1px solid var(--gold); border-radius: 14px; padding: 22px; position: relative; overflow: hidden; height: 100%; }
+  .persona-card::before { content: ''; position: absolute; top: -40px; right: -40px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%); border-radius: 50%; }
+  .persona-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; position: relative; z-index: 1; }
+  .persona-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.7em; border: 2px solid var(--gold); flex-shrink: 0; }
+  .persona-title { color: var(--gold); font-size: 1.15em; font-weight: bold; letter-spacing: 2px; }
+  .persona-subtitle { color: var(--text-dim); font-size: 0.78em; margin-top: 2px; }
+  .persona-desc { color: var(--text); font-size: 0.88em; line-height: 1.85; margin-bottom: 12px; position: relative; z-index: 1; }
+  .persona-tags { display: flex; flex-wrap: wrap; gap: 6px; position: relative; z-index: 1; }
+  .persona-tag { padding: 4px 12px; border-radius: 14px; font-size: 0.74em; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); color: var(--gold); }
+
+  /* ===== 五行生克图 ===== */
+  .duo-row { display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: wrap; }
+  .duo-left { flex: 1; min-width: 270px; }
+  .duo-right { flex: 1; min-width: 310px; }
+  .wuxing-graph { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 8px; }
+  .wuxing-graph svg { width: 100%; max-width: 320px; display: block; margin: 0 auto; }
+  .wx-node { cursor: pointer; transition: all 0.3s; filter: drop-shadow(0 0 4px rgba(201,168,76,0.15)); }
+  .wx-node:hover { filter: brightness(1.4) drop-shadow(0 0 8px rgba(201,168,76,0.3)); }
+  .wx-line-sheng { stroke-dasharray: 5 3; animation: shengFlow 2s linear infinite; }
+  .wx-line-ke { stroke-dasharray: 3 3; }
+  @keyframes shengFlow { to { stroke-dashoffset: -8; } }
+
+  /* ===== 开运锦囊 ===== */
+  .lucky-kit { background: var(--bg-card); border: 1px solid var(--gold); border-radius: 14px; padding: 20px 22px; margin-bottom: 22px; }
+  .lucky-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .lucky-item { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; transition: all 0.3s; }
+  .lucky-item:hover { border-color: var(--gold); background: rgba(201,168,76,0.05); transform: translateY(-2px); }
+  .lucky-icon { font-size: 1.5em; margin-bottom: 5px; }
+  .lucky-label { font-size: 0.7em; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
+  .lucky-value { font-size: 0.88em; color: var(--gold-light); margin-top: 4px; font-weight: bold; }
+
+  /* ===== 大运时间轴 ===== */
+  .dayun-timeline { display: flex; align-items: stretch; gap: 0; position: relative; overflow-x: auto; padding: 8px 0; }
+  .dayun-timeline::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent 0%, var(--border) 10%, var(--border) 90%, transparent 100%); z-index: 0; }
+  .dt-segment { flex: 1; min-width: 65px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin: 0 2px; cursor: pointer; transition: all 0.3s; position: relative; z-index: 1; font-size: 0.72em; }
+  .dt-segment:hover { transform: translateY(-4px); filter: brightness(1.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .dt-seg-gan { font-weight: bold; font-size: 1.05em; }
+  .dt-seg-age { font-size: 0.75em; opacity: 0.7; margin-top: 1px; }
+  .dt-daji { background: linear-gradient(135deg, rgba(39,174,96,0.35), rgba(39,174,96,0.1)); border: 1px solid rgba(39,174,96,0.45); }
+  .dt-ji { background: linear-gradient(135deg, rgba(39,174,96,0.18), rgba(39,174,96,0.05)); border: 1px solid rgba(39,174,96,0.25); }
+  .dt-ping { background: linear-gradient(135deg, rgba(201,168,76,0.18), rgba(201,168,76,0.05)); border: 1px solid rgba(201,168,76,0.25); }
+  .dt-xiong { background: linear-gradient(135deg, rgba(192,57,43,0.18), rgba(192,57,43,0.05)); border: 1px solid rgba(192,57,43,0.25); }
+
+  /* ===== 命理总论卡片升级 ===== */
+  .overview-card { background: linear-gradient(135deg, rgba(17,24,39,0.98) 0%, rgba(201,168,76,0.04) 100%); border: 1px solid rgba(201,168,76,0.3); border-radius: 12px; padding: 20px 24px; margin-bottom: 22px; position: relative; }
+  .overview-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--gold), var(--gold-light), var(--gold), transparent); }
+
   .gan-jia,.gan-yi { color: #2ecc71; }
   .gan-bing,.gan-ding { color: #e74c3c; }
   .gan-wu,.gan-ji { color: #c9a84c; }
@@ -334,23 +401,46 @@
 
 <div class="result-section" id="result">
   <div class="bazi-plate" id="baziPlate"></div>
+  <!-- 今年运势快速卡片 — 排盘后第一眼 -->
+  <div class="thisyear-card" id="thisyearCard" style="display:none">
+    <div class="thisyear-inner" id="thisyearInner"></div>
+  </div>
+  <!-- 日主性格名片 + 五行生克图 并排 -->
+  <div class="duo-row">
+    <div class="duo-left">
+      <div class="persona-card" id="personaCard" style="display:none"></div>
+    </div>
+    <div class="duo-right">
+      <div class="wuxing-bar" id="wuxingBar"></div>
+      <div class="wuxing-graph" id="wuxingGraph" style="display:none">
+        <svg id="wuxingSvg" viewBox="0 0 320 280"></svg>
+      </div>
+    </div>
+  </div>
+  <div class="summary-grid" id="summaryGrid"></div>
   <div class="pillar-analysis" id="pillarAnalysis" style="display:none">
-    <h3>☰ 四柱单独解读</h3>
+    <div class="section-hdr">🏛️ 四柱单独解读</div>
     <div class="pillar-analysis-grid" id="pillarAnalysisGrid"></div>
   </div>
   <div class="overview-card" id="overviewCard" style="display:none">
-    <h3>☰ 命理总论</h3>
+    <div class="section-hdr">📜 命理总论</div>
     <div class="overview-text" id="overviewText"></div>
   </div>
-  <div class="summary-grid" id="summaryGrid"></div>
-  <div class="wuxing-bar" id="wuxingBar"></div>
   <div class="analysis-grid" id="analysisGrid"></div>
+  <!-- 喜用神开运锦囊 -->
+  <div class="lucky-kit" id="luckyKit" style="display:none">
+    <div class="lucky-grid" id="luckyGrid"></div>
+  </div>
   <div class="shensha-section" id="shenshaSection" style="display:none">
-    <h3>☰ 神煞</h3>
+    <div class="section-hdr">🔮 神煞</div>
     <div class="shensha-grid" id="shenshaGrid"></div>
   </div>
   <div class="dayun-section">
-    <h3>☰ 大运详析</h3>
+    <div class="section-hdr">📈 大运时间轴</div>
+    <div class="dayun-timeline" id="dayunTimeline"></div>
+  </div>
+  <div class="dayun-section">
+    <div class="section-hdr">📋 大运详析</div>
     <div class="dayun-cards" id="dayunCards"></div>
   </div>
 </div>
@@ -668,11 +758,18 @@ function renderResult(data, birthYear) {
       (dyShensha[idx] && dyShensha[idx].length > 0 ? '<div class="dayun-shensha">🔮 神煞影响：' + dyShensha[idx].join('；') + '</div>' : '') +
       '<button class="dayun-ln-btn" onclick="toggleLiunian(this, ' + d['步数'] + ')">📅 展开流年</button>' +
       '<table class="liunian-table" id="lnTable' + d['步数'] + '">' +
-        '<thead><tr><th>年份</th><th>干支</th><th>天干十神</th><th>地支十神</th><th>评分</th><th>简评</th><th>四维指引</th></tr></thead>' +
+        '<thead><tr><th>年份</th><th>干支</th><th>十神</th><th>评分</th><th>简评</th><th>事业</th><th>财富</th><th>子女</th><th>健康</th><th>四维指引</th></tr></thead>' +
         '<tbody id="lnBody' + d['步数'] + '"></tbody>' +
       '</table>' +
     '</div>';
   }).join('');
+
+  // 渲染新增功能
+  renderCurrentYear(data, birthYear);
+  renderPersona(data);
+  renderWuxingGraph(data);
+  renderLuckyKit(data);
+  renderTimeline(data);
 
   document.getElementById('result').classList.add('show');
   setTimeout(function() {
@@ -713,24 +810,36 @@ function toggleLiunian(btn, step) {
 }
 
 function renderLiunianTable(tbody, list) {
+  function star5(sc) { var s=sc>=90?5:sc>=70?4:sc>=55?3:sc>=40?2:1; var h=''; for(var i=0;i<5;i++)h+=i<s?'★':'☆'; var c=s>=4?'#2ecc71':s>=3?'#c9a84c':'#e74c3c'; return '<span style="color:'+c+';font-size:0.8em;letter-spacing:0">'+h+'</span>'; }
   tbody.innerHTML = list.map(function(ly) {
     var sc = ly['评分'] || 55;
     var cls = sc >= 70 ? 'ln-score-high' : (sc >= 55 ? 'ln-score-mid' : 'ln-score-low');
     var gz = ly['干支'] || '';
+    var ssGan = ly['天干十神']||'';
+    var ssZhi = ly['地支十神']||'';
+    var careerS=(ssGan==='正官'||ssGan==='七杀')?sc+5:(ssGan==='正印'||ssGan==='偏印')?sc+2:sc;
+    var wealthS=(ssGan==='正财'||ssGan==='偏财')?sc+5:(ssGan==='食神'||ssGan==='伤官')?sc+3:sc-2;
+    var childS=(ssGan==='食神'||ssGan==='伤官')?sc+5:(ssGan==='正官'||ssGan==='七杀')?sc+2:sc;
+    var healthS=(ssGan==='正印'||ssGan==='偏印')?sc+4:(ssGan==='劫财')?sc-5:sc;
+    careerS=Math.max(10,Math.min(95,careerS));wealthS=Math.max(10,Math.min(95,wealthS));
+    childS=Math.max(10,Math.min(95,childS));healthS=Math.max(10,Math.min(95,healthS));
     var dimTips = ly['四维指引'] || {};
     var dimHtml = '';
-    if (dimTips['事业']) dimHtml += '<div>' + dimTips['事业'] + '</div>';
-    if (dimTips['财富']) dimHtml += '<div>' + dimTips['财富'] + '</div>';
-    if (dimTips['子女']) dimHtml += '<div>' + dimTips['子女'] + '</div>';
+    if (dimTips['事业']) dimHtml += '<div style="margin-bottom:2px">' + dimTips['事业'] + '</div>';
+    if (dimTips['财富']) dimHtml += '<div style="margin-bottom:2px">' + dimTips['财富'] + '</div>';
+    if (dimTips['子女']) dimHtml += '<div style="margin-bottom:2px">' + dimTips['子女'] + '</div>';
     if (dimTips['健康']) dimHtml += '<div>' + dimTips['健康'] + '</div>';
     return '<tr>' +
       '<td>' + ly['年份'] + '</td>' +
       '<td><span class="' + ganCls(gz[0]) + '">' + gz[0] + '</span><span class="' + zhiCls(gz[1]) + '">' + gz[1] + '</span></td>' +
-      '<td>' + (ly['天干十神']||'') + '</td>' +
-      '<td>' + (ly['地支十神']||'') + '</td>' +
+      '<td style="font-size:0.78em">' + ssGan + '<br><span style="color:var(--text-dim)">' + ssZhi + '</span></td>' +
       '<td class="' + cls + '">' + sc + '分</td>' +
-      '<td style="font-size:0.9em;max-width:180px">' + (ly['简评']||'') + '</td>' +
-      '<td style="text-align:left;font-size:0.78em;color:var(--text-dim);max-width:280px;line-height:1.5">' + dimHtml + '</td>' +
+      '<td style="font-size:0.8em;max-width:220px;line-height:1.5">' + (ly['简评']||'') + '</td>' +
+      '<td>' + star5(careerS) + '</td>' +
+      '<td>' + star5(wealthS) + '</td>' +
+      '<td>' + star5(childS) + '</td>' +
+      '<td>' + star5(healthS) + '</td>' +
+      '<td style="text-align:left;font-size:0.74em;color:var(--text-dim);max-width:240px;line-height:1.45">' + dimHtml + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -740,6 +849,159 @@ document.addEventListener('keydown', function(e) {
     doAnalyze();
   }
 });
+
+// ===== 今年运势快速卡片 =====
+function renderCurrentYear(data, birthYear) {
+  var card = document.getElementById('thisyearCard');
+  var inner = document.getElementById('thisyearInner');
+  var now = new Date().getFullYear();
+  var liunianMap = data['流年'] || {};
+  // 找到当前年份所属的大运步
+  var found = null;
+  var dyl = data['大运'] || [];
+  for (var s = 0; s < dyl.length; s++) {
+    var dy = dyl[s];
+    var startY = birthYear + dy.age_start;
+    var endY = birthYear + dy.age_end;
+    if (now >= startY && now <= endY) { found = {dy: dy, step: s+1}; break; }
+  }
+  if (!found) { card.style.display = 'none'; return; }
+  var lnList = liunianMap[String(found.step)] || [];
+  var ly = null;
+  for (var i = 0; i < lnList.length; i++) { if (lnList[i]['年份'] === now) { ly = lnList[i]; break; } }
+  if (!ly) { card.style.display = 'none'; return; }
+
+  var score = ly['评分']||55;
+  var gz = ly['干支']||'';
+  var g = gz[0]||'', z = gz[1]||'';
+  function stars(sc) { var s=sc>=90?5:sc>=70?4:sc>=55?3:sc>=40?2:1; var h=''; for(var i=0;i<5;i++)h+=i<s?'★':'☆'; return '<span style="color:'+(s>=4?'#2ecc71':s>=3?'#c9a84c':'#e74c3c')+';letter-spacing:1px">'+h+'</span>'; }
+  inner.innerHTML =
+    '<div class="ty-main">' +
+      '<div class="ty-ganzhi"><span class="'+ganCls(g)+'">'+g+'</span><span class="'+zhiCls(z)+'">'+z+'</span>年</div>' +
+      '<div class="ty-ss">'+ly['天干十神']+' · '+ly['地支十神']+' · '+score+'分</div>' +
+      '<div class="ty-brief">'+(ly['简评']||'')+'</div>' +
+    '</div>' +
+    '<div class="ty-dims">' +
+      '<div class="ty-dim"><div class="ty-dim-icon">💼</div><div class="ty-dim-label">事业</div><div class="ty-dim-value">'+stars(score)+'</div></div>' +
+      '<div class="ty-dim"><div class="ty-dim-icon">💰</div><div class="ty-dim-label">财富</div><div class="ty-dim-value">'+stars(score)+'</div></div>' +
+      '<div class="ty-dim"><div class="ty-dim-icon">👶</div><div class="ty-dim-label">子女</div><div class="ty-dim-value">'+stars(score)+'</div></div>' +
+      '<div class="ty-dim"><div class="ty-dim-icon">🏥</div><div class="ty-dim-label">健康</div><div class="ty-dim-value">'+stars(score)+'</div></div>' +
+    '</div>';
+  card.style.display = 'block';
+}
+
+// ===== 日主性格名片 =====
+function renderPersona(data) {
+  var dg = data['日主']||'';
+  var dwx = data['日主五行']||'';
+  var gj = data['格局']||'';
+  var rst = data['日主状态']||'';
+  var persona = {
+    '甲': {emoji:'🌳', title:'甲木参天', desc:'如参天大树，正直刚毅，有领导气质。内心有强烈的向上生长的欲望，不甘平庸。遇事果断、执行力强，是天生的开拓者。', tags:['领导型','正直','开拓者','执行力强'], color:'#27ae60'},
+    '乙': {emoji:'🌿', title:'乙木柔韧', desc:'如藤蔓花草，温和灵活，善于变通。表面柔软但内心坚韧，擅长在复杂环境中找到自己的生存空间。人缘好、有艺术天赋。', tags:['温和','灵活','艺术天赋','适应力强'], color:'#2ecc71'},
+    '丙': {emoji:'☀️', title:'丙火炽烈', desc:'如烈日当空，热情开朗，感染力极强。走到哪里都是焦点，天生自带「主角光环」。慷慨大方，但偶尔冲动，学习管理情绪是终身课题。', tags:['热情','感染力','慷慨','领袖气质'], color:'#e74c3c'},
+    '丁': {emoji:'🕯️', title:'丁火内秀', desc:'如烛火灯明，外柔内刚，善于思考。不是聚光灯下最亮的那一个，但持续燃烧的力量让人无法忽视。细心、有耐心，适合钻研型工作。', tags:['内秀','细心','持久力','钻研型'], color:'#c0392b'},
+    '戊': {emoji:'🏔️', title:'戊土厚重', desc:'如广袤大地，沉稳厚重，值得信赖。不轻易许诺，但一诺千金。看似慢热，实则是在积蓄力量，一旦发力势不可挡。', tags:['沉稳','可靠','一诺千金','厚积薄发'], color:'#c9a84c'},
+    '己': {emoji:'🌾', title:'己土滋养', desc:'如沃土良田，谦和务实，滋养万物而不争。善于在幕后成就他人，团队中最不可或缺的黏合剂。低调但不可或缺。', tags:['谦和','务实','团队黏合剂','默默耕耘'], color:'#8B6914'},
+    '庚': {emoji:'⚔️', title:'庚金刚猛', desc:'如精钢利刃，刚强果决，遇事从不退缩。原则性极强，黑白分明。在商场如战场的环境中如鱼得水，是天生的决策者和执行者。', tags:['刚强','果决','原则性强','决策者'], color:'#bdc3c7'},
+    '辛': {emoji:'💎', title:'辛金精致', desc:'如珠玉宝石，精致内敛，追求完美。审美品位出众，对细节的关注令人佩服。不轻易表露情感，但内心世界丰富而深刻。', tags:['精致','完美主义','审美出众','内敛深刻'], color:'#95a5a6'},
+    '壬': {emoji:'🌊', title:'壬水奔流', desc:'如大海江河，豁达包容，心胸开阔。不纠结小事，看问题有大格局。善于整合资源和人脉，是天生的「资源连接器」。', tags:['豁达','包容','大局观','资源整合'], color:'#3498db'},
+    '癸': {emoji:'💧', title:'癸水润物', desc:'如溪流雨露，温润细腻，洞察力敏锐。善于捕捉他人情绪的细微变化，情商极高。做事润物细无声，在不知不觉中达成目标。', tags:['细腻','敏锐','高情商','润物无声'], color:'#2980b9'}
+  }[dg] || {emoji:'🔮', title:'命主', desc:'禀天地之气而生，独一无二。', tags:['独特','自我'], color:'var(--gold)'};
+  var card = document.getElementById('personaCard');
+  card.innerHTML =
+    '<div class="persona-header">' +
+      '<div class="persona-avatar" style="background:'+persona.color+'20;color:'+persona.color+'">'+persona.emoji+'</div>' +
+      '<div><div class="persona-title">'+persona.title+'</div><div class="persona-subtitle">'+dg+'日主 · '+dwx+'性 · '+gj+' · '+rst+'</div></div>' +
+    '</div>' +
+    '<div class="persona-desc">'+persona.desc+'</div>' +
+    '<div class="persona-tags">'+persona.tags.map(function(t){return '<span class="persona-tag">'+t+'</span>';}).join('')+'</div>';
+  card.style.display = 'block';
+}
+
+// ===== 五行生克图 =====
+function renderWuxingGraph(data) {
+  var wx = data['五行统计']||{};
+  var graphDiv = document.getElementById('wuxingGraph');
+  var svg = document.getElementById('wuxingSvg');
+  var colors = {金:'#bdc3c7',木:'#27ae60',水:'#3498db',火:'#e74c3c',土:'#c9a84c'};
+  var order = ['水','木','火','土','金'];
+  var cx=160, cy=140, r=100;
+  var maxW = Math.max.apply(null, order.map(function(w){return wx[w]||0;}))||1;
+  var pts = {};
+  order.forEach(function(w,i){
+    var ang = -Math.PI/2 + 2*Math.PI*i/5;
+    pts[w] = [cx+r*Math.cos(ang), cy+r*Math.sin(ang)];
+  });
+  // 生线
+  var sheng = ['水→木','木→火','火→土','土→金','金→水'];
+  var ke = ['水→火','火→金','金→木','木→土','土→水'];
+  var lines = '';
+  sheng.forEach(function(s){
+    var f=s.split('→'), a=pts[f[0]], b=pts[f[1]];
+    lines += '<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--gold)" stroke-width="1" opacity="0.4" class="wx-line-sheng"/>';
+    var mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+    lines += '<text x="'+mx+'" y="'+my+'" fill="var(--gold)" font-size="10" text-anchor="middle" opacity="0.6">生</text>';
+  });
+  ke.forEach(function(s){
+    var f=s.split('→'), a=pts[f[0]], b=pts[f[1]];
+    lines += '<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="var(--red-light)" stroke-width="1" opacity="0.3" class="wx-line-ke"/>';
+    var mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+    lines += '<text x="'+mx+'" y="'+my+'" fill="var(--red-light)" font-size="10" text-anchor="middle" opacity="0.5">克</text>';
+  });
+  var nodes = '';
+  order.forEach(function(w){
+    var p=pts[w], val=wx[w]||0, sz=24+(val/maxW)*18;
+    nodes += '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+sz+'" fill="'+colors[w]+'20" stroke="'+colors[w]+'" stroke-width="1.5" class="wx-node"/>';
+    nodes += '<text x="'+p[0]+'" y="'+p[1]+'-4" text-anchor="middle" fill="'+colors[w]+'" font-size="14" font-weight="bold">'+w+'</text>';
+    nodes += '<text x="'+p[0]+'" y="'+p[1]+'+14" text-anchor="middle" fill="var(--text-dim)" font-size="11">'+val+'</text>';
+  });
+  // 中心标注
+  var dwx = data['日主五行']||'';
+  nodes += '<circle cx="'+cx+'" cy="'+cy+'" r="18" fill="var(--bg-card)" stroke="var(--gold)" stroke-width="1"/><text x="'+cx+'" y="'+cy+'+5" text-anchor="middle" fill="var(--gold)" font-size="12" font-weight="bold">日主</text>';
+  svg.innerHTML = lines+nodes;
+  graphDiv.style.display = 'block';
+}
+
+// ===== 喜用神开运锦囊 =====
+function renderLuckyKit(data) {
+  var xy = data['喜用神']||[];
+  var th = data['调候用神']||[];
+  var allXY = xy.concat(th.filter(function(t){return xy.indexOf(t)<0;}));
+  var wxColor = {金:'白色/银色/金色',木:'绿色/青色',水:'黑色/蓝色',火:'红色/紫色',土:'黄色/棕色/咖啡色'};
+  var wxDir = {金:'西/西北',木:'东/东南',水:'北',火:'南',土:'中央/西南'};
+  var wxNum = {金:'4、9',木:'3、8',水:'1、6',火:'2、7',土:'5、0'};
+  var wxJewel = {金:'金属饰品、白水晶、银饰',木:'木质手串、绿松石、翡翠',水:'黑曜石、海蓝宝、珍珠',火:'红玛瑙、石榴石、红绳',土:'黄水晶、蜜蜡、陶瓷饰品'};
+  var wxSport = {金:'力量训练、拳击',木:'瑜伽、徒步、太极',水:'游泳、潜水',火:'跑步、HIIT',土:'登山、攀岩'};
+  var x1 = allXY[0]||'';
+  var x2 = allXY[1]||x1;
+  var items = [
+    {icon:'🎨',label:'幸运色',value:wxColor[x1]||'-'},
+    {icon:'🧭',label:'开运方位',value:wxDir[x1]||'-'},
+    {icon:'🔢',label:'幸运数字',value:wxNum[x1]||'-'},
+    {icon:'💎',label:'宜佩戴',value:wxJewel[x1]||'-'},
+    {icon:'🏃',label:'适合运动',value:wxSport[x1]||'-'},
+    {icon:'⚡',label:'喜用五行',value:allXY.join('、')}
+  ];
+  var grid = document.getElementById('luckyGrid');
+  grid.innerHTML = items.map(function(i){
+    return '<div class="lucky-item"><div class="lucky-icon">'+i.icon+'</div><div class="lucky-label">'+i.label+'</div><div class="lucky-value">'+i.value+'</div></div>';
+  }).join('');
+  document.getElementById('luckyKit').style.display = 'block';
+}
+
+// ===== 大运时间轴 =====
+function renderTimeline(data) {
+  var dyl = data['大运']||[];
+  var dal = data['大运分析']||[];
+  var tl = document.getElementById('dayunTimeline');
+  tl.innerHTML = dal.map(function(d,i){
+    var score=d['评分']||60;
+    var cls = score>=75?'dt-daji':(score>=60?'dt-ji':(score>=45?'dt-ping':'dt-xiong'));
+    return '<div class="dt-segment '+cls+'" title="'+d['大运']+' '+d['年龄']+'岁 '+d['吉凶']+'" onclick="document.querySelectorAll(\'.dayun-card\')['+i+']?.scrollIntoView({behavior:\'smooth\',block:\'center\'})">'+
+      '<div class="dt-seg-gan">'+d['大运']+'</div><div class="dt-seg-age">'+d['年龄']+'</div></div>';
+  }).join('');
+}
 </script>
 </body>
 </html>
