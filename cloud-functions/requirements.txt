@@ -1,0 +1,4 @@
+flask>=3.0
+iztro-py>=0.3.4
+lunarcalendar>=0.0.9
+ephem>=4.1
