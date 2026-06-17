@@ -440,6 +440,16 @@ function renderResult(data, birthYear) {
     {label:'起运年龄', value: (mp['起运年龄']||'?')+'岁'},
     {label:'得令/得地/得势', value: (mp['得令']?'令 ':'')+(mp['得地']?'地 ':'')+(mp['得势']?'势':'') || '均无'}
   ];
+  // 调候用神
+  var th = mp['调候用神'] || [];
+  if (th.length > 0) {
+    items.push({label:'调候用神', value: th.join('、')});
+  }
+  // 真太阳时信息
+  var solar = mp['真太阳时'];
+  if (solar) {
+    items.push({label:'真太阳时', value: solar['真太阳时']||'N/A'});
+  }
   grid.innerHTML = items.map(function(i) {
     return '<div class="summary-item"><div class="label">' + i.label + '</div><div class="value">' + i.value + '</div></div>';
   }).join('');
@@ -479,14 +489,36 @@ function renderResult(data, birthYear) {
     var detail = '';
     if (c.key === '财富') {
       detail = '<p>' + (d['详情']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 现代视角：' + d['现代解读'] + '</p>';
+      if (d['收入层级']) detail += '<p class="sub">💰 收入参考：' + d['收入层级'] + '</p>';
+      if (d['建议']) detail += '<p class="sub">💡 ' + d['建议'] + '</p>';
     } else if (c.key === '事业') {
-      detail = '<p>' + (d['详情']||'') + '</p><p class="sub">适合行业：' + (d['适合行业']||[]).join('、') + '</p>';
+      detail = '<p>' + (d['详情']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 现代视角：' + d['现代解读'] + '</p>';
+      detail += '<p class="sub">🏢 适合行业：' + (d['适合行业']||[]).join('、') + '</p>';
+      if (d['建议']) detail += '<p class="sub">💡 ' + d['建议'] + '</p>';
     } else if (c.key === '婚姻') {
-      detail = '<p>' + (d['婚姻质量']||'') + '</p><p class="sub">' + (d['配偶特征']||'') + '</p><p class="sub">配偶星：' + (d['配偶星']||'') + '</p>';
+      detail = '<p>' + (d['婚姻质量']||'') + '</p>'
+        + '<p class="sub">👤 ' + (d['配偶特征']||'') + '</p>'
+        + '<p class="sub">💍 配偶星：' + (d['配偶星']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 现代视角：' + d['现代解读'] + '</p>';
     } else if (c.key === '父母') {
       detail = '<p>' + (d['母亲']||'') + '</p><p class="sub">' + (d['父亲']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 ' + d['现代解读'] + '</p>';
+    } else if (c.key === '健康') {
+      detail = '<p>' + (d['详情']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 ' + d['现代解读'] + '</p>';
+      var notes = d['注意事项'] || [];
+      if (notes.length > 0) {
+        detail += '<p class="sub">⚠️ 具体建议：';
+        for (var ni = 0; ni < notes.length; ni++) {
+          detail += '<br>· ' + notes[ni];
+        }
+        detail += '</p>';
+      }
     } else {
       detail = '<p>' + (d['详情']||'') + '</p>';
+      if (d['现代解读']) detail += '<p class="sub">📊 ' + d['现代解读'] + '</p>';
     }
     var lv = d['等级'] || '';
     return '<div class="analysis-card">' +
