@@ -448,7 +448,12 @@ function useSyncedBirth() {
   document.getElementById('year').value = _syncedBirth.year;
   document.getElementById('month').value = _syncedBirth.month;
   document.getElementById('day').value = _syncedBirth.day;
-  document.getElementById('hour').value = _syncedBirth.hour;
+  // 将精确小时映射到十二时辰值（八字页真太阳时可能产出精确小时）
+  var rawHour = _syncedBirth.hour;
+  var shichen = rawHour;
+  if (rawHour === 23 || rawHour === 0) shichen = 0;
+  else if (rawHour % 2 === 0) shichen = rawHour - 1;
+  document.getElementById('hour').value = shichen;
   currentSex = _syncedBirth.sex || '男';
   // 更新性别按钮状态
   document.querySelectorAll('.sex-btn').forEach(function(b) {
