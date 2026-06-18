@@ -1073,7 +1073,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
     current_year = datetime.datetime.now().year
     items = []
 
-    for y in range(solar_year, min(solar_year + 120, current_year + 1)):
+    # 流年范围扩展到出生年+120岁（完整人生周期），不再截止当前年
+    for y in range(solar_year, solar_year + 120):
         gan_idx = (y - 4) % 10
         zhi_idx = (y - 4) % 12
         g = GAN[gan_idx]

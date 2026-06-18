@@ -173,6 +173,18 @@
   .dayun-deep .dim-desc { font-size: 0.68em; color: var(--text-dim); line-height: 1.6; margin-left: 4px; }
   .dayun-card .expand-hint { font-size: 0.58em; color: var(--text-dim); text-align: center; margin-top: 6px; opacity: 0.7; }
 
+  /* 大运卡片内嵌流年迷你表 */
+  .ln-mini-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); letter-spacing: 1px; }
+  .ln-mini-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 6px; }
+  .ln-mini-table { width: 100%; border-collapse: collapse; font-size: 0.62em; min-width: 500px; }
+  .ln-mini-table th { background: rgba(201,168,76,0.06); color: var(--gold); padding: 3px 4px; text-align: left; font-weight: normal; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .ln-mini-table td { padding: 2px 4px; border-bottom: 1px solid rgba(42,53,80,0.25); white-space: nowrap; }
+  .ln-mini-table .ln-yr { color: var(--gold); font-weight: bold; }
+  .ln-mini-table .ln-ss { color: var(--text-dim); font-size: 0.9em; }
+  .ln-mini-table .ln-brief { max-width: 160px; white-space: normal; line-height: 1.4; font-size: 0.9em; color: var(--text-dim); }
+  .ln-mini-table .ln-now td { background: rgba(201,168,76,0.08); }
+  .ln-mini-table tr:hover td { background: rgba(201,168,76,0.04); }
+
   .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .liunian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .liunian-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -375,24 +387,6 @@
   <div class="dayun-section" id="dayunSection">
     <h3>☰ 大运分析（十年一运）</h3>
     <div class="dayun-timeline" id="dayunTimeline"></div>
-  </div>
-
-  <div class="liunian-section" id="liunianSection">
-    <h3>☰ 流年分析</h3>
-    <div class="liunian-filter">
-      <label>筛选年份：</label>
-      <input type="number" id="lnYearFrom" placeholder="起始" min="1900">
-      <span style="color:var(--text-dim)">—</span>
-      <input type="number" id="lnYearTo" placeholder="结束" min="1900" max="2100">
-      <button onclick="filterLiunian()">查询</button>
-      <button onclick="resetLiunianFilter()">重置</button>
-    </div>
-    <div class="liunian-scroll">
-      <table class="liunian-table" id="liunianTable">
-        <thead><tr><th>年份</th><th>干支</th><th>纳音</th><th>十神</th><th>评分</th><th>简评</th><th>★事业</th><th>★财富</th><th>★感情</th><th>★健康</th></tr></thead>
-        <tbody id="liunianTbody"></tbody>
-      </table>
-    </div>
   </div>
 
   <div class="feihua-section" id="feihuaSection">
@@ -706,15 +700,11 @@ function renderResult(data) {
       '</div>' +
       '<div class="stars-line"><span class="star-label">主星</span>' + majorStr + (minorStr ? ' &nbsp;<span class="star-label">辅</span>' + minorStr : '') + '</div>' +
       '<div class="score-bars">' + barHtml + '</div>' +
-      '<div class="dayun-deep">' + deepHtml + '</div>' +
-      '<div class="expand-hint">▸ 点击展开深度解读</div>' +
+      '<div class="dayun-deep">' + deepHtml + buildDayunLiunian(birthYear, dy['起始年龄'], dy['结束年龄']) + '</div>' +
+      '<div class="expand-hint">▸ 点击展开深度解读 + 此运流年</div>' +
     '</div>';
   }
   document.getElementById('dayunTimeline').innerHTML = dayunHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无大运数据</p>';
-
-  var liunianList = data['流年'] || [];
-  window._liunianAllData = liunianList;
-  renderLiunianTable(liunianList);
 
   var feihuaList = data['飞化分析'] || [];
   var feihuaHtml = '';
@@ -795,49 +785,43 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-function renderLiunianTable(list) {
-  var tbody = document.getElementById('liunianTbody');
-  if (!list || list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:20px">暂无流年数据</td></tr>';
-    return;
+function buildDayunLiunian(birthYear, startAge, endAge) {
+  // 从全局流年数据中筛选该大运区间内的年份
+  var liunianList = (currentResult && currentResult['流年']) || [];
+  if (liunianList.length === 0) return '';
+  var startYear = birthYear + startAge;
+  var endYear = birthYear + endAge;
+  var filtered = [];
+  for (var i = 0; i < liunianList.length; i++) {
+    if (liunianList[i]['年份'] >= startYear && liunianList[i]['年份'] <= endYear) {
+      filtered.push(liunianList[i]);
+    }
   }
+  if (filtered.length === 0) return '';
   var nowYear = new Date().getFullYear();
-  var html = '';
-  var starMap = {5:'★★★★★',4:'★★★★☆',3:'★★★☆☆',2:'★★☆☆☆',1:'★☆☆☆☆',0:'—'};
-  var ssClsMap = {'比劫':'ss-neutral','印星':'ss-jixiang','食伤':'ss-neutral','财星':'ss-jixiang','官杀':'ss-ji'};
-  for (var i = 0; i < list.length; i++) {
-    var ln = list[i];
-    var isCurrentYear = (ln['年份'] === nowYear);
-    var scoreCls = ln['评分'] >= 65 ? 'score-good' : ln['评分'] >= 45 ? 'score-mid' : 'score-low';
-    var ssLabel = ln['十神类'] || '';
-    html += '<tr' + (isCurrentYear ? ' style="background:rgba(201,168,76,0.08)"' : '') + '>' +
-      '<td class="year-col">' + ln['年份'] + (isCurrentYear ? ' ◄' : '') + '</td>' +
-      '<td class="gan-zhi">' + (ln['流年干支']||'') + '</td>' +
-      '<td style="font-size:0.72em;color:var(--text-dim)">' + (ln['纳音']||'') + '</td>' +
-      '<td><span style="font-size:0.75em;color:var(--text-dim)">' + (ln['十神']||'') + '</span></td>' +
-      '<td><span style="color:' + (ln['评分']>=65?'#2ecc71':ln['评分']>=45?'var(--gold)':'var(--red-light)') + ';font-weight:bold">' + (ln['评分']||50) + '</span></td>' +
-      '<td style="font-size:0.78em;max-width:200px;line-height:1.5">' + (ln['简评']||'') + '</td>' +
+  var starMap = {5:'★★★★★',4:'★★★★☆',3:'★★★☆☆',2:'★★☆☆☆',1:'★☆☆☆☆'};
+  var html = '<div class="ln-mini-title">📅 此运流年（' + startYear + '—' + endYear + '）</div>';
+  html += '<div class="ln-mini-scroll"><table class="ln-mini-table">';
+  html += '<thead><tr><th>年份</th><th>干支</th><th>十神</th><th>评</th><th>简评</th><th>事</th><th>财</th><th>情</th><th>健</th></tr></thead><tbody>';
+  for (var i = 0; i < filtered.length; i++) {
+    var ln = filtered[i];
+    var isNow = (ln['年份'] === nowYear);
+    var sc = ln['评分']||50;
+    var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? 'var(--gold)' : 'var(--red-light)';
+    html += '<tr' + (isNow ? ' class="ln-now"' : '') + '>' +
+      '<td class="ln-yr">' + ln['年份'] + (isNow?' ▸':'') + '</td>' +
+      '<td>' + (ln['流年干支']||'') + '</td>' +
+      '<td class="ln-ss">' + (ln['十神']||'') + '</td>' +
+      '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
+      '<td class="ln-brief">' + (ln['简评']||'') + '</td>' +
       '<td>' + (starMap[ln['事业']]||'—') + '</td>' +
       '<td>' + (starMap[ln['财富']]||'—') + '</td>' +
       '<td>' + (starMap[ln['感情']]||'—') + '</td>' +
       '<td>' + (starMap[ln['健康']]||'—') + '</td>' +
     '</tr>';
   }
-  tbody.innerHTML = html;
-}
-
-function filterLiunian() {
-  var fromVal = parseInt(document.getElementById('lnYearFrom').value) || 0;
-  var toVal = parseInt(document.getElementById('lnYearTo').value) || 9999;
-  var all = window._liunianAllData || [];
-  var filtered = all.filter(function(i) { return i['年份'] >= fromVal && i['年份'] <= toVal; });
-  renderLiunianTable(filtered);
-}
-
-function resetLiunianFilter() {
-  document.getElementById('lnYearFrom').value = '';
-  document.getElementById('lnYearTo').value = '';
-  renderLiunianTable(window._liunianAllData || []);
+  html += '</tbody></table></div>';
+  return html;
 }
 </script>
 </body>
