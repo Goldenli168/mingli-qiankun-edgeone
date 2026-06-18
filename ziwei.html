@@ -213,6 +213,36 @@
   .feihua-card .fh-source .src-palace { color: var(--gold); font-weight: bold; }
   .feihua-card .fh-desc { font-size: 0.78em; color: var(--text); line-height: 1.7; }
 
+  .sync-banner {
+    max-width: 720px; margin: 18px auto 0; padding: 0 20px;
+  }
+  .sync-card {
+    background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(201,168,76,0.06) 100%);
+    border: 1px solid rgba(39,174,96,0.3); border-radius: 12px;
+    padding: 16px 22px; display: none; align-items: center;
+    justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .sync-card.show { display: flex; }
+  .sync-card .sync-icon { font-size: 1.6em; flex-shrink: 0; }
+  .sync-card .sync-info { flex: 1; min-width: 200px; }
+  .sync-card .sync-title { color: #2ecc71; font-size: 0.95em; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
+  .sync-card .sync-detail { color: var(--text-dim); font-size: 0.82em; line-height: 1.5; }
+  .sync-card .sync-detail strong { color: var(--gold); }
+  .sync-card .sync-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .sync-card .btn-sync {
+    padding: 9px 20px; border: none; border-radius: 8px;
+    background: linear-gradient(135deg, var(--green) 0%, #1e8449 100%);
+    color: #fff; font-family: inherit; font-size: 0.9em;
+    letter-spacing: 2px; cursor: pointer; transition: all 0.3s; font-weight: bold;
+  }
+  .sync-card .btn-sync:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(39,174,96,0.3); }
+  .sync-card .btn-sync-alt {
+    padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px;
+    background: transparent; color: var(--text-dim); font-family: inherit;
+    font-size: 0.82em; cursor: pointer; transition: all 0.3s; letter-spacing: 1px;
+  }
+  .sync-card .btn-sync-alt:hover { border-color: var(--gold); color: var(--gold); }
+
   .disclaimer { text-align: center; color: var(--text-dim); font-size: 0.75em; padding: 20px; border-top: 1px solid var(--border); margin-top: 10px; }
 
   @media (max-width: 768px) {
@@ -237,7 +267,7 @@
 <body>
 
 <nav class="navbar">
-  <div class="brand">命 理 干 坤</div>
+  <div class="brand">命 理 乾 坤</div>
   <div class="nav-tabs">
     <a href="/index.html" class="nav-tab">八字命理</a>
     <a href="/ziwei.html" class="nav-tab active">紫微斗数</a>
@@ -247,6 +277,20 @@
 <div class="header">
   <h1>紫 微 斗 数</h1>
   <div class="subtitle">星曜布天盘 · 命数定乾坤</div>
+</div>
+
+<div class="sync-banner">
+  <div class="sync-card" id="syncCard">
+    <div class="sync-icon">🔗</div>
+    <div class="sync-info">
+      <div class="sync-title">已同步八字页的生辰信息</div>
+      <div class="sync-detail" id="syncDetail"></div>
+    </div>
+    <div class="sync-actions">
+      <button class="btn-sync" onclick="useSyncedBirth()">使用同步数据排盘</button>
+      <button class="btn-sync-alt" onclick="clearSyncedBirth()">手动输入</button>
+    </div>
+  </div>
 </div>
 
 <div class="input-section">
@@ -362,6 +406,66 @@
 var currentSex = '男';
 var currentResult = null;
 var activeDetailIdx = -1;
+var _syncedBirth = null;
+
+// 页面加载时检查是否有八字页同步的生辰信息
+(function initSync() {
+  try {
+    var raw = localStorage.getItem('mingli_birth');
+    if (raw) {
+      _syncedBirth = JSON.parse(raw);
+      // 判断是否24小时内同步的
+      var savedAt = _syncedBirth.savedAt ? new Date(_syncedBirth.savedAt) : null;
+      var now = new Date();
+      if (savedAt && (now - savedAt) < 24 * 3600 * 1000) {
+        showSyncBanner();
+      }
+    }
+  } catch(e) {}
+})();
+
+function showSyncBanner() {
+  if (!_syncedBirth) return;
+  var card = document.getElementById('syncCard');
+  var detail = document.getElementById('syncDetail');
+  var sexText = _syncedBirth.sex || '男';
+  var bpStr = _syncedBirth.birthplace ? ' · 出生地：<strong>' + _syncedBirth.birthplace + '</strong>' : '';
+  detail.innerHTML = '<strong>' + _syncedBirth.year + '</strong>年<strong>' + _syncedBirth.month + '</strong>月<strong>' + _syncedBirth.day + '</strong>日 ' + timeLabel(_syncedBirth.hour, _syncedBirth.minute) + ' · <strong>' + sexText + '</strong>命' + bpStr;
+  card.classList.add('show');
+}
+
+function timeLabel(h, m) {
+  var labels = ['子时','丑时','寅时','卯时','辰时','巳时','午时','未时','申时','酉时','戌时','亥时'];
+  var ranges = ['(23-01)','(01-03)','(03-05)','(05-07)','(07-09)','(09-11)','(11-13)','(13-15)','(15-17)','(17-19)','(19-21)','(21-23)'];
+  var idx = Math.floor(((+h) % 24) / 2);
+  if (idx < 0 || idx > 11) idx = 0;
+  var minStr = m ? ':' + String(m).padStart(2,'0') : ':00';
+  return labels[idx] + ' ' + h + minStr + ranges[idx];
+}
+
+function useSyncedBirth() {
+  if (!_syncedBirth) return;
+  document.getElementById('year').value = _syncedBirth.year;
+  document.getElementById('month').value = _syncedBirth.month;
+  document.getElementById('day').value = _syncedBirth.day;
+  document.getElementById('hour').value = _syncedBirth.hour;
+  currentSex = _syncedBirth.sex || '男';
+  // 更新性别按钮状态
+  document.querySelectorAll('.sex-btn').forEach(function(b) {
+    b.className = 'sex-btn';
+    if ((b.textContent.indexOf('男') >= 0 && currentSex === '男') ||
+        (b.textContent.indexOf('女') >= 0 && currentSex === '女')) {
+      b.classList.add(currentSex === '男' ? 'active-male' : 'active-female');
+    }
+  });
+  doAnalyze();
+}
+
+function clearSyncedBirth() {
+  try { localStorage.removeItem('mingli_birth'); } catch(e) {}
+  _syncedBirth = null;
+  document.getElementById('syncCard').classList.remove('show');
+}
 
 function setSex(sex, btn) {
   currentSex = sex;
