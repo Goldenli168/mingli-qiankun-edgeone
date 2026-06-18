@@ -186,6 +186,10 @@
   .liunian-table .ss-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
   .liunian-table .ss-jixiang { background: rgba(39,174,96,0.12); color: #2ecc71; }
   .liunian-table .ss-neutral { background: rgba(136,146,164,0.1); color: var(--text-dim); }
+  .liunian-table .score-good { color: #2ecc71; font-weight: bold; }
+  .liunian-table .score-mid { color: var(--gold); font-weight: bold; }
+  .liunian-table .score-low { color: var(--red-light); font-weight: bold; }
+  .liunian-table .star-col { font-size: 0.65em; letter-spacing: -1px; white-space: nowrap; }
   .liunian-filter { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
   .liunian-filter input { padding: 6px 10px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 0.85em; width: 80px; }
   .liunian-filter label { color: var(--text-dim); font-size: 0.82em; letter-spacing: 1px; }
@@ -385,7 +389,7 @@
     </div>
     <div class="liunian-scroll">
       <table class="liunian-table" id="liunianTable">
-        <thead><tr><th>年份</th><th>流年干支</th><th>地支</th><th>神煞</th></tr></thead>
+        <thead><tr><th>年份</th><th>干支</th><th>纳音</th><th>十神</th><th>评分</th><th>简评</th><th>★事业</th><th>★财富</th><th>★感情</th><th>★健康</th></tr></thead>
         <tbody id="liunianTbody"></tbody>
       </table>
     </div>
@@ -794,23 +798,29 @@ document.addEventListener('keydown', function(e) {
 function renderLiunianTable(list) {
   var tbody = document.getElementById('liunianTbody');
   if (!list || list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:20px">暂无流年数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:20px">暂无流年数据</td></tr>';
     return;
   }
   var nowYear = new Date().getFullYear();
   var html = '';
+  var starMap = {5:'★★★★★',4:'★★★★☆',3:'★★★☆☆',2:'★★☆☆☆',1:'★☆☆☆☆',0:'—'};
+  var ssClsMap = {'比劫':'ss-neutral','印星':'ss-jixiang','食伤':'ss-neutral','财星':'ss-jixiang','官杀':'ss-ji'};
   for (var i = 0; i < list.length; i++) {
     var ln = list[i];
     var isCurrentYear = (ln['年份'] === nowYear);
-    var shensha = ln['神煞'] || '';
-    var ssCls = 'ss-neutral';
-    if (shensha.indexOf('红鸾') >= 0 || shensha.indexOf('天喜') >= 0 || shensha.indexOf('吉星') >= 0) ssCls = 'ss-jixiang';
-    else if (shensha.indexOf('破') >= 0 || shensha.indexOf('耗') >= 0) ssCls = 'ss-ji';
+    var scoreCls = ln['评分'] >= 65 ? 'score-good' : ln['评分'] >= 45 ? 'score-mid' : 'score-low';
+    var ssLabel = ln['十神类'] || '';
     html += '<tr' + (isCurrentYear ? ' style="background:rgba(201,168,76,0.08)"' : '') + '>' +
       '<td class="year-col">' + ln['年份'] + (isCurrentYear ? ' ◄' : '') + '</td>' +
       '<td class="gan-zhi">' + (ln['流年干支']||'') + '</td>' +
-      '<td>' + (ln['地支']||'') + '</td>' +
-      '<td><span class="shensha-tag ' + ssCls + '">' + shensha + '</span></td>' +
+      '<td style="font-size:0.72em;color:var(--text-dim)">' + (ln['纳音']||'') + '</td>' +
+      '<td><span style="font-size:0.75em;color:var(--text-dim)">' + (ln['十神']||'') + '</span></td>' +
+      '<td><span style="color:' + (ln['评分']>=65?'#2ecc71':ln['评分']>=45?'var(--gold)':'var(--red-light)') + ';font-weight:bold">' + (ln['评分']||50) + '</span></td>' +
+      '<td style="font-size:0.78em;max-width:200px;line-height:1.5">' + (ln['简评']||'') + '</td>' +
+      '<td>' + (starMap[ln['事业']]||'—') + '</td>' +
+      '<td>' + (starMap[ln['财富']]||'—') + '</td>' +
+      '<td>' + (starMap[ln['感情']]||'—') + '</td>' +
+      '<td>' + (starMap[ln['健康']]||'—') + '</td>' +
     '</tr>';
   }
   tbody.innerHTML = html;

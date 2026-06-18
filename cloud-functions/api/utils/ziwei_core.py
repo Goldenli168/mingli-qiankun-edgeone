@@ -401,8 +401,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "大运": _dayun_deep_analysis(
             _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year),
             places, year_gan),
-        # 流年分析
-        "流年": _calc_liunian(solar_year, year_gan),
+        # 流年分析（增强版：含四化、评分、简评、四维指引）
+        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
     }
@@ -919,40 +919,224 @@ def _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year):
     return result
 
 
-# ===== 流年分析 =====
-def _calc_liunian(solar_year, year_gan):
-    """计算流年分析（从出生年到当前年份）"""
-    ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
-    GAN   = list("甲乙丙丁戊己庚辛壬癸")
-    current_year = datetime.datetime.now().year
+# ===== 流年分析（增强版） =====
+def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
+    """
+    计算流年分析，包含四化评分、白话简评、四维指引。
 
+    参数:
+      solar_year: 出生公历年
+      year_gan: 年干
+      year_zhi_i: 年支索引 (0-11)
+      places: 十二宫数据列表
+      ming_branch: 命宫地支索引
+
+    返回:
+      [{"年份": int, "流年干支": str, "纳音": str, "十神": str,
+        "评分": int, "简评": str,
+        "事业": int, "财富": int, "感情": int, "健康": int,
+        "四维指引": str}, ...]
+    """
+    ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
+    GAN  = list("甲乙丙丁戊己庚辛壬癸")
+
+    # 纳音
+    NAYIN_MAP = {
+        "甲子":"海中金","乙丑":"海中金","丙寅":"炉中火","丁卯":"炉中火",
+        "戊辰":"大林木","己巳":"大林木","庚午":"路旁土","辛未":"路旁土",
+        "壬申":"剑锋金","癸酉":"剑锋金","甲戌":"山头火","乙亥":"山头火",
+        "丙子":"涧下水","丁丑":"涧下水","戊寅":"城头土","己卯":"城头土",
+        "庚辰":"白蜡金","辛巳":"白蜡金","壬午":"杨柳木","癸未":"杨柳木",
+        "甲申":"泉中水","乙酉":"泉中水","丙戌":"屋上土","丁亥":"屋上土",
+        "戊子":"霹雳火","己丑":"劈雳火","庚寅":"松柏木","辛卯":"松柏木",
+        "壬辰":"长流水","癸巳":"长流水","甲午":"沙中金","乙未":"沙中金",
+        "丙申":"山下火","丁酉":"山下火","戊戌":"平地木","己亥":"平地木",
+        "庚子":"壁上土","辛丑":"壁上土","壬寅":"金箔金","癸卯":"金箔金",
+        "甲辰":"覆灯火","乙巳":"覆灯火","丙午":"天河水","丁未":"天河水",
+        "戊申":"大驿土","己酉":"大驿土","庚戌":"钗钏金","辛亥":"钗钏金",
+        "壬子":"桑柘木","癸丑":"桑柘木","甲寅":"大溪水","乙卯":"大溪水",
+        "丙辰":"沙中土","丁巳":"沙中土","戊午":"天上火","己未":"天上火",
+        "庚申":"石榴木","辛酉":"石榴木","壬戌":"大海水","癸亥":"大海水",
+    }
+
+    # 流年天干十神（以年干为基准）
+    SHISHEN_TABLE = {
+        "甲":{"甲":"比肩","乙":"劫财","丙":"食神","丁":"伤官","戊":"偏财","己":"正财","庚":"七杀","辛":"正官","壬":"偏印","癸":"正印"},
+        "乙":{"甲":"劫财","乙":"比肩","丙":"伤官","丁":"食神","戊":"正财","己":"偏财","庚":"正官","辛":"七杀","壬":"正印","癸":"偏印"},
+        "丙":{"甲":"偏印","乙":"正印","丙":"比肩","丁":"劫财","戊":"食神","己":"伤官","庚":"偏财","辛":"正财","壬":"七杀","癸":"正官"},
+        "丁":{"甲":"正印","乙":"偏印","丙":"劫财","丁":"比肩","戊":"伤官","己":"食神","庚":"正财","辛":"偏财","壬":"正官","癸":"七杀"},
+        "戊":{"甲":"七杀","乙":"正官","丙":"偏印","丁":"正印","戊":"比肩","己":"劫财","庚":"食神","辛":"伤官","壬":"偏财","癸":"正财"},
+        "己":{"甲":"正官","乙":"七杀","丙":"正印","丁":"偏印","戊":"劫财","己":"比肩","庚":"伤官","辛":"食神","壬":"正财","癸":"偏财"},
+        "庚":{"甲":"偏财","乙":"正财","丙":"七杀","丁":"正官","戊":"偏印","己":"正印","庚":"比肩","辛":"劫财","壬":"食神","癸":"伤官"},
+        "辛":{"甲":"正财","乙":"偏财","丙":"正官","丁":"七杀","戊":"正印","己":"偏印","庚":"劫财","辛":"比肩","壬":"伤官","癸":"食神"},
+        "壬":{"甲":"食神","乙":"伤官","丙":"偏财","丁":"正财","戊":"七杀","己":"正官","庚":"偏印","辛":"正印","壬":"比肩","癸":"劫财"},
+        "癸":{"甲":"伤官","乙":"食神","丙":"正财","丁":"偏财","戊":"正官","己":"七杀","庚":"正印","辛":"偏印","壬":"劫财","癸":"比肩"},
+    }
+
+    # 流年四化表（天干→[化禄,化权,化科,化忌]）
+    SIHUA_LN = {
+        "甲":["廉贞","破军","武曲","太阳"],
+        "乙":["天机","天梁","紫微","太阴"],
+        "丙":["天同","天机","文昌","廉贞"],
+        "丁":["太阴","天同","天机","巨门"],
+        "戊":["贪狼","太阴","右弼","天机"],
+        "己":["武曲","贪狼","天梁","文曲"],
+        "庚":["太阳","武曲","太阴","天同"],
+        "辛":["巨门","太阳","文曲","文昌"],
+        "壬":["天梁","紫微","左辅","武曲"],
+        "癸":["破军","巨门","太阴","贪狼"],
+    }
+
+    # 星曜对各维度贡献（正值＝吉，负值＝凶）
+    DIM_STAR = {
+        "财富": {"天府":28,"武曲":25,"太阴":22,"禄存":28,"贪狼":10,"紫微":18,"天相":15,
+                 "破军":-15,"七杀":-10,"巨门":-12,"廉贞":-8,"太阳":8,"天同":8,"天机":5,"天梁":5},
+        "事业": {"紫微":35,"天府":28,"太阳":25,"天相":22,"武曲":20,"天机":15,"廉贞":12,
+                 "天梁":10,"贪狼":10,"太阴":12,"七杀":8,"破军":5,"天同":8,"巨门":5},
+        "感情": {"太阴":25,"天同":22,"天府":20,"天相":18,"天梁":15,"紫微":10,"太阳":12,
+                 "贪狼":-12,"七杀":-18,"破军":-20,"廉贞":-12,"巨门":-15,"武曲":-8,"天机":5},
+        "健康": {"天梁":25,"天同":22,"天府":18,"天相":15,"紫微":12,"太阳":10,"太阴":10,
+                 "破军":-15,"七杀":-12,"廉贞":-10,"巨门":-8,"贪狼":-8,"武曲":-5,"天机":3},
+    }
+
+    # 四化对维度影响
+    SIHUA_DIM = {
+        "化禄": {"财富":20,"事业":12,"感情":10,"健康":8},
+        "化权": {"财富":10,"事业":22,"感情":5,"健康":5},
+        "化科": {"财富":8,"事业":10,"感情":8,"健康":10},
+        "化忌": {"财富":-18,"事业":-15,"感情":-15,"健康":-12},
+    }
+
+    # 地支冲合
+    def _chong_he(z1, z2):
+        """返回地支关系"""
+        diff = (z1 - z2) % 12
+        if diff == 6: return "冲", -1, "太岁冲命宫，动荡多变，宜冷静应对"
+        if diff == 0: return "值", 1, "太岁值命宫，变动之年，宜顺势而为"
+        if diff in (4, 8): return "合", 2, "太岁与命宫相合，贵人助力，行事顺遂"
+        if diff in (3, 9): return "害", -2, "太岁与命宫相害，暗藏是非"
+        return "平", 0, "太岁无重大冲合，运势平稳"
+
+    def _score_to_stars(s):
+        if s >= 85: return 5
+        if s >= 70: return 4
+        if s >= 55: return 3
+        if s >= 40: return 2
+        return 1
+
+    def _brief(y, g, z, ny, ss, sihua_stars, chong_str):
+        """生成40-60字白话简评"""
+        parts = []
+        s_lu = sihua_stars[0]; s_quan = sihua_stars[1]; s_ke = sihua_stars[2]; s_ji = sihua_stars[3]
+
+        # 太岁层
+        if chong_str.startswith("冲"):
+            parts.append("今年太岁冲命宫，变动大是主旋律")
+        elif chong_str.startswith("值"):
+            parts.append("太岁值命宫，人生新篇章开启的一年")
+        elif chong_str.startswith("合"):
+            parts.append("太岁合命宫，天时地利人和都在你这边")
+        else:
+            parts.append("今年运势稳中求进")
+
+        # 四化层
+        if s_lu and s_lu not in ("",""):
+            parts.append(f"{s_lu}化禄，财源机会增加")
+        if s_quan and s_quan not in ("", ""):
+            parts.append(f"{s_quan}化权，掌握主动权")
+        if s_ji and s_ji not in ("", ""):
+            parts.append(f"但{s_ji}化忌需防波折")
+
+        # 纳音提示
+        ny_short = ny[:2] if ny else ""
+        if ny_short in ("大海","剑锋","炉中","天上"):
+            parts.append("火旺之年忌冲动消费")
+
+        return "，".join(parts[:4]) + "。"
+
+    def _guide(dims):
+        """四维指引"""
+        lines = []
+        dmap = {"事业":"事业","财富":"财运","感情":"感情","健康":"身体"}
+        for k in ["事业","财富","感情","健康"]:
+            v = dims[k]
+            if v >= 70:
+                lines.append("%s★★★★★ 黄金期，全力出击" % dmap[k])
+            elif v >= 55:
+                lines.append("%s★★★☆☆ 稳中向好" % dmap[k])
+            elif v >= 40:
+                lines.append("%s★★☆☆☆ 宜守不宜攻" % dmap[k])
+            else:
+                lines.append("%s★☆☆☆☆ 需格外谨慎" % dmap[k])
+        return "；".join(lines[:4])
+
+    current_year = datetime.datetime.now().year
     items = []
+
     for y in range(solar_year, min(solar_year + 120, current_year + 1)):
         gan_idx = (y - 4) % 10
         zhi_idx = (y - 4) % 12
         g = GAN[gan_idx]
         z = ZHI[zhi_idx]
 
-        # 简化神煞
-        diff = y - solar_year
-        if diff <= 12:
-            shen = "岁破"
-        elif diff <= 24:
-            shen = "大耗"
-        elif diff <= 36:
-            shen = "小耗"
-        elif diff <= 48:
-            shen = "红鸾"
-        elif diff <= 60:
-            shen = "天喜"
-        else:
-            shen = "吉星"
+        # 纳音
+        gz_key = "%s%s" % (g, z)
+        ny = NAYIN_MAP.get(gz_key, "")
+
+        # 十神
+        ss = SHISHEN_TABLE.get(year_gan, {}).get(g, "?")
+        ss_label = "比劫" if ss in ("比肩","劫财") else "印星" if ss in ("正印","偏印") else \
+                    "食伤" if ss in ("食神","伤官") else "财星" if ss in ("正财","偏财") else \
+                    "官杀" if ss in ("正官","七杀") else "?"
+
+        # 流年四化
+        sihua_stars = SIHUA_LN.get(g, ["","","",""])
+
+        # 太岁与命宫的冲合
+        chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
+
+        # 四维度评分（基于流年四化）
+        dims = {"事业":50, "财富":50, "感情":50, "健康":50}
+        hua_labels = ["化禄","化权","化科","化忌"]
+        for hi, hua_name in enumerate(hua_labels):
+            star_name = sihua_stars[hi]
+            if not star_name:
+                continue
+            hua_adj = SIHUA_DIM.get(hua_name, {})
+            for dim in dims:
+                dims[dim] += hua_adj.get(dim, 0)
+            # 星曜自身的贡献
+            for dim in dims:
+                star_tbl = DIM_STAR.get(dim, {})
+                dims[dim] += star_tbl.get(star_name, 0) // 2  # 权重减半
+
+        # 太岁冲合调节
+        for dim in dims:
+            dims[dim] += chong_val * 3
+            dims[dim] = max(20, min(100, dims[dim]))
+
+        # 综合评分
+        avg = int(sum(dims.values()) / 4)
+
+        # 简评
+        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc)
+
+        # 四维指引
+        guide = _guide(dims)
 
         items.append({
             "年份": y,
-            "流年干支": "%s%s" % (g, z),
-            "地支": z,
-            "神煞": shen,
+            "流年干支": gz_key,
+            "纳音": ny,
+            "十神": ss,
+            "十神类": ss_label,
+            "评分": avg,
+            "简评": brief,
+            "事业": _score_to_stars(dims["事业"]),
+            "财富": _score_to_stars(dims["财富"]),
+            "感情": _score_to_stars(dims["感情"]),
+            "健康": _score_to_stars(dims["健康"]),
+            "四维指引": guide,
         })
 
     return items
