@@ -457,6 +457,38 @@ var currentSex = '男';
 var __lastResult = null;
 var liunianData = {};
 
+// 页面加载时恢复上次分析结果（切页不回空白）
+(function restoreResult() {
+  try {
+    var raw = localStorage.getItem('mingli_bazi_result');
+    if (!raw) return;
+    var cached = JSON.parse(raw);
+    if (!cached.result) return;
+    __lastResult = cached.result;
+    liunianData = {};
+    if (cached.year) document.getElementById('year').value = cached.year;
+    if (cached.month) document.getElementById('month').value = cached.month;
+    if (cached.day) document.getElementById('day').value = cached.day;
+    if (cached.hour) document.getElementById('hour').value = cached.hour;
+    if (cached.minute) document.getElementById('minute').value = cached.minute;
+    if (cached.birthplace) document.getElementById('birthplace').value = cached.birthplace;
+    if (cached.solarHour) document.getElementById('solarHour').value = cached.solarHour;
+    if (cached.solarMinute) document.getElementById('solarMinute').value = cached.solarMinute;
+    if (cached.ampm) document.getElementById('ampm').value = cached.ampm;
+    if (cached.sex) {
+      currentSex = cached.sex;
+      document.querySelectorAll('.sex-btn').forEach(function(b) {
+        b.className = 'sex-btn';
+        if ((b.textContent.indexOf('男') >= 0 && cached.sex === '男') ||
+            (b.textContent.indexOf('女') >= 0 && cached.sex === '女')) {
+          b.classList.add(cached.sex === '男' ? 'active-male' : 'active-female');
+        }
+      });
+    }
+    renderResult(cached.result, cached.year || 0);
+  } catch(e) {}
+})();
+
 function setSex(sex, btn) {
   currentSex = sex;
   document.querySelectorAll('.sex-btn').forEach(function(b) { b.className = 'sex-btn'; });
@@ -532,6 +564,14 @@ function doAnalyze() {
         birthplace: bp || '',
         solarHour: sh, solarMinute: sm, ampm: ampm,
         savedAt: new Date().toISOString()
+      }));
+      // 缓存分析结果，切页回来保持显示
+      localStorage.setItem('mingli_bazi_result', JSON.stringify({
+        result: data,
+        year: +year, month: +month, day: +day,
+        hour: +hour, minute: +minute, sex: currentSex,
+        birthplace: bp || '',
+        solarHour: sh, solarMinute: sm, ampm: ampm
       }));
     } catch(e) {}
   })

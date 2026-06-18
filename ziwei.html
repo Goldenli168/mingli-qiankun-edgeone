@@ -424,13 +424,46 @@ var _syncedBirth = null;
   } catch(e) {}
 })();
 
+// 页面加载时恢复上次分析结果（切页不回空白）
+(function restoreResult() {
+  try {
+    var raw = localStorage.getItem('mingli_ziwei_result');
+    if (!raw) return;
+    var cached = JSON.parse(raw);
+    if (!cached.result) return;
+    currentResult = cached.result;
+    if (cached.year) document.getElementById('year').value = cached.year;
+    if (cached.month) document.getElementById('month').value = cached.month;
+    if (cached.day) document.getElementById('day').value = cached.day;
+    if (cached.hour) document.getElementById('hour').value = cached.hour;
+    if (cached.sex) {
+      currentSex = cached.sex;
+      document.querySelectorAll('.sex-btn').forEach(function(b) {
+        b.className = 'sex-btn';
+        if ((b.textContent.indexOf('男') >= 0 && cached.sex === '男') ||
+            (b.textContent.indexOf('女') >= 0 && cached.sex === '女')) {
+          b.classList.add(cached.sex === '男' ? 'active-male' : 'active-female');
+        }
+      });
+    }
+    activeDetailIdx = -1;
+    renderResult(cached.result);
+  } catch(e) {}
+})();
+
 function showSyncBanner() {
   if (!_syncedBirth) return;
   var card = document.getElementById('syncCard');
   var detail = document.getElementById('syncDetail');
   var sexText = _syncedBirth.sex || '男';
   var bpStr = _syncedBirth.birthplace ? ' · 出生地：<strong>' + _syncedBirth.birthplace + '</strong>' : '';
-  detail.innerHTML = '<strong>' + _syncedBirth.year + '</strong>年<strong>' + _syncedBirth.month + '</strong>月<strong>' + _syncedBirth.day + '</strong>日 ' + timeLabel(_syncedBirth.hour, _syncedBirth.minute) + ' · <strong>' + sexText + '</strong>命' + bpStr;
+  var solarLine = '';
+  if (_syncedBirth.solarHour > 0 && _syncedBirth.birthplace) {
+    // 展示真太阳时信息：原始公历时间 + 调整后时辰 + 经度偏移
+    var rawTimeStr = _syncedBirth.solarHour + ':' + String(_syncedBirth.solarMinute||0).padStart(2,'0') + ' ' + (_syncedBirth.ampm||'AM');
+    solarLine = '<br>☀ 真太阳时 ' + String(_syncedBirth.hour).padStart(2,'0') + ':' + String(_syncedBirth.minute||0).padStart(2,'0') + '（公历 ' + rawTimeStr + '）';
+  }
+  detail.innerHTML = '<strong>' + _syncedBirth.year + '</strong>年<strong>' + _syncedBirth.month + '</strong>月<strong>' + _syncedBirth.day + '</strong>日 ' + timeLabel(_syncedBirth.hour, _syncedBirth.minute) + ' · <strong>' + sexText + '</strong>命' + bpStr + solarLine;
   card.classList.add('show');
 }
 
@@ -502,6 +535,17 @@ function doAnalyze() {
     currentResult = data;
     activeDetailIdx = -1;
     renderResult(data);
+    // 缓存分析结果，切页回来保持显示
+    try {
+      localStorage.setItem('mingli_ziwei_result', JSON.stringify({
+        result: data,
+        year: document.getElementById('year').value,
+        month: document.getElementById('month').value,
+        day: document.getElementById('day').value,
+        hour: document.getElementById('hour').value,
+        sex: currentSex
+      }));
+    } catch(e) {}
   })
   .catch(function(e) { alert('分析失败：' + e.message); })
   .finally(function() {
