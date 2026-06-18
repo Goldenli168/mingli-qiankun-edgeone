@@ -515,10 +515,20 @@ function doAnalyze() {
     liunianData = {};
     renderResult(data, +year);
     // 保存生辰信息到 localStorage，供紫微斗数页面共享
+    // 注意：如有真太阳时，需保存调整后的时辰，而非原始公历时间
+    var saveHour = +hour, saveMin = +minute;
+    if (sh > 0 && bp && bp.trim()) {
+      var coords = lookupCity(bp);
+      if (coords) {
+        var tst = calcTrueSolarTime(sh, sm, ampm, coords[0]);
+        saveHour = tst.hour;
+        saveMin = tst.minute;
+      }
+    }
     try {
       localStorage.setItem('mingli_birth', JSON.stringify({
         year: +year, month: +month, day: +day,
-        hour: +hour, minute: +minute, sex: currentSex,
+        hour: saveHour, minute: saveMin, sex: currentSex,
         birthplace: bp || '',
         solarHour: sh, solarMinute: sm, ampm: ampm,
         savedAt: new Date().toISOString()
@@ -1048,18 +1058,23 @@ function updateSolarPreview() {
   if (!sh || !bp) { hint.innerHTML = '填写后优先用于时辰计算'; hint.style.color = 'var(--text-dim)'; return; }
   var coords = lookupCity(bp);
   if (!coords) { hint.innerHTML = '填写后优先用于时辰计算'; hint.style.color = 'var(--text-dim)'; return; }
-  var lon = coords[0];
-  var h24 = sh;
-  if (ampm === 'PM' && sh < 12) h24 = sh + 12;
-  else if (ampm === 'AM' && sh === 12) h24 = 0;
-  var totalMin = h24 * 60 + sm + (lon - 120) * 4;
-  if (totalMin < 0) totalMin += 24 * 60;
-  if (totalMin >= 24 * 60) totalMin -= 24 * 60;
-  var th = Math.floor(totalMin / 60), tm = Math.round(totalMin % 60);
-  var offsetMin = Math.round((lon - 120) * 4);
+  var tst = calcTrueSolarTime(sh, sm, ampm, coords[0]);
+  var th = tst.hour, tm = tst.minute;
+  var offsetMin = Math.round((coords[0] - 120) * 4);
   var sign = offsetMin >= 0 ? '+' : '';
   hint.innerHTML = '☀ 真太阳时 ' + String(th).padStart(2,'0') + ':' + String(tm).padStart(2,'0') + '（经度偏移 ' + sign + offsetMin + '分）';
   hint.style.color = 'var(--gold-light)';
+}
+
+// 抽取真太阳时计算为共用函数，供 doAnalyze 和 updateSolarPreview 复用
+function calcTrueSolarTime(solarHour, solarMinute, ampm, lon) {
+  var h24 = solarHour;
+  if (ampm === 'PM' && solarHour < 12) h24 = solarHour + 12;
+  else if (ampm === 'AM' && solarHour === 12) h24 = 0;
+  var totalMin = h24 * 60 + solarMinute + (lon - 120) * 4;
+  if (totalMin < 0) totalMin += 24 * 60;
+  if (totalMin >= 24 * 60) totalMin -= 24 * 60;
+  return { hour: Math.floor(totalMin / 60), minute: Math.round(totalMin % 60) };
 }
 
 document.getElementById('solarHour').addEventListener('input', updateSolarPreview);
