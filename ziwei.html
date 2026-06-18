@@ -161,6 +161,7 @@
 
   .dayun-deep { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .dayun-card.expanded .dayun-deep { display: block; }
+  .dayun-card.expanded { max-width: none; width: 100%; flex-basis: 100%; }
   .dayun-deep .deep-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
   .dayun-deep .deep-text { font-size: 0.7em; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
   .dayun-deep .dim-section { margin-bottom: 6px; }
@@ -182,6 +183,7 @@
   .ln-mini-table .ln-yr { color: var(--gold); font-weight: bold; }
   .ln-mini-table .ln-ss { color: var(--text-dim); font-size: 0.9em; }
   .ln-mini-table .ln-brief { max-width: 160px; white-space: normal; line-height: 1.4; font-size: 0.9em; color: var(--text-dim); }
+  .ln-mini-table .ln-star { font-size: 0.82em; white-space: nowrap; letter-spacing: -1px; }
   .ln-mini-table .ln-now td { background: rgba(201,168,76,0.08); }
   .ln-mini-table tr:hover td { background: rgba(201,168,76,0.04); }
 
@@ -800,9 +802,20 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
   if (filtered.length === 0) return '';
   var nowYear = new Date().getFullYear();
   var starMap = {5:'★★★★★',4:'★★★★☆',3:'★★★☆☆',2:'★★☆☆☆',1:'★☆☆☆☆'};
+  var dimCfg = [
+    {key:'事业', color:'#3498db', label:'事业'},
+    {key:'财富', color:'#2ecc71', label:'财富'},
+    {key:'婚姻', color:'#e74c3c', label:'婚姻'},
+    {key:'子女', color:'#9b59b6', label:'子女'},
+    {key:'健康', color:'#f39c12', label:'健康'}
+  ];
   var html = '<div class="ln-mini-title">📅 此运流年（' + startYear + '—' + endYear + '）</div>';
   html += '<div class="ln-mini-scroll"><table class="ln-mini-table">';
-  html += '<thead><tr><th>年份</th><th>干支</th><th>十神</th><th>评</th><th>简评</th><th>事</th><th>财</th><th>情</th><th>健</th></tr></thead><tbody>';
+  html += '<thead><tr><th>年份</th><th>干支</th><th>十神</th><th>评</th><th>简评</th>';
+  for (var di = 0; di < dimCfg.length; di++) {
+    html += '<th style="color:' + dimCfg[di].color + ';letter-spacing:0">' + dimCfg[di].label + '</th>';
+  }
+  html += '</tr></thead><tbody>';
   for (var i = 0; i < filtered.length; i++) {
     var ln = filtered[i];
     var isNow = (ln['年份'] === nowYear);
@@ -813,12 +826,11 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       '<td>' + (ln['流年干支']||'') + '</td>' +
       '<td class="ln-ss">' + (ln['十神']||'') + '</td>' +
       '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
-      '<td class="ln-brief">' + (ln['简评']||'') + '</td>' +
-      '<td>' + (starMap[ln['事业']]||'—') + '</td>' +
-      '<td>' + (starMap[ln['财富']]||'—') + '</td>' +
-      '<td>' + (starMap[ln['感情']]||'—') + '</td>' +
-      '<td>' + (starMap[ln['健康']]||'—') + '</td>' +
-    '</tr>';
+      '<td class="ln-brief">' + (ln['简评']||'') + '</td>';
+    for (var di = 0; di < dimCfg.length; di++) {
+      html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + (starMap[ln[dimCfg[di].key]]||'—') + '</td>';
+    }
+    html += '</tr>';
   }
   html += '</tbody></table></div>';
   return html;

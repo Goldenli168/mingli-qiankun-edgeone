@@ -993,18 +993,20 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
                  "破军":-15,"七杀":-10,"巨门":-12,"廉贞":-8,"太阳":8,"天同":8,"天机":5,"天梁":5},
         "事业": {"紫微":35,"天府":28,"太阳":25,"天相":22,"武曲":20,"天机":15,"廉贞":12,
                  "天梁":10,"贪狼":10,"太阴":12,"七杀":8,"破军":5,"天同":8,"巨门":5},
-        "感情": {"太阴":25,"天同":22,"天府":20,"天相":18,"天梁":15,"紫微":10,"太阳":12,
+        "婚姻": {"太阴":25,"天同":22,"天府":20,"天相":18,"天梁":15,"紫微":10,"太阳":12,
                  "贪狼":-12,"七杀":-18,"破军":-20,"廉贞":-12,"巨门":-15,"武曲":-8,"天机":5},
+        "子女": {"天同":22,"天府":20,"天相":18,"太阴":15,"天梁":12,"紫微":10,"太阳":8,
+                 "破军":-15,"七杀":-12,"廉贞":-10,"贪狼":-8,"巨门":-5,"武曲":-5,"天机":5},
         "健康": {"天梁":25,"天同":22,"天府":18,"天相":15,"紫微":12,"太阳":10,"太阴":10,
                  "破军":-15,"七杀":-12,"廉贞":-10,"巨门":-8,"贪狼":-8,"武曲":-5,"天机":3},
     }
 
     # 四化对维度影响
     SIHUA_DIM = {
-        "化禄": {"财富":20,"事业":12,"感情":10,"健康":8},
-        "化权": {"财富":10,"事业":22,"感情":5,"健康":5},
-        "化科": {"财富":8,"事业":10,"感情":8,"健康":10},
-        "化忌": {"财富":-18,"事业":-15,"感情":-15,"健康":-12},
+        "化禄": {"财富":20,"事业":12,"婚姻":8,"子女":10,"健康":8},
+        "化权": {"财富":10,"事业":22,"婚姻":5,"子女":5,"健康":5},
+        "化科": {"财富":8,"事业":10,"婚姻":10,"子女":8,"健康":10},
+        "化忌": {"财富":-18,"事业":-15,"婚姻":-15,"子女":-12,"健康":-12},
     }
 
     # 地支冲合
@@ -1055,10 +1057,10 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         return "，".join(parts[:4]) + "。"
 
     def _guide(dims):
-        """四维指引"""
+        """五维指引"""
         lines = []
-        dmap = {"事业":"事业","财富":"财运","感情":"感情","健康":"身体"}
-        for k in ["事业","财富","感情","健康"]:
+        dmap = {"事业":"事业","财富":"财运","婚姻":"婚姻","子女":"子女","健康":"健康"}
+        for k in ["事业","财富","婚姻","子女","健康"]:
             v = dims[k]
             if v >= 70:
                 lines.append("%s★★★★★ 黄金期，全力出击" % dmap[k])
@@ -1068,7 +1070,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
                 lines.append("%s★★☆☆☆ 宜守不宜攻" % dmap[k])
             else:
                 lines.append("%s★☆☆☆☆ 需格外谨慎" % dmap[k])
-        return "；".join(lines[:4])
+        return "；".join(lines[:5])
 
     current_year = datetime.datetime.now().year
     items = []
@@ -1096,8 +1098,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         # 太岁与命宫的冲合
         chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
 
-        # 四维度评分（基于流年四化）
-        dims = {"事业":50, "财富":50, "感情":50, "健康":50}
+        # 五维度评分（基于流年四化）
+        dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
         hua_labels = ["化禄","化权","化科","化忌"]
         for hi, hua_name in enumerate(hua_labels):
             star_name = sihua_stars[hi]
@@ -1117,12 +1119,12 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
             dims[dim] = max(20, min(100, dims[dim]))
 
         # 综合评分
-        avg = int(sum(dims.values()) / 4)
+        avg = int(sum(dims.values()) / 5)
 
         # 简评
         brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc)
 
-        # 四维指引
+        # 五维指引
         guide = _guide(dims)
 
         items.append({
@@ -1135,7 +1137,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
             "简评": brief,
             "事业": _score_to_stars(dims["事业"]),
             "财富": _score_to_stars(dims["财富"]),
-            "感情": _score_to_stars(dims["感情"]),
+            "婚姻": _score_to_stars(dims["婚姻"]),
+            "子女": _score_to_stars(dims["子女"]),
             "健康": _score_to_stars(dims["健康"]),
             "四维指引": guide,
         })
