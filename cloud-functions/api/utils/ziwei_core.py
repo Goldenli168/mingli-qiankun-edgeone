@@ -1254,6 +1254,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         # 倪海厦：「禄在哪儿钱在哪儿，忌在哪儿问题在哪儿」
         # 关键：四化星落在命盘的哪个宫位，决定哪个人生领域受影响
         dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
+        hua_labels = ["化禄","化权","化科","化忌"]
 
         # 1) 四化落宫 —— 核心评分逻辑（因人而异的关键）
         for hi, hua_name in enumerate(hua_labels):
