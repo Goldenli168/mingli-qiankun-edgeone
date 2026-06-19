@@ -458,8 +458,16 @@ var __lastResult = null;
 var liunianData = {};
 
 // 页面加载时恢复上次分析结果（切页不回空白）
+// 缓存版本：升级时自动清除旧缓存
+var BAZI_CACHE_VERSION = 'v2.7';
 (function restoreResult() {
   try {
+    var ver = localStorage.getItem('mingli_bazi_ver');
+    if (ver !== BAZI_CACHE_VERSION) {
+      localStorage.removeItem('mingli_bazi_result');
+      localStorage.setItem('mingli_bazi_ver', BAZI_CACHE_VERSION);
+      return;
+    }
     var raw = localStorage.getItem('mingli_bazi_result');
     if (!raw) return;
     var cached = JSON.parse(raw);

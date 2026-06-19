@@ -425,8 +425,16 @@ var _syncedBirth = null;
 })();
 
 // 页面加载时恢复上次分析结果（切页不回空白）
+// 缓存版本：评分维度从4维升级到5维时必须清除旧缓存
+var ZIWEI_CACHE_VERSION = 'v2.7';
 (function restoreResult() {
   try {
+    var ver = localStorage.getItem('mingli_ziwei_ver');
+    if (ver !== ZIWEI_CACHE_VERSION) {
+      localStorage.removeItem('mingli_ziwei_result');
+      localStorage.setItem('mingli_ziwei_ver', ZIWEI_CACHE_VERSION);
+      return;
+    }
     var raw = localStorage.getItem('mingli_ziwei_result');
     if (!raw) return;
     var cached = JSON.parse(raw);
