@@ -380,6 +380,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     year_zhi_i = (lunar_year - 4) % 12
 
+    # 提取大运原始数据（iztro格式），供流年分析三盘联动
+    _dayun_raw = _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year)
+
     return {
         "基本信息": {
             "性别": sex,
@@ -402,7 +405,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year),
             places, year_gan),
         # 流年分析（增强版：含四化、评分、简评、四维指引）
-        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch),
+        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year)),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
     }
@@ -920,7 +923,7 @@ def _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year):
 
 
 # ===== 流年分析（增强版） =====
-def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
+def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_list=None):
     """
     计算流年分析，包含四化评分、白话简评、四维指引。
 
@@ -1018,7 +1021,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         if s >= 40: return 2
         return 1
 
-    def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info):
+    def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info, dayun_ctx=None):
         """倪海厦《天纪》风格简评——结合出生命盘宫位，因人而异"""
         s_lu = sihua_stars[0]; s_quan = sihua_stars[1]; s_ke = sihua_stars[2]; s_ji = sihua_stars[3]
         
@@ -1122,7 +1125,14 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         if ss in ss_tips and len(parts) < 3:
             parts.append(ss_tips[ss])
         
-        return "。".join(parts[:3]) + "。"
+        # 大运背景句（如果有）
+        if dayun_ctx and dayun_ctx.get('palace_name') and len(parts) < 4:
+            dy_info = f"你正走{dayun_ctx['age_range']}{dayun_ctx['palace_name']}大运" if dayun_ctx.get('age_range') else ''
+            if dy_info and dayun_ctx.get('rating'):
+                dy_info += f"（{dayun_ctx['rating']}）"
+            if dy_info: parts.append(dy_info)
+
+        return "。".join(parts[:4]) + "。"
 
     def _guide(dims):
         """五维指引"""
@@ -1202,6 +1212,42 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
 
         # 太岁与命宫的冲合
         chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
+        # 0) 大运上下文 —— 三盘联动的关键桥梁
+        current_age = y - solar_year
+        dayun_ctx = None
+        dy_palace_name = ''
+        dy_dim = None
+        if dayun_list:
+            for dy in dayun_list:
+                if dy.get('起始年龄', 0) <= current_age <= dy.get('结束年龄', 999):
+                    dy_zhi_char = dy.get('宫位', '')
+                    dy_zhi_i = ZHI.index(dy_zhi_char) if dy_zhi_char in ZHI else -1
+                    dy_palace_data = _zhi_to_palace.get(dy_zhi_i, {})
+                    dy_palace_name = dy_palace_data.get('宫名', '')
+                    dy_dim = PALACE_DIM_MAP.get(dy_palace_name)
+                    dy_stars = dy_palace_data.get('主星', []) + dy_palace_data.get('辅星', [])
+                    dy_quality = sum(1 for s in dy_stars if s in JI_STARS) - sum(1 for s in dy_stars if s in SHA_STARS)
+                    dayun_ctx = {
+                        'age_range': f"{dy.get('起始年龄',0)}-{dy.get('结束年龄',0)}岁",
+                        'gz': dayun_ctx_gz if 'dayun_ctx_gz' in dir() else '',
+                        'palace_name': dy_palace_name,
+                        'dim': dy_dim,
+                        'rating': dy.get('综合评级', '平运'),
+                        'score': dy.get('综合评分', 50),
+                        'quality': dy_quality,
+                        'stars': dy_stars[:3],
+                    }
+                    # 大运天干地支
+                    dy_gan = dy.get('天干', '')
+                    dy_zhi = dy.get('地支', '')
+                    gz_str = f"{dy_gan}{dy_zhi}" if dy_gan and dy_zhi else ''
+                    # 查找大运宫位在places中的位置
+                    for p in places:
+                        if p.get('宫位') == dy_zhi_i:
+                            dy_gan = p.get('天干', '') or dy_gan
+                    dayun_ctx['gz'] = f"{dy_gan}{dy_zhi}" if dy_gan and dy_zhi else ''
+                    break
+
 
         # 五维度评分 —— 四化落宫 + 流年主题宫 + 三方四正联动
         # v2.8：底分降至40，权重放大，神煞介入，分数拉开30-90
@@ -1304,9 +1350,14 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
             dims[dim] += chong_val * 3
             dims[dim] = max(15, min(100, dims[dim]))
 
+        # 5) 大运主题加权 —— 当前大运的命宫维度±10~15
+        if dayun_ctx and dy_dim:
+            dy_bonus = 10 if dayun_ctx['quality'] >= 0 else -10
+            dims[dy_dim] += dy_bonus
+
         avg = int(sum(dims.values()) / 5)
 
-        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info)
+        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info, dayun_ctx)
 
         # 五维指引
         guide = _guide(dims)
