@@ -1193,6 +1193,37 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
                 lines.append("%s★☆☆☆☆ 需格外谨慎" % dmap[k])
         return "；".join(lines[:5])
 
+    # 构建宫位索引：地支索引 → 宫位数据
+    _zhi_to_palace = {}
+    for p in places:
+        zi = p.get("宫位", -1)
+        if zi >= 0:
+            _zhi_to_palace[zi] = p
+
+    # 宫名 → 评分维度映射（紫微斗数全书十二宫对应人生领域）
+    PALACE_DIM_MAP = {
+        "命宫": None,      # 命宫影响全局，不单独对应某维度
+        "兄弟": None,
+        "夫妻": "婚姻",     # 夫妻宫 → 婚姻
+        "子女": "子女",     # 子女宫 → 子女
+        "财帛": "财富",     # 财帛宫 → 财富
+        "疾厄": "健康",     # 疾厄宫 → 健康
+        "迁移": None,
+        "交友": None,
+        "官禄": "事业",     # 官禄宫 → 事业
+        "田宅": "财富",     # 田宅宫 → 财富（不动产）
+        "福德": "健康",     # 福德宫 → 健康（精神健康）
+        "父母": None,
+    }
+
+    # 四化落宫对维度的加分（《天纪》原则：禄在哪个宫，哪个领域旺）
+    SIHUA_PALACE_BONUS = {
+        "化禄": {"婚姻":18,"子女":15,"财富":20,"健康":12,"事业":15},
+        "化权": {"婚姻":8,"子女":8,"财富":10,"健康":8,"事业":20},
+        "化科": {"婚姻":12,"子女":12,"财富":8,"健康":12,"事业":10},
+        "化忌": {"婚姻":-15,"子女":-12,"财富":-18,"健康":-15,"事业":-15},
+    }
+
     current_year = datetime.datetime.now().year
     items = []
 
@@ -1219,70 +1250,55 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         # 太岁与命宫的冲合
         chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
 
-        # 五维度评分 —— 基于《天纪》《紫微斗数全书》四化原则
+        # 五维度评分 —— 基于出生命盘的四化落宫（《天纪》《紫微斗数全书》核心法）
         # 倪海厦：「禄在哪儿钱在哪儿，忌在哪儿问题在哪儿」
+        # 关键：四化星落在命盘的哪个宫位，决定哪个人生领域受影响
         dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
 
-        # 星曜分类（《天纪》体系）
-        STAR_CAT = {
-            "紫微":"官","天府":"财","太阳":"官","武曲":"财","天相":"官",
-            "天机":"智","天同":"福","天梁":"福","太阴":"财","贪狼":"桃",
-            "巨门":"口","廉贞":"桃","七杀":"杀","破军":"杀",
-        }
-
-        # 四化对各维度的主效应（《紫微斗数全书》）
-        SIHUA_PRIMARY = {
-            "化禄": [("财富",15),("事业",5),("婚姻",5)],
-            "化权": [("事业",18),("财富",8)],
-            "化科": [("事业",8),("婚姻",8),("子女",8)],
-            "化忌": [("财富",-15),("婚姻",-10),("健康",-10)],
-        }
-
-        # 星曜类别对四化的调节（同类相加，异类减半）
-        CAT_BOOST = {
-            ("化禄","财"): [("财富",8)],
-            ("化禄","官"): [("事业",8)],
-            ("化禄","桃"): [("婚姻",8)],
-            ("化禄","福"): [("健康",6)],
-            ("化权","官"): [("事业",10)],
-            ("化权","财"): [("事业",6)],
-            ("化权","杀"): [("事业",8)],
-            ("化科","官"): [("事业",6)],
-            ("化科","智"): [("事业",6),("子女",6)],
-            ("化科","福"): [("健康",6)],
-            ("化忌","财"): [("财富",-10)],
-            ("化忌","官"): [("事业",-10)],
-            ("化忌","桃"): [("婚姻",-10)],
-            ("化忌","杀"): [("健康",-8)],
-            ("化忌","口"): [("事业",-8)],
-        }
-
+        # 1) 四化落宫 —— 核心评分逻辑（因人而异的关键）
         for hi, hua_name in enumerate(hua_labels):
             star_name = sihua_stars[hi]
             if not star_name:
                 continue
 
-            # 1) 四化主效应
-            for dim_eff, bonus in SIHUA_PRIMARY.get(hua_name, []):
-                dims[dim_eff] += bonus
+            # 在命盘中查找该星曜所在的宫位
+            for p_idx, p_data in _zhi_to_palace.items():
+                p_main = p_data.get("主星", [])
+                p_aux = p_data.get("辅星", [])
+                all_stars = p_main + p_aux
+                if star_name in all_stars:
+                    p_name = p_data.get("宫名", "")
+                    dim = PALACE_DIM_MAP.get(p_name)
+                    if dim:
+                        # 四化落在对应维度宫位 → 强效应
+                        bonus = SIHUA_PALACE_BONUS.get(hua_name, {}).get(dim, 0)
+                        dims[dim] += bonus
+                    else:
+                        # 四化落在非核心宫位 → 弱效应
+                        if hua_name == "化禄":
+                            dims["财富"] += 5; dims["事业"] += 3
+                        elif hua_name == "化权":
+                            dims["事业"] += 5
+                        elif hua_name == "化科":
+                            dims["婚姻"] += 3; dims["子女"] += 3
+                        elif hua_name == "化忌":
+                            dims["健康"] -= 5
+                    break  # 每颗星只在一个宫位
 
-            # 2) 星曜类别调节（同类强，异类无）
-            scat = STAR_CAT.get(star_name, "")
-            if scat:
-                key = (hua_name, scat)
-                if key in CAT_BOOST:
-                    for dim_eff, bonus in CAT_BOOST[key]:
-                        dims[dim_eff] += bonus
+        # 2) 流年命宫定位 —— 太岁地支落在命盘的哪个宫位
+        ln_palace = _zhi_to_palace.get(zhi_idx)
+        if ln_palace:
+            ln_name = ln_palace.get("宫名", "")
+            ln_dim = PALACE_DIM_MAP.get(ln_name)
+            if ln_dim:
+                if chong_val > 0:
+                    dims[ln_dim] += 5
+                elif chong_val < 0:
+                    dims[ln_dim] -= 5
 
-            # 3) 星曜自身对各维度的微调（权重1/3，仅参考）
-            star_tbl = DIM_STAR
-            for dim in dims:
-                tbl = star_tbl.get(dim, {})
-                dims[dim] += tbl.get(star_name, 0) // 3
-
-        # 太岁冲合调节
+        # 3) 太岁冲合全局调节
         for dim in dims:
-            dims[dim] += chong_val * 3
+            dims[dim] += chong_val * 2
             dims[dim] = max(20, min(100, dims[dim]))
 
         # 综合评分
