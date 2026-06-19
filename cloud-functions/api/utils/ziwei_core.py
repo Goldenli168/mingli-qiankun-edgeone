@@ -1018,163 +1018,110 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         if s >= 40: return 2
         return 1
 
-    def _brief(y, g, z, ny, ss, sihua_stars, chong_str):
-        """倪海厦《天纪》风格简评（50-70字）"""
+    def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info):
+        """倪海厦《天纪》风格简评——结合出生命盘宫位，因人而异"""
         s_lu = sihua_stars[0]; s_quan = sihua_stars[1]; s_ke = sihua_stars[2]; s_ji = sihua_stars[3]
-        gz = g + z
-
-        # 倪海厦风格短语库
-        NH = {
-            "tai_sui_chong": [
-                f"太岁冲命宫，今年变动大过坐过山车，宜动不宜静",
-                f"冲太岁，搬家换工作换环境都是好事，别死守",
-                f"命宫被太岁冲，这一年稳不住的，顺势而为就对了",
-            ],
-            "tai_sui_zhi": [
-                f"太岁值命，新的一页翻开了，有什么想法就去做",
-                f"太岁临命，天命在你这儿，大胆冲",
-            ],
-            "tai_sui_he": [
-                f"太岁合命，贵人自己会来找你，躺着都有好事",
-                f"六合之年，天时地利人和，结婚合伙都是上选",
-            ],
-            "tai_sui_hai": [
-                f"太岁害命宫，暗箭难防，合同签字要多看两眼",
-                f"害太岁，小人躲在暗处，少管闲事少惹是非",
-            ],
-            "tai_sui_ping": [
-                f"平稳一年，不贪不急就是赢",
-                f"风平浪静的一年，守好本分就好",
-            ],
-            "lu": {
-                "廉贞": "廉贞化禄，桃花财旺得不得了，但情债要还",
-                "破军": "破军化禄，破旧立新财运开，敢闯就有",
-                "武曲": "武曲化禄，正财运来得猛，存得住才是你的",
-                "太阳": "太阳化禄，光明正大地赚钱，名气带财来",
-                "天机": "天机化禄，脑子转得快钱就来，别想太多",
-                "天梁": "天梁化禄，福星高照，偏财比正财还旺",
-                "紫微": "紫微化禄，帝王星加持，这一年你可以横着走",
-                "太阴": "太阴化禄，田宅财旺，买房置产好时机",
-                "天同": "天同化禄，福气满满，躺着也有钱进来",
-                "贪狼": "贪狼化禄，偏财桃花一起来，但要懂得收",
-                "巨门": "巨门化禄，口才变钱，说话就能赚",
-            },
-            "quan": {
-                "廉贞": "廉贞化权，掌控力爆表，说了算的一年",
-                "破军": "破军化权，破局的力量在你手里，敢干就赢",
-                "武曲": "武曲化权，执行力拉满，该出手时别犹豫",
-                "太阳": "太阳化权，光芒万丈，升职加薪看你表演",
-                "天机": "天机化权，策略对了就是王，谋定而后动",
-                "天梁": "天梁化权，权威加身，说了就算",
-                "紫微": "紫微化权，这一年的主角就是你",
-                "太阴": "太阴化权，暗中掌握大局，不动声色赢",
-                "天同": "天同化权，以柔克刚，不争就是最大的争",
-                "贪狼": "贪狼化权，人脉资源一把抓，社交就是生产力",
-                "巨门": "巨门化权，一开口就镇住全场",
-                "文昌": "文昌化权，文星当道，考试面试发挥好",
-                "文曲": "文曲化权，才艺变现，靠本事吃饭",
-                "右弼": "右弼化权，左右逢源，贵人主动来",
-            },
-            "ke": {
-                "文昌": "文昌化科，学业考试如有神助",
-                "文曲": "文曲化科，才艺名声双丰收",
-                "天梁": "天梁化科，好人好事传千里",
-                "太阴": "太阴化科，暗中有贵人提携",
-                "左辅": "左辅化科，助力不断，事事顺",
-                "右弼": "右弼化科，人缘好得不得了",
-                "天机": "天机化科，智慧闪光，一鸣惊人",
-            },
-            "ji": {
-                "太阳": "太阳化忌，男人缘差，跟老板同事别较劲",
-                "太阴": "太阴化忌，女人小人多，家务事别闹大",
-                "廉贞": "廉贞化忌，感情官司缠身，别提旧账",
-                "巨门": "巨门化忌，口舌是非多如牛毛，闭嘴是金",
-                "天同": "天同化忌，懒散误事，别拖别等",
-                "武曲": "武曲化忌，破财之年，投资三个字：不要碰",
-                "文曲": "文曲化忌，文书合同出问题，白纸黑字盯紧",
-                "文昌": "文昌化忌，考试面试有坎，加倍准备",
-                "天机": "天机化忌，想太多反而坏事，简单点",
-                "贪狼": "贪狼化忌，桃花劫来了，色字头上一把刀",
-            },
-            "ss_boost": {
-                "比肩": "自食其力之年，别指望别人",
-                "劫财": "小心合伙分财不均，亲兄弟明算账",
-                "食神": "创意变现的好年份，灵感变金子",
-                "伤官": "才华横溢但易得罪人，注意说话分寸",
-                "偏财": "意外之财来敲门，投资可以小试",
-                "正财": "稳扎稳打赚钱，正业收入稳中有升",
-                "七杀": "压力大到爆但升得也快，撑住就是赢家",
-                "正官": "按规矩办事就对了，别走捷径",
-                "偏印": "学习进修的好年，考个证拿个学位",
-                "正印": "长辈贵人关照，听老人家的话",
-            },
-            "ny_boost": {
-                "海中金": "金子埋在海里，今年财运暗藏机会",
-                "炉中火": "炉火烧得旺，事业升温，但别烧过头",
-                "大林木": "大树底下好乘凉，靠团队别单干",
-                "路旁土": "脚踏实地的一年，一步一脚印",
-                "剑锋金": "锋芒毕露，但树大招风",
-                "山头火": "火焰山的一年，急不来的",
-                "涧下水": "细水长流，别指望一夜暴富",
-                "城头土": "稳如城墙，根基扎实",
-                "白蜡金": "小财不断，大财别想",
-                "杨柳木": "随风飘的一年，顺势别硬撑",
-                "泉中水": "灵感如泉涌，创作爆发年",
-                "屋上土": "家宅相关，买房修屋好时机",
-                "霹雳火": "惊雷一响机遇来，要抓得住",
-                "松柏木": "松柏长青，越老越值钱的一年",
-                "长流水": "源源不断，积累之年",
-                "沙中金": "大浪淘沙见真金，坚持就有",
-                "山下火": "小火慢炖，别急",
-                "平地木": "根基年，打基础最重要",
-                "壁上土": "别太高调，墙上的土易掉",
-                "金箔金": "表面风光，内里要踏实",
-                "覆灯火": "灯下黑，看清身边人",
-                "天河水": "天降甘霖，贵人运旺",
-                "大驿土": "奔波劳碌但值得，在路上就有机会",
-                "钗钏金": "小饰品值钱，小生意也有大赚头",
-                "桑柘木": "养蚕吐丝，劳动换回报",
-                "大溪水": "溪水汇流，众人拾柴火焰高",
-                "沙中土": "沙里淘金，要有耐心",
-                "天上火": "火从天上来，名利双收的好年",
-                "石榴木": "多子多福，家庭喜事多",
-                "大海水": "海纳百川，格局要大",
-            },
+        
+        # 太岁冲合——决定年度基调
+        tai_sui = {
+            "冲": [f"太岁冲命宫，变动大过坐过山车，宜动不宜静",
+                   f"冲太岁，搬家换工作都是好事，别死守",
+                   f"命宫被太岁冲，这一年稳不住的，顺势而为"],
+            "值": [f"太岁值命，新的一页翻开了，有什么想法就去做",
+                   f"太岁临命，天命在你这儿，大胆冲"],
+            "合": [f"太岁合命，贵人自己会来找你，躺着都有好事",
+                   f"六合之年，天时地利人和，结婚合伙上选"],
+            "害": [f"太岁害命宫，暗箭难防，合同多看两眼",
+                   f"害太岁，小人躲在暗处，少管闲事"],
         }
-
-        # 1) 太岁冲合 — 决定年度基调
-        if chong_str.startswith("冲"):
-            base = NH["tai_sui_chong"][zhi_idx % 3]
-        elif chong_str.startswith("值"):
-            base = NH["tai_sui_zhi"][zhi_idx % 2]
-        elif chong_str.startswith("合"):
-            base = NH["tai_sui_he"][zhi_idx % 2]
-        elif chong_str.startswith("害"):
-            base = NH["tai_sui_hai"][zhi_idx % 2]
+        for kw, arr in tai_sui.items():
+            if chong_str.startswith(kw):
+                base = arr[zhi_idx % len(arr)]
+                break
         else:
-            base = NH["tai_sui_ping"][zhi_idx % 2]
-
-        # 2) 化忌 — 点名警告，必须说
+            base = "平稳一年，不贪不急就是赢" if zhi_idx % 2 == 0 else "风平浪静，守好本分"
+        
         parts = [base]
-        if s_ji and s_ji in NH["ji"]:
-            parts.append(NH["ji"][s_ji])
-
-        # 3) 化禄 — 好事要夸
-        if s_lu and s_lu in NH["lu"]:
-            parts.append(NH["lu"][s_lu])
-
-        # 4) 化权 — 主动权
-        if s_quan and s_quan in NH["quan"] and len(parts) < 3:
-            parts.append(NH["quan"][s_quan])
-
-        # 5) 十神补充
-        if ss in NH["ss_boost"] and len(parts) < 3:
-            parts.append(NH["ss_boost"][ss])
-
-        # 6) 纳音点睛
-        if ny in NH["ny_boost"] and len(parts) < 3:
-            parts.append(NH["ny_boost"][ny])
-
+        
+        # 四化层——根据落宫生成个性化描述
+        def _palace_effect(star, hua_type):
+            """根据星曜+四化类型+落宫，生成个性化短语"""
+            p_name = sihua_info.get(star, ("?", "?"))[0] if star in sihua_info else ""
+            if not p_name or p_name == "?": return ""
+            
+            # 禄在不同宫的效应
+            lu_effects = {
+                "财帛": f"{star}禄入你的财帛宫，正偏财一起来", 
+                "官禄": f"{star}禄在官禄，事业财运双旺",
+                "夫妻": f"{star}禄照夫妻宫，感情升温好年份",
+                "子女": f"{star}禄入子女宫，孩子好事多",
+                "田宅": f"{star}禄照田宅，房产家运旺",
+                "疾厄": f"{star}禄入疾厄，身体安康少病痛",
+                "福德": f"{star}禄照福德，心情愉快精神好",
+                "命宫": f"{star}禄入命宫，今年主角就是你",
+                "迁移": f"{star}禄在迁移，外出机会多收获大",
+                "交友": f"{star}禄入交友，朋友带来财运",
+                "兄弟": f"{star}禄照兄弟，手足合作有利",
+                "父母": f"{star}禄照父母，长辈关照得力",
+            }
+            # 权在不同宫的效应
+            quan_effects = {
+                "官禄": f"{star}权在官禄，职场说了算",
+                "命宫": f"{star}权入命宫，掌控全局的一年",
+                "财帛": f"{star}权在财帛，赚钱有话语权",
+                "夫妻": f"{star}权入夫妻，家里你说了算但别太强势",
+                "迁移": f"{star}权在迁移，出门在外展拳脚",
+                "交友": f"{star}权入交友，朋友当中你是核心",
+            }
+            # 忌在不同宫的效应
+            ji_effects = {
+                "夫妻": f"{star}忌入你的夫妻宫，感情容易翻旧账，今年少提往事",
+                "财帛": f"{star}忌入财帛，花钱冲动，管住钱包",
+                "官禄": f"{star}忌在官禄，工作上小人多，低调行事",
+                "疾厄": f"{star}忌入疾厄，身体要注意，别熬夜",
+                "子女": f"{star}忌入子女，孩子淘气或生育需谨慎",
+                "田宅": f"{star}忌入田宅，家宅不宁或房产不顺",
+                "命宫": f"{star}忌入命宫，诸事多阻的一年，以守为攻",
+                "福德": f"{star}忌入福德，心情烦躁，找方式解压",
+                "迁移": f"{star}忌在迁移，外出小心意外纠纷",
+                "交友": f"{star}忌入交友，别替人作保",
+                "父母": f"{star}忌照父母，长辈那边多点耐心",
+                "兄弟": f"{star}忌入兄弟，手足之间少计较",
+            }
+            
+            if hua_type == "化禄" and p_name in lu_effects:
+                return lu_effects[p_name]
+            elif hua_type == "化权" and p_name in quan_effects:
+                return quan_effects[p_name]
+            elif hua_type == "化忌" and p_name in ji_effects:
+                return ji_effects[p_name]
+            elif hua_type == "化科" and p_name:
+                return f"{star}科在{p_name}，名声贵人提升"
+            return ""
+        
+        # 忌星优先点名
+        if s_ji and s_ji in sihua_info:
+            txt = _palace_effect(s_ji, "化忌")
+            if txt: parts.append(txt)
+        
+        # 禄星
+        if s_lu and s_lu in sihua_info and len(parts) < 3:
+            txt = _palace_effect(s_lu, "化禄")
+            if txt: parts.append(txt)
+        
+        # 权星
+        if s_quan and s_quan in sihua_info and len(parts) < 3:
+            txt = _palace_effect(s_quan, "化权")
+            if txt: parts.append(txt)
+        
+        # 十神补充
+        ss_tips = {"比肩":"自食其力之年","劫财":"小心合伙分财","食神":"创意变金子",
+                   "伤官":"才华别得罪人","偏财":"意外财来敲门","正财":"正业收入稳升",
+                   "七杀":"压力大升得快","正官":"按规矩办事","偏印":"学习考证好年",
+                   "正印":"长辈贵人关照"}
+        if ss in ss_tips and len(parts) < 3:
+            parts.append(ss_tips[ss])
+        
         return "。".join(parts[:3]) + "。"
 
     def _guide(dims):
@@ -1250,43 +1197,65 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
         # 太岁与命宫的冲合
         chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
 
-        # 五维度评分 —— 基于出生命盘的四化落宫（《天纪》《紫微斗数全书》核心法）
-        # 倪海厦：「禄在哪儿钱在哪儿，忌在哪儿问题在哪儿」
-        # 关键：四化星落在命盘的哪个宫位，决定哪个人生领域受影响
+        # 五维度评分 —— 四化落宫 + 宫位星曜质量调节（《天纪》《全书》《精要》综合法）
+        # 《天纪》：禄在哪儿旺哪儿，忌在哪儿损哪儿
+        # 《全书》：吉星增力，煞星减力  
+        # 《精要》：双星互涉，吉煞对冲
         dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
         hua_labels = ["化禄","化权","化科","化忌"]
 
-        # 1) 四化落宫 —— 核心评分逻辑（因人而异的关键）
+        # 吉星与煞星集合（《紫微斗数全书》分类）
+        JI_STARS = {"紫微","天府","天相","天梁","天同","太阴","太阳","左辅","右弼","文昌","文曲","天魁","天钺","禄存","天马"}
+        SHA_STARS = {"擎羊","陀罗","火星","铃星","地空","地劫","七杀","破军","贪狼","巨门","廉贞"}
+
+        # 宫位星曜质量调节系数（吉星+煞星净效应）
+        def _palace_quality(p_main, p_aux):
+            """评估宫位星曜质量：吉星多→正调节，煞星多→负调节"""
+            all_s = p_main + p_aux
+            ji_cnt = sum(1 for s in all_s if s in JI_STARS)
+            sha_cnt = sum(1 for s in all_s if s in SHA_STARS)
+            net = ji_cnt - sha_cnt
+            if net >= 3: return 1.5      # 吉星汇聚，四化加倍
+            elif net >= 1: return 1.2     # 偏吉，四化+20%
+            elif net >= -1: return 1.0     # 平衡，正常
+            elif net >= -3: return 0.7     # 偏凶，四化-30%
+            else: return 0.4              # 煞星汇聚，四化大幅削弱
+        
+
+        # 记录四化落宫信息（供简评使用）
+        sihua_info = {}
+        
         for hi, hua_name in enumerate(hua_labels):
             star_name = sihua_stars[hi]
             if not star_name:
                 continue
-
-            # 在命盘中查找该星曜所在的宫位
             for p_idx, p_data in _zhi_to_palace.items():
                 p_main = p_data.get("主星", [])
                 p_aux = p_data.get("辅星", [])
                 all_stars = p_main + p_aux
                 if star_name in all_stars:
                     p_name = p_data.get("宫名", "")
+                    quality = _palace_quality(p_main, p_aux)
+                    sihua_info[star_name] = (p_name, quality)
+                    
                     dim = PALACE_DIM_MAP.get(p_name)
                     if dim:
-                        # 四化落在对应维度宫位 → 强效应
-                        bonus = SIHUA_PALACE_BONUS.get(hua_name, {}).get(dim, 0)
-                        dims[dim] += bonus
+                        base_bonus = SIHUA_PALACE_BONUS.get(hua_name, {}).get(dim, 0)
+                        # 好宫+禄权科=加倍，煞宫+忌=加倍，好宫+忌=减半，煞宫+禄=打折扣
+                        if base_bonus > 0:
+                            # 正效应：吉星汇聚放大，煞星削弱
+                            adjusted = int(base_bonus * quality)
+                        else:
+                            # 负效应：煞星汇聚放大，吉星削弱
+                            adjusted = int(base_bonus * (2.0 - min(quality, 1.0)))
+                        dims[dim] += adjusted
                     else:
-                        # 四化落在非核心宫位 → 弱效应
-                        if hua_name == "化禄":
-                            dims["财富"] += 5; dims["事业"] += 3
-                        elif hua_name == "化权":
-                            dims["事业"] += 5
-                        elif hua_name == "化科":
-                            dims["婚姻"] += 3; dims["子女"] += 3
-                        elif hua_name == "化忌":
-                            dims["健康"] -= 5
-                    break  # 每颗星只在一个宫位
+                        # 非核心宫位弱效应
+                        base_effect = {"化禄":5,"化权":5,"化科":3,"化忌":-5}.get(hua_name, 0)
+                        dims["财富" if hua_name == "化禄" else "事业" if hua_name == "化权" else "健康" if hua_name == "化忌" else "婚姻"] += int(base_effect * quality)
+                    break
 
-        # 2) 流年命宫定位 —— 太岁地支落在命盘的哪个宫位
+        # 2) 流年命宫定位
         ln_palace = _zhi_to_palace.get(zhi_idx)
         if ln_palace:
             ln_name = ln_palace.get("宫名", "")
@@ -1302,11 +1271,11 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch):
             dims[dim] += chong_val * 2
             dims[dim] = max(20, min(100, dims[dim]))
 
-        # 综合评分
         avg = int(sum(dims.values()) / 5)
 
-        # 简评
-        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc)
+        # 简评（传入四化落宫信息）
+        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info)
+
 
         # 五维指引
         guide = _guide(dims)
