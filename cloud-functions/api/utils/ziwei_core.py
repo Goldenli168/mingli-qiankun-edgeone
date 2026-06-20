@@ -1015,83 +1015,97 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         return "平", 0, "太岁无重大冲合，运势平稳"
 
     def _score_to_stars(s):
-        if s >= 85: return 5
-        if s >= 70: return 4
-        if s >= 55: return 3
-        if s >= 40: return 2
+        # v2.9 流年专属阈值：因流年分数源仅4颗四化星+太岁宫，分数天然窄于大运
+        # 78/68/58/48 确保五档各有分布，不会出现5星和1星空档
+        if s >= 78: return 5
+        if s >= 68: return 4
+        if s >= 58: return 3
+        if s >= 48: return 2
         return 1
 
-    def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info, dayun_ctx=None):
-        """倪海厦《天纪》风格简评——结合出生命盘宫位，因人而异"""
+    def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info, dayun_ctx=None,
+               ln_palace_name='', ln_palace_main=None, dy_foundation=None):
+        """倪海厦《天纪》风格简评 v2.9 —— 六层分析：大运→命宫→四化→忌星→冲合→锦囊"""
         s_lu = sihua_stars[0]; s_quan = sihua_stars[1]; s_ke = sihua_stars[2]; s_ji = sihua_stars[3]
-        
-        # 太岁冲合——决定年度基调
-        tai_sui = {
-            "冲": [f"太岁冲命宫，变动大过坐过山车，宜动不宜静",
-                   f"冲太岁，搬家换工作都是好事，别死守",
-                   f"命宫被太岁冲，这一年稳不住的，顺势而为"],
-            "值": [f"太岁值命，新的一页翻开了，有什么想法就去做",
-                   f"太岁临命，天命在你这儿，大胆冲"],
-            "合": [f"太岁合命，贵人自己会来找你，躺着都有好事",
-                   f"六合之年，天时地利人和，结婚合伙上选"],
-            "害": [f"太岁害命宫，暗箭难防，合同多看两眼",
-                   f"害太岁，小人躲在暗处，少管闲事"],
-        }
-        for kw, arr in tai_sui.items():
-            if chong_str.startswith(kw):
-                base = arr[zhi_idx % len(arr)]
-                break
+        parts = []
+
+        # ═══ 1) 大运基调 ── 首位，因大运定大局 ═══
+        if dayun_ctx and dayun_ctx.get('palace_name'):
+            dy_rating = dayun_ctx.get('rating', '平运')
+            rating_desc = {"上吉":"大运极盛，诸事可期","中吉":"运势上扬，稳中求进",
+                          "平运":"平稳十年，守成为上","偏凶":"此运偏弱，宜退守",
+                          "大凶":"大运凶险，韬光养晦"}
+            dy_desc = rating_desc.get(dy_rating, "运势平稳")
+            parts.append(f"你正行{dayun_ctx.get('age_range','')}{dayun_ctx['palace_name']}大运，{dy_desc}")
+        elif dayun_ctx:
+            parts.append("大运平稳，无大风浪")
+
+        # ═══ 2) 流年命宫 ── 太岁宫坐镇星曜，年度定调 ═══
+        if ln_palace_name and ln_palace_main:
+            main_str = "、".join(ln_palace_main[:2])
+            # 流年命宫落在不同本命宫位影响不同
+            ln_tone_map = {
+                "命宫": "流年命宫坐本命，今年你就是主角",
+                "财帛": "流年命宫落财帛，财运是全年主题",
+                "官禄": "流年命宫落官禄，事业今年定基调",
+                "夫妻": "流年命宫落夫妻，感情婚姻是重点",
+                "子女": "流年命宫落子女，孩子创意为主轴",
+                "田宅": "流年命宫入田宅，房产家事为主轴",
+                "迁移": "流年命宫在迁移，外出远行有机遇",
+                "疾厄": "流年命宫入疾厄，健康是今年的功课",
+                "福德": "流年命宫在福德，精神享受为主题",
+                "交友": "流年命宫入交友，人脉圈子新变化",
+                "父母": "流年命宫在父母，长辈关系是重点",
+                "兄弟": "流年命宫入兄弟，手足合作是主轴",
+            }
+            ln_tone = ln_tone_map.get(ln_palace_name, f"流年命宫坐{ln_palace_name}")
+            if g[0] in "甲乙":
+                ln_tone += "，开春就有转机"
+            parts.append(f"{ln_tone}，{main_str}坐镇，定全年基调")
         else:
-            base = "平稳一年，不贪不急就是赢" if zhi_idx % 2 == 0 else "风平浪静，守好本分"
-        
-        parts = [base]
-        
-        # 四化层——根据落宫生成个性化描述
+            parts.append(f"流年命宫平稳，随大势而行")
+
+        # ═══ 3) 四化应事层 ── 禄权科各有其应 ═══
         def _palace_effect(star, hua_type):
-            """根据星曜+四化类型+落宫，生成个性化短语"""
             p_name = sihua_info.get(star, ("?", "?"))[0] if star in sihua_info else ""
             if not p_name or p_name == "?": return ""
-            
-            # 禄在不同宫的效应
+
             lu_effects = {
-                "财帛": f"{star}禄入你的财帛宫，正偏财一起来", 
-                "官禄": f"{star}禄在官禄，事业财运双旺",
-                "夫妻": f"{star}禄照夫妻宫，感情升温好年份",
-                "子女": f"{star}禄入子女宫，孩子好事多",
-                "田宅": f"{star}禄照田宅，房产家运旺",
+                "财帛": f"{star}禄入你的财帛宫，正偏财一起来，今年钱包鼓",
+                "官禄": f"{star}禄在官禄，事业财运双旺，升职加薪有望",
+                "夫妻": f"{star}禄照夫妻宫，感情升温，婚恋嫁娶好年份",
+                "子女": f"{star}禄入子女宫，孩子好事多，孕育添丁佳期",
+                "田宅": f"{star}禄照田宅，房产增值，家运昌隆",
                 "疾厄": f"{star}禄入疾厄，身体安康少病痛",
-                "福德": f"{star}禄照福德，心情愉快精神好",
-                "命宫": f"{star}禄入命宫，今年主角就是你",
-                "迁移": f"{star}禄在迁移，外出机会多收获大",
-                "交友": f"{star}禄入交友，朋友带来财运",
-                "兄弟": f"{star}禄照兄弟，手足合作有利",
-                "父母": f"{star}禄照父母，长辈关照得力",
+                "福德": f"{star}禄照福德，心情愉快精神好，少烦恼",
+                "命宫": f"{star}禄入命宫，今年主角就是你，机会自己送上门",
+                "迁移": f"{star}禄在迁移，外出机会多，越动越有钱",
+                "交友": f"{star}禄入交友，朋友带来财运，人脉变钱脉",
+                "兄弟": f"{star}禄照兄弟，手足合作有利，团队力量大",
+                "父母": f"{star}禄照父母，长辈关照得力，靠山硬",
             }
-            # 权在不同宫的效应
             quan_effects = {
-                "官禄": f"{star}权在官禄，职场说了算",
-                "命宫": f"{star}权入命宫，掌控全局的一年",
-                "财帛": f"{star}权在财帛，赚钱有话语权",
+                "官禄": f"{star}权在官禄，职场说了算，升主管当领导",
+                "命宫": f"{star}权入命宫，掌控全局的一年，自己说了算",
+                "财帛": f"{star}权在财帛，赚钱有话语权，投资可主动出击",
                 "夫妻": f"{star}权入夫妻，家里你说了算但别太强势",
-                "迁移": f"{star}权在迁移，出门在外展拳脚",
-                "交友": f"{star}权入交友，朋友当中你是核心",
+                "迁移": f"{star}权在迁移，出门在外展拳脚，往外闯有收获",
+                "交友": f"{star}权入交友，朋友当中你是核心，号召力强",
             }
-            # 忌在不同宫的效应
             ji_effects = {
                 "夫妻": f"{star}忌入你的夫妻宫，感情容易翻旧账，今年少提往事",
-                "财帛": f"{star}忌入财帛，花钱冲动，管住钱包",
-                "官禄": f"{star}忌在官禄，工作上小人多，低调行事",
-                "疾厄": f"{star}忌入疾厄，身体要注意，别熬夜",
-                "子女": f"{star}忌入子女，孩子淘气或生育需谨慎",
-                "田宅": f"{star}忌入田宅，家宅不宁或房产不顺",
-                "命宫": f"{star}忌入命宫，诸事多阻的一年，以守为攻",
-                "福德": f"{star}忌入福德，心情烦躁，找方式解压",
-                "迁移": f"{star}忌在迁移，外出小心意外纠纷",
-                "交友": f"{star}忌入交友，别替人作保",
-                "父母": f"{star}忌照父母，长辈那边多点耐心",
-                "兄弟": f"{star}忌入兄弟，手足之间少计较",
+                "财帛": f"{star}忌入财帛，花钱冲动管不住，今年守财为上",
+                "官禄": f"{star}忌在官禄，工作上小人多口舌多，低调行事",
+                "疾厄": f"{star}忌入疾厄，身体要注意，别熬夜，有病早查",
+                "子女": f"{star}忌入子女，孩子淘气或生育需谨慎，少折腾",
+                "田宅": f"{star}忌入田宅，家宅不宁或房产不顺，别买卖",
+                "命宫": f"{star}忌入命宫，诸事多阻的一年，以守为攻别硬来",
+                "福德": f"{star}忌入福德，心烦易怒，找方式解压别闷着",
+                "迁移": f"{star}忌在迁移，外出小心意外纠纷，少管闲事",
+                "交友": f"{star}忌入交友，朋友借钱别答应，别替人作保",
+                "父母": f"{star}忌照父母，长辈那边多点耐心，别顶嘴",
+                "兄弟": f"{star}忌入兄弟，手足之间少计较，钱的事说清楚",
             }
-            
             if hua_type == "化禄" and p_name in lu_effects:
                 return lu_effects[p_name]
             elif hua_type == "化权" and p_name in quan_effects:
@@ -1099,40 +1113,70 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             elif hua_type == "化忌" and p_name in ji_effects:
                 return ji_effects[p_name]
             elif hua_type == "化科" and p_name:
-                return f"{star}科在{p_name}，名声贵人提升"
+                ke_map = {"命宫":f"{star}科入命宫，名声鹊起贵人提携",
+                         "官禄":f"{star}科在官禄，专业受认可",
+                         "夫妻":f"{star}科照夫妻，感情和睦名声好",
+                         "财帛":f"{star}科在财帛，以名气得财",
+                         "迁移":f"{star}科在迁移，外出遇贵人"}
+                return ke_map.get(p_name, f"{star}科在{p_name}，名声贵人提升")
             return ""
-        
-        # 忌星优先点名
-        if s_ji and s_ji in sihua_info:
-            txt = _palace_effect(s_ji, "化忌")
-            if txt: parts.append(txt)
-        
-        # 禄星
-        if s_lu and s_lu in sihua_info and len(parts) < 3:
+
+        # 禄星应事
+        if s_lu and s_lu in sihua_info:
             txt = _palace_effect(s_lu, "化禄")
             if txt: parts.append(txt)
-        
-        # 权星
-        if s_quan and s_quan in sihua_info and len(parts) < 3:
+
+        # 权星 / 科星
+        if s_quan and s_quan in sihua_info and len(parts) < 5:
             txt = _palace_effect(s_quan, "化权")
             if txt: parts.append(txt)
-        
-        # 十神补充
-        ss_tips = {"比肩":"自食其力之年","劫财":"小心合伙分财","食神":"创意变金子",
-                   "伤官":"才华别得罪人","偏财":"意外财来敲门","正财":"正业收入稳升",
-                   "七杀":"压力大升得快","正官":"按规矩办事","偏印":"学习考证好年",
-                   "正印":"长辈贵人关照"}
-        if ss in ss_tips and len(parts) < 3:
-            parts.append(ss_tips[ss])
-        
-        # 大运背景句（如果有）
-        if dayun_ctx and dayun_ctx.get('palace_name') and len(parts) < 4:
-            dy_info = f"你正走{dayun_ctx['age_range']}{dayun_ctx['palace_name']}大运" if dayun_ctx.get('age_range') else ''
-            if dy_info and dayun_ctx.get('rating'):
-                dy_info += f"（{dayun_ctx['rating']}）"
-            if dy_info: parts.append(dy_info)
+        if s_ke and s_ke in sihua_info and len(parts) < 5:
+            txt = _palace_effect(s_ke, "化科")
+            if txt: parts.append(txt)
 
-        return "。".join(parts[:4]) + "。"
+        # ═══ 4) 忌星警告 ── 点名忌星落宫，敲警钟 ═══
+        if s_ji and s_ji in sihua_info:
+            txt = _palace_effect(s_ji, "化忌")
+            if txt:
+                # 添加化解建议
+                ji_name = sihua_info[s_ji][0]
+                remedies = {"夫妻":"多沟通少翻旧账","财帛":"管住钱包别冲动","官禄":"少说多做防小人",
+                           "疾厄":"早睡早起体检去","子女":"多陪孩子少说教","命宫":"凡事三思别硬闯",
+                           "迁移":"出门低调莫逞能","交友":"独善其身少应酬"}
+                remedy = remedies.get(ji_name, "保守行事")
+                parts.append(f"{txt}，化解之道：{remedy}")
+
+        # ═══ 5) 太岁冲合 ── 年度关键提醒 ═══
+        chong_parts = {
+            "冲": "太岁冲动，变动难免——搬家换工出远门都是解法，别死守",
+            "值": "太岁值命，天时在你这边，大胆出击",
+            "合": "太岁六合，贵人天降，躺平都有好事",
+            "害": "太岁相害，暗箭需防，合同多看两遍",
+        }
+        for kw, tip in chong_parts.items():
+            if chong_str.startswith(kw):
+                if len(parts) < 5:
+                    parts.append(tip)
+                break
+        else:
+            if len(parts) < 5:
+                parts.append("年支平和，不贪不急就是赢")
+
+        # ═══ 6) 行动锦囊 ── 倪海厦风格一句话 ═══
+        tips_pool = []
+        if s_ji:
+            tips_pool = ["倪师曰：忌星之年，以守为攻，不动如山", "稳字当头，最忌贪快", "熬过今年就是春天"]
+        elif s_lu:
+            tips_pool = ["倪师曰：禄临之年，该出手时就出手", "好运不等人，大胆往前闯", "春耕秋收，今年种什么都收成"]
+        elif "冲" in chong_str:
+            tips_pool = ["倪师曰：冲则动，动则变，变则通", "主动求变胜过被动挨打"]
+        elif "合" in chong_str:
+            tips_pool = ["倪师曰：天地合气，顺势而为即可", "贵人就在身边，开口就有"]
+        else:
+            tips_pool = ["倪师曰：平平淡淡才是真，稳扎稳打", "守好本分，该来的自然会来"]
+        parts.append(tips_pool[zhi_idx % len(tips_pool)])
+
+        return "。".join(parts[:6]) + "。"
 
     def _guide(dims):
         """五维指引"""
@@ -1237,6 +1281,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                         'score': dy.get('综合评分', 50),
                         'quality': dy_quality,
                         'stars': dy_stars[:3],
+                        'dim_scores': dy.get('评分', {}),  # 大运五维逐分，流年地基用
                     }
                     # 大运天干地支
                     dy_gan = dy.get('天干', '')
@@ -1250,14 +1295,16 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     break
 
 
-        # 五维度评分 —— 复用大运评分标准表，确保逻辑一致
-        # 与大运 _score_dayun 使用完全相同的：
-        #   _STAR_WEALTH/CAREER/MARRIAGE/CHILDREN（星曜表）
-        #   _AUX_ADJUST（辅星表）
-        #   _SIHUA_DIM（四化表）
-        # 新增 _STAR_HEALTH（健康维度表，大运用父母维度，流年独立）
+        # ===== 流年五维度评分 v2.9 =====
+        # 架构：大运地基 + 流年命宫 + 四化效应 + 三方四正 + 太岁调节
+        # 紫微斗数铁律：大运定方向，流年定应期；大运为地基(45%)，流年为演出(55%)
+        # 与大运 _score_dayun 共用 _STAR_* / _AUX_ADJUST / _SIHUA_DIM 表
+
         dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
         hua_labels = ["化禄","化权","化科","化忌"]
+
+        # 大运→流年维度映射（大运"父母"维度映射到流年"健康"维度）
+        DY_TO_LN_DIM = {"财富":"财富", "事业":"事业", "婚姻":"婚姻", "子女":"子女", "父母":"健康"}
 
         # 健康维度星曜分值（参考《全书》疾厄宫+福德宫星曜体系）
         _STAR_HEALTH = {
@@ -1270,15 +1317,43 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             "健康": _STAR_HEALTH,
         }
 
-        # 记录四化落宫信息（供简评使用）
-        sihua_info = {}
+        # ---------- ① 大运地基（逐维度继承，权重0.45） ----------
+        dy_dim_scores = dayun_ctx.get('dim_scores', {}) if dayun_ctx else {}
+        dy_foundation = {}  # 记录大运地基分，供简评使用
+        for dy_dim, ln_dim in DY_TO_LN_DIM.items():
+            dy_base = dy_dim_scores.get(dy_dim, 50)
+            foundation = int(dy_base * 0.45)
+            dims[ln_dim] = foundation
+            dy_foundation[ln_dim] = foundation
 
+        # ---------- ② 流年命宫（太岁宫主星+辅星，权重0.4/0.5） ----------
+        ln_palace = _zhi_to_palace.get(zhi_idx)
+        ln_palace_name = ''
+        ln_palace_main = []
+        ln_palace_aux = []
+        if ln_palace:
+            ln_palace_name = ln_palace.get("宫名", "")
+            ln_palace_main = ln_palace.get("主星", [])
+            ln_palace_aux = ln_palace.get("辅星", [])
+            ln_dim = PALACE_DIM_MAP.get(ln_palace_name)
+
+            # 流年命宫主星对所有维度的贡献（权重0.4）
+            for s in ln_palace_main:
+                for dim, tbl in STAR_TABLES_LN.items():
+                    dims[dim] += int(tbl.get(s, 0) * 0.4)
+
+            # 流年命宫辅星（权重0.5）
+            for a in ln_palace_aux:
+                adj = _AUX_ADJUST.get(a, {})
+                for dim in dims:
+                    dims[dim] += int(adj.get(dim, 0) * 0.5)
+
+        # ---------- ③ 流年四化效应 ----------
+        sihua_info = {}
         for hi, hua_name in enumerate(hua_labels):
             star_name = sihua_stars[hi]
             if not star_name:
                 continue
-
-            # 在命盘中查找该星曜所在的宫位
             for p_idx, p_data in _zhi_to_palace.items():
                 p_main = p_data.get("主星", [])
                 p_aux = p_data.get("辅星", [])
@@ -1287,60 +1362,47 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     p_name = p_data.get("宫名", "")
                     sihua_info[star_name] = (p_name, 1.0)
 
-                    # 1) 四化主效应（复用 _SIHUA_DIM，与大运完全一致）
+                    # 四化主效应（_SIHUA_DIM ×1.0）
                     hua_adj = _SIHUA_DIM.get(hua_name, {})
                     for dim in dims:
                         dims[dim] += hua_adj.get(dim, 0)
 
-                    # 2) 四化星曜自身贡献（权重0.15，四化效应已担主责）
+                    # 四化星曜自身贡献（权重0.2）
                     for dim, tbl in STAR_TABLES_LN.items():
-                        dims[dim] += int(tbl.get(star_name, 0) * 0.15)
+                        dims[dim] += int(tbl.get(star_name, 0) * 0.2)
 
-                    # 3) 该宫位辅星调节（权重0.5）
+                    # 四化落宫辅星调节（权重0.5）
                     for a in p_aux:
-                        adj = _AUX_ADJUST.get(a, {})
                         adj = _AUX_ADJUST.get(a, {})
                         for dim in dims:
                             dims[dim] += int(adj.get(dim, 0) * 0.5)
                     break
 
-        # 4) 流年主题宫 —— 太岁落宫加权
-        ln_palace = _zhi_to_palace.get(zhi_idx)
+        # ---------- ④ 流年三方四正联动（权重提至0.5） ----------
         if ln_palace:
-            ln_name = ln_palace.get("宫名", "")
-            ln_dim = PALACE_DIM_MAP.get(ln_name)
-            if ln_dim:
-                if chong_val > 0:
-                    dims[ln_dim] += 10
-                elif chong_val < 0:
-                    dims[ln_dim] -= 10
-
-            # 三方四正联动
             for offset in SANFANG_OFFSETS:
                 sf_zhi = (zhi_idx - offset) % 12
                 sf_palace = _zhi_to_palace.get(sf_zhi)
                 if sf_palace:
                     sf_dim = PALACE_DIM_MAP.get(sf_palace.get("宫名", ""))
-                    if sf_dim and sf_dim != ln_dim:
+                    if sf_dim:
                         sf_main = sf_palace.get("主星", [])
                         for s in sf_main:
                             tbl = STAR_TABLES_LN.get(sf_dim, {})
-                            dims[sf_dim] += int(tbl.get(s, 0) * 0.3)
+                            dims[sf_dim] += int(tbl.get(s, 0) * 0.5)
 
-        # 5) 太岁冲合全局调节
+        # ---------- ⑤ 太岁冲合全局调节 ----------
         for dim in dims:
             dims[dim] += chong_val * 2
             dims[dim] = max(20, min(100, dims[dim]))
 
-        # 6) 大运主题加权
-        if dayun_ctx and dy_dim:
-            dy_bonus = 10 if dayun_ctx.get('quality', 0) >= 0 else -10
-            dims[dy_dim] += dy_bonus
-
         avg = int(sum(dims.values()) / 5)
 
+        # 组装简评所需上下文
+        brief_ctx = (y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info, dayun_ctx,
+                     ln_palace_name, ln_palace_main, dy_foundation)
 
-        brief = _brief(y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info, dayun_ctx)
+        brief = _brief(*brief_ctx)
 
         # 五维指引
         guide = _guide(dims)
