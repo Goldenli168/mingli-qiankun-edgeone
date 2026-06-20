@@ -556,7 +556,7 @@ _SIHUA_DIM = {
 # 对宫迁移影响外务
 # 大运夫妻宫、子女宫、父母宫、福德宫 分别影响对应维度
 
-def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces):
+def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age=None):
     """
     计算单个大运的五维评分
 
@@ -570,6 +570,10 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces):
       {维度: 分数} 和 {维度: 解读文本}
     """
     DIMS = ["财富", "事业", "婚姻", "子女", "父母"]
+    # 少年大运（起始年龄<20）跳过婚姻和子女维度
+    youth_skip = start_age is not None and start_age < 20
+    if youth_skip:
+        DIMS = ["财富", "事业", "父母"]  # 少年只评财富、事业、父母
     DIM_PALACE_MAP = {
         "财富": "财帛宫",
         "事业": "官禄宫",
@@ -627,9 +631,22 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces):
         all_sihua = {}
         all_sihua.update(dayun_sihua)
         all_sihua.update(dp_sihua)
+
+        # 权忌同宫检测：倪海厦"有权能制忌"——权忌同宫时权星优先
+        has_quan = any("化权" in h for h in all_sihua.keys())
+        has_ji = any("化忌" in h for h in all_sihua.keys())
+        quan_ji_same_palace = has_quan and has_ji  # 同一宫位同时有权和忌
+
         for hua_type, star_name in all_sihua.items():
             hua_adj = _SIHUA_DIM.get(hua_type, {})
-            sihua_bonus += hua_adj.get(dim, 0)
+            bonus = hua_adj.get(dim, 0)
+            # 权忌同宫：权×1.5，忌×0.5
+            if quan_ji_same_palace:
+                if "化权" in hua_type:
+                    bonus = int(bonus * 1.5)
+                elif "化忌" in hua_type:
+                    bonus = int(bonus * 0.5)
+            sihua_bonus += bonus
             if abs(hua_adj.get(dim, 0)) >= 10:
                 dim_detail_parts.append("%s%s(%s%d)" % (star_name, hua_type, "+" if hua_adj.get(dim, 0) > 0 else "", hua_adj.get(dim, 0)))
 
@@ -821,11 +838,15 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
                 "四化": dp.get("四化", {}),
             }
 
-        # 计算评分
-        scores, descs = _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces)
+        # 计算评分（传入起始年龄，少年大运自动跳过婚育维度）
+        start_age = dy.get("起始年龄", 99)
+        scores, descs = _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age)
 
-        # 综合评分 (加权平均)
-        weights = {"财富": 0.25, "事业": 0.25, "婚姻": 0.20, "子女": 0.15, "父母": 0.15}
+        # 综合评分 (加权平均)；少年大运自动调节权重
+        if start_age < 20:
+            weights = {"财富": 0.35, "事业": 0.35, "父母": 0.30}
+        else:
+            weights = {"财富": 0.25, "事业": 0.25, "婚姻": 0.20, "子女": 0.15, "父母": 0.15}
         total_score = 0
         for dim, w in weights.items():
             total_score += scores.get(dim, 50) * w
@@ -1472,6 +1493,15 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     dims[ln_dim] = max(dims[ln_dim], 50)
 
         avg = int(sum(dims.values()) / 5)
+
+        # ---------- ⑦ 大运天花板（大运弱则流年难爆发） ----------
+        # 大运偏凶（<45分）时流年综合分不超过60
+        if dayun_ctx:
+            dy_total = dayun_ctx.get('score', 50)
+            if dy_total < 45:
+                for dim in dims:
+                    dims[dim] = min(dims[dim], 60)
+                avg = min(avg, 60)  # 综合分也封顶
 
         # 组装简评所需上下文
         brief_ctx = (y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info, dayun_ctx,
