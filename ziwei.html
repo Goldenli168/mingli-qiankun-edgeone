@@ -836,7 +836,9 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
       '<td class="ln-brief">' + (ln['简评']||'') + '</td>';
     for (var di = 0; di < dimCfg.length; di++) {
-      html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + (starMap[ln[dimCfg[di].key]]||'—') + '</td>';
+      var dimScore = ln[dimCfg[di].key + '分'] || '';
+      var dimStars = starMap[ln[dimCfg[di].key]] || '—';
+      html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
   }

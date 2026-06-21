@@ -1499,6 +1499,11 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             "婚姻": _score_to_stars(dims["婚姻"]),
             "子女": _score_to_stars(dims["子女"]),
             "健康": _score_to_stars(dims["健康"]),
+            "事业分": dims["事业"],
+            "财富分": dims["财富"],
+            "婚姻分": dims["婚姻"],
+            "子女分": dims["子女"],
+            "健康分": dims["健康"],
             "四维指引": guide,
         })
 
