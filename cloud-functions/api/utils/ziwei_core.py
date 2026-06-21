@@ -545,10 +545,10 @@ _AUX_ADJUST = {
 
 # 四化对维度的影响
 _SIHUA_DIM = {
-    "化禄": {"财富": 20, "事业": 12, "婚姻": 10, "子女": 8, "父母": 8},
-    "化权": {"财富": 10, "事业": 22, "婚姻": 5, "子女": 5, "父母": 5},
-    "化科": {"财富": 8, "事业": 10, "婚姻": 8, "子女": 10, "父母": 10},
-    "化忌": {"财富": -18, "事业": -15, "婚姻": -15, "子女": -12, "父母": -12},
+    "化禄": {"财富": 20, "事业": 12, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
+    "化权": {"财富": 10, "事业": 22, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
+    "化科": {"财富": 8, "事业": 10, "婚姻": 8, "子女": 10, "父母": 10, "健康": 12},
+    "化忌": {"财富": -18, "事业": -15, "婚姻": -15, "子女": -12, "父母": -12, "健康": -15},
 }
 
 # ----- 大运三方四正对应维度 -----
@@ -591,7 +591,7 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
     descs = {}
 
     for dim in DIMS:
-        base = 35  # 基准分（v2.9+ 从50降到35，防虚高100分）
+        base = 45  # 基准分（v3.0: 60合格线，45底+15加成≈60）
 
         # 1) 大运命宫主星对该维度的贡献（权重0.6，防主星独力破百）
         main_stars = dayun_palace_stars.get("主星", [])
@@ -656,7 +656,7 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
         scores[dim] = total
 
         # 解读文本
-        level = "优" if total >= 75 else "良" if total >= 60 else "中" if total >= 45 else "差" if total >= 30 else "凶"
+        level = "大吉" if total >= 85 else "中吉" if total >= 75 else "小吉" if total >= 60 else "偏弱" if total >= 45 else "凶"
         dim_desc = "%s评级：%s（%d分）" % (dim, level, total)
         if dim_detail_parts:
             dim_desc += "。" + "、".join(dim_detail_parts[:5])
@@ -671,7 +671,7 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
 def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
     """生成维度专项解读，融合三家之言"""
     # 通用解读模板
-    if score >= 75:
+    if score >= 85:
         base = {
             "财富": "此运财源广进，宜把握投资机遇，天府武曲太阴等财星得力，陆斌兆云：「财星守命，十年丰足」.",
             "事业": "此运事业通达，贵人扶助，紫微天府太阳坐镇，倪海厦云：「命宫得令，三方会吉，十年宏图可展」.",
@@ -679,7 +679,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "子女": "此运子女有成，亲子融洽，天同天府主福泽，子女宫吉庆有余.",
             "父母": "此运与长辈缘分深厚，得荫庇助力，天梁太阳主尊长，父母宫安稳.",
         }
-    elif score >= 60:
+    elif score >= 75:
         base = {
             "财富": "此运财运平稳，量入为出，不宜冒进投机，守成为上策.",
             "事业": "此运事业渐进，踏实经营可获提升，宜稳中求变.",
@@ -687,7 +687,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "子女": "此运子女运中等，需多关心教育引导，不可放任.",
             "父母": "此运与父母关系尚可，宜多尽孝道，注意长辈健康.",
         }
-    elif score >= 45:
+    elif score >= 60:
         base = {
             "财富": "此运财运起伏，需谨慎理财，忌赌博投机，王亭之云：「煞星守财，宜守不宜攻」.",
             "事业": "此运事业多变，宜蛰伏蓄力，不宜轻率跳槽，需防小人.",
@@ -853,18 +853,18 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
         total_score = int(round(total_score))
 
         # 综合评级
-        if total_score >= 75:
-            overall = "上吉"
-            overall_desc = "此运整体运势极佳，诸事顺遂，宜积极进取，把握良机。陆斌兆云：「大运得令，十年风光」."
-        elif total_score >= 60:
+        if total_score >= 85:
+            overall = "大吉"
+            overall_desc = "此运极佳，诸事顺遂，宜积极进取。陆斌兆云：「大运得令，十年风光」."
+        elif total_score >= 75:
             overall = "中吉"
-            overall_desc = "此运整体运势良好，虽有波折但不碍大局，宜稳中求进。倪海厦云：「三方会吉，虽有小疵，不失为佳运」."
+            overall_desc = "此运良好，虽有波折不碍大局，稳中求进。倪海厦云：「三方会吉，不失为佳运」."
+        elif total_score >= 60:
+            overall = "小吉"
+            overall_desc = "此运合格，无大起大落，宜守成待时。王亭之云：「平运宜守，勿贪急进」."
         elif total_score >= 45:
-            overall = "平运"
-            overall_desc = "此运整体运势平稳，无大起大落，宜守成待时，王亭之云：「平运宜守，勿贪急进」."
-        elif total_score >= 30:
-            overall = "偏凶"
-            overall_desc = "此运整体运势偏弱，需防破耗与是非，宜退守自保，不宜冒进."
+            overall = "偏弱"
+            overall_desc = "此运偏弱，需防破耗是非，退守自保，不宜冒进."
         else:
             overall = "大凶"
             overall_desc = "此运整体运势凶险，诸事多阻，宜韬光养晦，避凶趋吉。倪海厦云：「大运逢煞，十年坎坷，唯忍字可渡」."
@@ -1038,12 +1038,11 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         return "平", 0, "太岁无重大冲合，运势平稳"
 
     def _score_to_stars(s):
-        # v2.9 流年专属阈值：因流年分数源仅4颗四化星+太岁宫，分数天然窄于大运
-        # 78/68/58/48 确保五档各有分布，不会出现5星和1星空档
-        if s >= 78: return 5
-        if s >= 68: return 4
-        if s >= 58: return 3
-        if s >= 48: return 2
+        # v3.0: 用户感知对齐 — 85/75/65/55 — 大吉/中吉/小吉/合格的心里映射
+        if s >= 85: return 5
+        if s >= 75: return 4
+        if s >= 65: return 3
+        if s >= 55: return 2
         return 1
 
     def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info, dayun_ctx=None,
@@ -1055,9 +1054,9 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         # ═══ 1) 大运基调 ── 首位，因大运定大局 ═══
         if dayun_ctx and dayun_ctx.get('palace_name'):
             dy_rating = dayun_ctx.get('rating', '平运')
-            rating_desc = {"上吉":"大运极盛，诸事可期","中吉":"运势上扬，稳中求进",
-                          "平运":"平稳十年，守成为上","偏凶":"此运偏弱，宜退守",
-                          "大凶":"大运凶险，韬光养晦"}
+            rating_desc = {"大吉":"大运极盛，诸事可期","中吉":"运势上扬，稳中求进",
+                          "小吉":"平稳十年，守成为上","偏弱":"此运偏弱，宜退守",
+                          "凶":"运势凶险，韬光养晦"}
             dy_desc = rating_desc.get(dy_rating, "运势平稳")
             parts.append(f"你正行{dayun_ctx.get('age_range','')}{dayun_ctx['palace_name']}大运，{dy_desc}")
         elif dayun_ctx:
@@ -1262,14 +1261,16 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         dmap = {"事业":"事业","财富":"财运","婚姻":"婚姻","子女":"子女","健康":"健康"}
         for k in ["事业","财富","婚姻","子女","健康"]:
             v = dims[k]
-            if v >= 70:
-                lines.append("%s★★★★★ 黄金期，全力出击" % dmap[k])
+            if v >= 85:
+                lines.append("%s★★★★★ 大吉之年，全力出击" % dmap[k])
+            elif v >= 75:
+                lines.append("%s★★★★☆ 中吉之年，把握良机" % dmap[k])
+            elif v >= 65:
+                lines.append("%s★★★☆☆ 小吉之年，稳中向好" % dmap[k])
             elif v >= 55:
-                lines.append("%s★★★☆☆ 稳中向好" % dmap[k])
-            elif v >= 40:
-                lines.append("%s★★☆☆☆ 宜守不宜攻" % dmap[k])
+                lines.append("%s★★☆☆☆ 合格，宜守不宜攻" % dmap[k])
             else:
-                lines.append("%s★☆☆☆☆ 需格外谨慎" % dmap[k])
+                lines.append("%s★☆☆☆☆ 偏弱，需格外谨慎" % dmap[k])
         return "；".join(lines[:5])
 
     # 构建宫位索引：地支索引 → 宫位数据
@@ -1485,20 +1486,20 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             dims[dim] = max(20, min(100, dims[dim]))
 
         # ---------- ⑥ 安全地板（大运好则流年不能太差） ----------
-        # 大运≥70分（良好）时流年该维度不低于50（2星），防大运高分流年跌穿
+        # 大运≥70分（小吉）时流年该维度不低于55（2星）
         if dayun_ctx:
             dy_dim_scores = dayun_ctx.get('dim_scores', {})
             for dy_dim, ln_dim in DY_TO_LN_DIM.items():
                 if dy_dim_scores.get(dy_dim, 0) >= 70:
-                    dims[ln_dim] = max(dims[ln_dim], 50)
+                    dims[ln_dim] = max(dims[ln_dim], 55)
 
         avg = int(sum(dims.values()) / 5)
 
         # ---------- ⑦ 大运天花板（大运弱则流年难爆发） ----------
-        # 大运偏凶（<45分）时流年综合分不超过60
+        # 大运偏弱（<50分）时流年综合分不超过70
         if dayun_ctx:
             dy_total = dayun_ctx.get('score', 50)
-            if dy_total < 45:
+            if dy_total < 50:
                 for dim in dims:
                     dims[dim] = min(dims[dim], 60)
                 avg = min(avg, 60)  # 综合分也封顶
