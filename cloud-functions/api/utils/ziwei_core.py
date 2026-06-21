@@ -547,7 +547,7 @@ _SIHUA_DIM = {
     "化禄": {"财富": 20, "事业": 12, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
     "化权": {"财富": 10, "事业": 22, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
     "化科": {"财富": 8, "事业": 10, "婚姻": 8, "子女": 10, "父母": 10, "健康": 12},
-    "化忌": {"财富": -18, "事业": -15, "婚姻": -15, "子女": -12, "父母": -12, "健康": -15},
+    "化忌": {"财富": -12, "事业": -10, "婚姻": -10, "子女": -8, "父母": -8, "健康": -10},
 }
 
 # ----- 大运三方四正对应维度 -----
@@ -1359,7 +1359,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                         'score': dy.get('综合评分', 50),
                         'quality': dy_quality,
                         'stars': dy_stars[:3],
-                        'dim_scores': dy.get('评分', {}),  # 大运五维逐分，流年地基用
+                        'dim_scores': dy.get('评分', {}),  # 大运五维逐分
+                        'dy_sihua': _zhi_to_palace.get(dy_zhi_i, {}).get('四化', {}),  # 大运四化
                     }
                     # 大运天干地支
                     dy_gan = dy.get('天干', '')
@@ -1393,14 +1394,19 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             "健康": _STAR_HEALTH,
         }
 
-        # ═══ ① 大运地基 (70%) ═══
+        # ═══ ① 大运地基 (70%) + 大运四化叠加 (25%) ═══
         dy_dim_scores = dayun_ctx.get('dim_scores', {}) if dayun_ctx else {}
+        dy_sihua = dayun_ctx.get('dy_sihua', {}) if dayun_ctx else {}
         dy_foundation = {}
         for dy_dim, ln_dim in DY_TO_LN.items():
             dy_base = dy_dim_scores.get(dy_dim, 50)
             foundation = int(dy_base * 0.70)
             dims[ln_dim] = foundation
             dy_foundation[ln_dim] = foundation
+        # 《全书》：大运四化是"体"，叠加对流年的影响（权重0.25）
+        for hua_type, star_name in dy_sihua.items():
+            for dim in DIMS:
+                dims[dim] += int(_SIHUA_DIM.get(hua_type, {}).get(dim, 0) * 0.25)
 
         # ═══ ② 流年四化落宫分析 ═══
         sihua_info = {}
@@ -1454,21 +1460,20 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         for dim in DIMS:
             dims[dim] += chong_val * 2
 
-        # ═══ ⑥ 夹持: 大运趋势保护 ═══
+        # ═══ ⑥ 夹持: 《全书》体用协调保护 ═══
         if dayun_ctx:
             for dy_dim, ln_dim in DY_TO_LN.items():
                 dy_v = dy_dim_scores.get(dy_dim, 50)
-                # 大运好→流年有底线; 大运差→流年有上限
-                if dy_v >= 70:
-                    dims[ln_dim] = max(dims[ln_dim], 55)  # 大运强→流年至少2星
+                if dy_v >= 75:
+                    dims[ln_dim] = max(dims[ln_dim], 53)  # 大运中吉→流年至少2星
                 elif dy_v >= 60:
-                    dims[ln_dim] = max(dims[ln_dim], 50)  # 大运及格→流年不低于1星高位
-                if dy_v < 50:
-                    dims[ln_dim] = min(dims[ln_dim], 70)  # 大运弱→流年上限3星
+                    dims[ln_dim] = max(dims[ln_dim], 48)  # 大运小吉→流年不低于1星高区
+                elif dy_v < 45:
+                    dims[ln_dim] = min(dims[ln_dim], 72)  # 大运弱→流年上限
 
-        # Clamp
+        # Clamp（全书：忌虽凶不致死，禄虽喜不逆天）
         for dim in DIMS:
-            dims[dim] = max(25, min(95, dims[dim]))
+            dims[dim] = max(32, min(95, dims[dim]))
 
         avg = int(sum(dims.values()) / 5)
 
