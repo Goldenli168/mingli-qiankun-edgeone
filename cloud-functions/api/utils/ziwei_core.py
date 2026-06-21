@@ -406,7 +406,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         # 大运分析（含深度评分，同时传给流年做三盘联动）
         "大运": _dayun_scored,
         # 流年分析（使用已评分的大运，确保地基有效）
-        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, _dayun_scored, ln_weights=ln_weights),
+        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, _dayun_scored, ln_weights=ln_weights, birth_sihua=sihua),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
     }
@@ -945,7 +945,7 @@ def _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year):
 
 
 # ===== 流年分析（增强版） =====
-def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_list=None, ln_weights=None):
+def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, dayun_list=None, ln_weights=None, birth_sihua=None):
     """
     计算流年分析，包含四化评分、白话简评、四维指引。
 
@@ -1408,6 +1408,69 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             for dim in DIMS:
                 dims[dim] += int(_SIHUA_DIM.get(hua_type, {}).get(dim, 0) * 0.25)
 
+        # ═══ ①b 生年四化叠加 (20%) ═══
+        # 《全书》：生年四化定一生基调，流年应有呼应
+        if birth_sihua:
+            for hi, star_name in enumerate(birth_sihua):
+                if not star_name: continue
+                hua_name = ["化禄","化权","化科","化忌"][hi]
+                # 找生年四化星在本命十二宫中的落宫
+                for p_data in _zhi_to_palace.values():
+                    if star_name in p_data.get("主星",[]) + p_data.get("辅星",[]):
+                        for dim in DIMS:
+                            dims[dim] += int(_SIHUA_DIM.get(hua_name, {}).get(dim, 0) * 0.20)
+                        break
+
+        # ═══ ①c 庙旺系数调节 ═══
+        # 《全书》：星曜在庙旺宫位效力加倍，在落陷宫位效力减半
+        MIAO_WANG = {
+            "紫微": ["子","午","丑","未","寅","申","卯","酉","辰","戌"],
+            "天机": ["子","午","卯","酉","辰","戌","巳","亥","寅","申"],
+            "太阳": ["寅","卯","辰","巳","午","未","申","酉","戌","亥"],
+            "武曲": ["丑","未","辰","戌","巳","亥","卯","酉","寅","申"],
+            "天同": ["巳","亥","子","午","卯","酉","寅","申","丑","未"],
+            "廉贞": ["寅","申","卯","酉","辰","戌","丑","未","子","午"],
+            "天府": ["卯","酉","丑","未","巳","亥","子","午","辰","戌"],
+            "太阴": ["酉","戌","亥","子","丑","寅","卯","辰","巳","午"],
+            "贪狼": ["寅","申","卯","酉","子","午","辰","戌","丑","未"],
+            "巨门": ["寅","申","卯","酉","辰","戌","巳","亥","子","午"],
+            "天相": ["卯","酉","丑","未","寅","申","巳","亥","辰","戌"],
+            "天梁": ["子","午","卯","酉","辰","戌","丑","未","寅","申"],
+            "七杀": ["寅","申","巳","亥","卯","酉","子","午","辰","戌"],
+            "破军": ["子","午","巳","亥","寅","申","卯","酉","丑","未"],
+        }
+        def _get_miaowang_coeff(star_name, zhi_name):
+            """返回星曜在当前地支的庙旺系数：1.15庙旺, 1.0平, 0.85落陷"""
+            if star_name not in MIAO_WANG: return 1.0
+            wang_list = MIAO_WANG[star_name]
+            try:
+                pos = wang_list.index(zhi_name)
+                if pos < 4: return 1.15   # 庙旺
+                if pos < 8: return 1.0     # 得地
+                return 0.85                # 落陷
+            except ValueError:
+                return 1.0
+
+        # ④⑦层中星曜贡献应用庙旺系数（后续在四化和命宫分析中生效）
+        mi_wang_cache = {}
+        def _mi_wang_coeff(star):
+            if star not in mi_wang_cache:
+                for p_data in _zhi_to_palace.values():
+                    if star in p_data.get("主星",[]) + p_data.get("辅星",[]):
+                        zhi = ZHI[list(_zhi_to_palace.keys())[list(_zhi_to_palace.values()).index(p_data)]]
+                        # Simplified: use the palace's own zhi
+                        break
+                else:
+                    mi_wang_cache[star] = 1.0
+                    return 1.0
+            return mi_wang_cache.get(star, 1.0)
+        # Rebuild: search for star and find its location
+        for star in set([s for p in _zhi_to_palace.values() for s in p.get("主星",[]) + p.get("辅星",[])]):
+            for zhi_v, p_data in _zhi_to_palace.items():
+                if star in p_data.get("主星",[]) + p_data.get("辅星",[]):
+                    mi_wang_cache[star] = _get_miaowang_coeff(star, ZHI[zhi_v])
+                    break
+
         # ═══ ② 流年四化落宫分析 ═══
         sihua_info = {}
         for hi, hua_name in enumerate(["化禄","化权","化科","化忌"]):
@@ -1421,9 +1484,10 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     # 四化主效应
                     for dim in DIMS:
                         dims[dim] += _SIHUA_DIM.get(hua_name, {}).get(dim, 0)
-                    # 星曜自身在各维度的贡献（轻量加权）
+                    # 星曜自身在各维度的贡献（轻量加权+庙旺系数）
+                    mw = mi_wang_cache.get(star_name, 1.0)
                     for dim, tbl in STAR_TABLES_LN.items():
-                        dims[dim] += int(tbl.get(star_name, 0) * 0.15)
+                        dims[dim] += int(tbl.get(star_name, 0) * 0.15 * mw)
                     break
 
         # ═══ ③ 流年命宫分析 ═══
@@ -1433,10 +1497,11 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         if ln_palace:
             ln_palace_name = ln_palace.get("宫名", "")
             ln_palace_main = ln_palace.get("主星", [])
-            # 流年命宫主星对五维的贡献
+            # 流年命宫主星对五维的贡献（庙旺系数）
             for s in ln_palace_main:
+                mw = mi_wang_cache.get(s, 1.0)
                 for dim, tbl in STAR_TABLES_LN.items():
-                    dims[dim] += int(tbl.get(s, 0) * 0.25)
+                    dims[dim] += int(tbl.get(s, 0) * 0.25 * mw)
             # 辅星贡献
             for a in ln_palace.get("辅星", []):
                 adj = _AUX_ADJUST.get(a, {})
@@ -1454,11 +1519,26 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     if sf_dim:
                         for s in sf_palace.get("主星", []):
                             tbl = STAR_TABLES_LN.get(sf_dim, {})
-                            dims[sf_dim] += int(tbl.get(s, 0) * 0.20)
+                            mw = mi_wang_cache.get(s, 1.0)
+                            dims[sf_dim] += int(tbl.get(s, 0) * 0.20 * mw)
 
         # ═══ ⑤ 太岁冲合调节 ═══
         for dim in DIMS:
             dims[dim] += chong_val * 2
+
+        # ═══ ⑤b 身宫触发 ═══
+        # 《全书》：身宫为后天安身之所，流年命宫遇身宫时影响加倍
+        shen_zhi_name = ZHI[shen_branch] if shen_branch is not None else None
+        if shen_zhi_name and _zhi_to_palace.get(zhi_idx, {}).get("宫名", ""):
+            shen_palace = None
+            for p_data in _zhi_to_palace.values():
+                if p_data.get("是否身宫"):
+                    shen_palace = p_data
+                    break
+            if shen_palace and _zhi_to_palace.get(zhi_idx, {}) is shen_palace:
+                # 流年命宫 = 身宫 → 各维度 +5
+                for dim in DIMS:
+                    dims[dim] += 5
 
         # ═══ ⑥ 夹持: 《全书》体用协调保护 ═══
         if dayun_ctx:
