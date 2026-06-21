@@ -382,8 +382,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     year_zhi_i = (lunar_year - 4) % 12
 
-    # 提取大运原始数据（iztro格式），供流年分析三盘联动
-    _dayun_raw = _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year)
+    # 提取大运原始数据，提前评分供流年三盘联动使用
+    _dayun_extracted = _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year)
+    _dayun_scored = _dayun_deep_analysis(_dayun_extracted, places, year_gan)
 
     return {
         "基本信息": {
@@ -402,12 +403,10 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "四化": {"年干": year_gan, "化禄": sihua[0], "化权": sihua[1],
                  "化科": sihua[2], "化忌": sihua[3]},
         "大限信息": {"起运年龄": ju_num, "顺逆": "顺行" if daxian_forward else "逆行"},
-        # 大运分析（从iztro提取，并深度评分）
-        "大运": _dayun_deep_analysis(
-            _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year),
-            places, year_gan),
-        # 流年分析（增强版：含四化、评分、简评、四维指引）
-        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year), ln_weights=ln_weights),
+        # 大运分析（含深度评分，同时传给流年做三盘联动）
+        "大运": _dayun_scored,
+        # 流年分析（使用已评分的大运，确保地基有效）
+        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, _dayun_scored, ln_weights=ln_weights),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
     }
@@ -1374,28 +1373,16 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                     break
 
 
-        # ===== 流年五维度评分 v2.9 =====
-        # 架构：大运地基 + 流年命宫 + 四化效应 + 三方四正 + 太岁调节
-        # 紫微斗数铁律：大运定方向，流年定应期；大运为地基，流年为演出
-        # 与大运 _score_dayun 共用 _STAR_* / _AUX_ADJUST / _SIHUA_DIM 表
+        # ===== 流年五维度评分 v4.0: 分析驱动 =====
+        # 原则: 大运定趋势(70%), 流年四化做加减, 最终调和太岁
+        # 每维度 = 大运地基 + 四化落宫分析 + 流年命宫分析 + 太岁调节
 
-        # 权重参数（可通过 ln_weights 覆盖，供离线校准使用）
-        W = ln_weights if ln_weights else {
-            'dy_floor': 0.60,    # 大运地基（v3.0: 0.60，大运子女66→流年地基40，加四化可达60+）
-            'ln_ming': 0.40,     # 流年命宫主星
-            'ln_aux': 0.50,      # 流年命宫辅星
-            'sihua_star': 0.20,  # 四化星曜自身
-            'sihua_aux': 0.50,   # 四化落宫辅星
-            'sanfang': 0.50,     # 三方四正
-        }
+        DIMS = ["事业","财富","婚姻","子女","健康"]
+        dims = {d: 50 for d in DIMS}
 
-        dims = {"事业":50, "财富":50, "婚姻":50, "子女":50, "健康":50}
-        hua_labels = ["化禄","化权","化科","化忌"]
+        # 大运→流年维度映射
+        DY_TO_LN = {"财富":"财富","事业":"事业","婚姻":"婚姻","子女":"子女","父母":"健康"}
 
-        # 大运→流年维度映射（大运"父母"维度映射到流年"健康"维度）
-        DY_TO_LN_DIM = {"财富":"财富", "事业":"事业", "婚姻":"婚姻", "子女":"子女", "父母":"健康"}
-
-        # 健康维度星曜分值（参考《全书》疾厄宫+福德宫星曜体系）
         _STAR_HEALTH = {
             "天梁":25,"天同":22,"天府":18,"天相":15,"紫微":12,"太阳":10,"太阴":10,
             "破军":-15,"七杀":-12,"廉贞":-10,"巨门":-8,"贪狼":-8,"武曲":-5,"天机":3,
@@ -1406,68 +1393,52 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             "健康": _STAR_HEALTH,
         }
 
-        # ---------- ① 大运地基（逐维度继承） ----------
+        # ═══ ① 大运地基 (70%) ═══
         dy_dim_scores = dayun_ctx.get('dim_scores', {}) if dayun_ctx else {}
-        dy_foundation = {}  # 记录大运地基分，供简评使用
-        for dy_dim, ln_dim in DY_TO_LN_DIM.items():
+        dy_foundation = {}
+        for dy_dim, ln_dim in DY_TO_LN.items():
             dy_base = dy_dim_scores.get(dy_dim, 50)
-            foundation = int(dy_base * W['dy_floor'])
+            foundation = int(dy_base * 0.70)
             dims[ln_dim] = foundation
             dy_foundation[ln_dim] = foundation
 
-        # ---------- ② 流年命宫（太岁宫主星+辅星） ----------
+        # ═══ ② 流年四化落宫分析 ═══
+        sihua_info = {}
+        for hi, hua_name in enumerate(["化禄","化权","化科","化忌"]):
+            star_name = sihua_stars[hi]
+            if not star_name: continue
+            # 找星曜所在本命宫位
+            for p_data in _zhi_to_palace.values():
+                if star_name in p_data.get("主星",[]) + p_data.get("辅星",[]):
+                    p_name = p_data.get("宫名","")
+                    sihua_info[star_name] = (p_name, 1.0)
+                    # 四化主效应
+                    for dim in DIMS:
+                        dims[dim] += _SIHUA_DIM.get(hua_name, {}).get(dim, 0)
+                    # 星曜自身在各维度的贡献（轻量加权）
+                    for dim, tbl in STAR_TABLES_LN.items():
+                        dims[dim] += int(tbl.get(star_name, 0) * 0.15)
+                    break
+
+        # ═══ ③ 流年命宫分析 ═══
         ln_palace = _zhi_to_palace.get(zhi_idx)
         ln_palace_name = ''
         ln_palace_main = []
-        ln_palace_aux = []
         if ln_palace:
             ln_palace_name = ln_palace.get("宫名", "")
             ln_palace_main = ln_palace.get("主星", [])
-            ln_palace_aux = ln_palace.get("辅星", [])
-            ln_dim = PALACE_DIM_MAP.get(ln_palace_name)
-
-            # 流年命宫主星对所有维度的贡献
+            # 流年命宫主星对五维的贡献
             for s in ln_palace_main:
                 for dim, tbl in STAR_TABLES_LN.items():
-                    dims[dim] += int(tbl.get(s, 0) * W['ln_ming'])
-
-            # 流年命宫辅星
-            for a in ln_palace_aux:
+                    dims[dim] += int(tbl.get(s, 0) * 0.25)
+            # 辅星贡献
+            for a in ln_palace.get("辅星", []):
                 adj = _AUX_ADJUST.get(a, {})
-                for dim in dims:
-                    dims[dim] += int(adj.get(dim, 0) * W['ln_aux'])
+                for dim in DIMS:
+                    dims[dim] += int(adj.get(dim, 0) * 0.40)
 
-        # ---------- ③ 流年四化效应 ----------
-        sihua_info = {}
-        for hi, hua_name in enumerate(hua_labels):
-            star_name = sihua_stars[hi]
-            if not star_name:
-                continue
-            for p_idx, p_data in _zhi_to_palace.items():
-                p_main = p_data.get("主星", [])
-                p_aux = p_data.get("辅星", [])
-                all_stars = p_main + p_aux
-                if star_name in all_stars:
-                    p_name = p_data.get("宫名", "")
-                    sihua_info[star_name] = (p_name, 1.0)
-
-                    # 四化主效应（_SIHUA_DIM ×1.0）
-                    hua_adj = _SIHUA_DIM.get(hua_name, {})
-                    for dim in dims:
-                        dims[dim] += hua_adj.get(dim, 0)
-
-                    # 四化星曜自身贡献
-                    for dim, tbl in STAR_TABLES_LN.items():
-                        dims[dim] += int(tbl.get(star_name, 0) * W['sihua_star'])
-
-                    # 四化落宫辅星调节
-                    for a in p_aux:
-                        adj = _AUX_ADJUST.get(a, {})
-                        for dim in dims:
-                            dims[dim] += int(adj.get(dim, 0) * W['sihua_aux'])
-                    break
-
-        # ---------- ④ 流年三方四正联动 ----------
+        # ═══ ④ 三方四正联动（轻量） ═══
+        SANFANG_OFFSETS = [0, 6, 4, 8]
         if ln_palace:
             for offset in SANFANG_OFFSETS:
                 sf_zhi = (zhi_idx - offset) % 12
@@ -1475,37 +1446,31 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
                 if sf_palace:
                     sf_dim = PALACE_DIM_MAP.get(sf_palace.get("宫名", ""))
                     if sf_dim:
-                        sf_main = sf_palace.get("主星", [])
-                        for s in sf_main:
+                        for s in sf_palace.get("主星", []):
                             tbl = STAR_TABLES_LN.get(sf_dim, {})
-                            dims[sf_dim] += int(tbl.get(s, 0) * W['sanfang'])
+                            dims[sf_dim] += int(tbl.get(s, 0) * 0.20)
 
-        # ---------- ⑤ 太岁冲合全局调节 ----------
-        for dim in dims:
+        # ═══ ⑤ 太岁冲合调节 ═══
+        for dim in DIMS:
             dims[dim] += chong_val * 2
-            dims[dim] = max(20, min(100, dims[dim]))
 
-        # ---------- ⑥ 安全地板 + 地基推力（大运好则流年受提振） ----------
+        # ═══ ⑥ 夹持: 大运趋势保护 ═══
         if dayun_ctx:
-            dy_dim_scores = dayun_ctx.get('dim_scores', {})
-            for dy_dim, ln_dim in DY_TO_LN_DIM.items():
-                dy_v = dy_dim_scores.get(dy_dim, 0)
+            for dy_dim, ln_dim in DY_TO_LN.items():
+                dy_v = dy_dim_scores.get(dy_dim, 50)
+                # 大运好→流年有底线; 大运差→流年有上限
                 if dy_v >= 70:
-                    dims[ln_dim] = max(dims[ln_dim], 55)
+                    dims[ln_dim] = max(dims[ln_dim], 55)  # 大运强→流年至少2星
                 elif dy_v >= 60:
-                    # 大运及格→流年额外+15推力，防大运60分流年1星
-                    dims[ln_dim] += 15
+                    dims[ln_dim] = max(dims[ln_dim], 50)  # 大运及格→流年不低于1星高位
+                if dy_v < 50:
+                    dims[ln_dim] = min(dims[ln_dim], 70)  # 大运弱→流年上限3星
+
+        # Clamp
+        for dim in DIMS:
+            dims[dim] = max(25, min(95, dims[dim]))
 
         avg = int(sum(dims.values()) / 5)
-
-        # ---------- ⑦ 大运天花板（大运弱则流年难爆发） ----------
-        # 大运偏弱（<50分）时流年综合分不超过70
-        if dayun_ctx:
-            dy_total = dayun_ctx.get('score', 50)
-            if dy_total < 50:
-                for dim in dims:
-                    dims[dim] = min(dims[dim], 60)
-                avg = min(avg, 60)  # 综合分也封顶
 
         # 组装简评所需上下文
         brief_ctx = (y, g, z, ny, ss, sihua_stars, chong_desc, sihua_info, dayun_ctx,
