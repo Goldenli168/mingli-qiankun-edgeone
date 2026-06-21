@@ -1038,11 +1038,11 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         return "平", 0, "太岁无重大冲合，运势平稳"
 
     def _score_to_stars(s):
-        # v3.0: 用户感知对齐 — 85/75/65/55 — 大吉/中吉/小吉/合格的心里映射
-        if s >= 85: return 5
-        if s >= 75: return 4
-        if s >= 65: return 3
-        if s >= 55: return 2
+        # v3.0: 60分=3星（合格），50=2星，70=4星，80=5星
+        if s >= 80: return 5
+        if s >= 70: return 4
+        if s >= 60: return 3
+        if s >= 50: return 2
         return 1
 
     def _brief(y, g, z, ny, ss, sihua_stars, chong_str, sihua_info, dayun_ctx=None,
@@ -1261,13 +1261,13 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
         dmap = {"事业":"事业","财富":"财运","婚姻":"婚姻","子女":"子女","健康":"健康"}
         for k in ["事业","财富","婚姻","子女","健康"]:
             v = dims[k]
-            if v >= 85:
-                lines.append("%s★★★★★ 大吉之年，全力出击" % dmap[k])
-            elif v >= 75:
-                lines.append("%s★★★★☆ 中吉之年，把握良机" % dmap[k])
-            elif v >= 65:
-                lines.append("%s★★★☆☆ 小吉之年，稳中向好" % dmap[k])
-            elif v >= 55:
+            if v >= 80:
+                lines.append("%s★★★★★ 大吉，全力出击" % dmap[k])
+            elif v >= 70:
+                lines.append("%s★★★★☆ 中吉，把握良机" % dmap[k])
+            elif v >= 60:
+                lines.append("%s★★★☆☆ 小吉，稳中向好" % dmap[k])
+            elif v >= 50:
                 lines.append("%s★★☆☆☆ 合格，宜守不宜攻" % dmap[k])
             else:
                 lines.append("%s★☆☆☆☆ 偏弱，需格外谨慎" % dmap[k])
@@ -1381,7 +1381,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
 
         # 权重参数（可通过 ln_weights 覆盖，供离线校准使用）
         W = ln_weights if ln_weights else {
-            'dy_floor': 0.50,    # 大运地基（v2.9+ 从0.45提升，大运定方向应过半）
+            'dy_floor': 0.60,    # 大运地基（v3.0: 0.60，大运子女66→流年地基40，加四化可达60+）
             'ln_ming': 0.40,     # 流年命宫主星
             'ln_aux': 0.50,      # 流年命宫辅星
             'sihua_star': 0.20,  # 四化星曜自身
@@ -1485,13 +1485,16 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             dims[dim] += chong_val * 2
             dims[dim] = max(20, min(100, dims[dim]))
 
-        # ---------- ⑥ 安全地板（大运好则流年不能太差） ----------
-        # 大运≥70分（小吉）时流年该维度不低于55（2星）
+        # ---------- ⑥ 安全地板 + 地基推力（大运好则流年受提振） ----------
         if dayun_ctx:
             dy_dim_scores = dayun_ctx.get('dim_scores', {})
             for dy_dim, ln_dim in DY_TO_LN_DIM.items():
-                if dy_dim_scores.get(dy_dim, 0) >= 70:
+                dy_v = dy_dim_scores.get(dy_dim, 0)
+                if dy_v >= 70:
                     dims[ln_dim] = max(dims[ln_dim], 55)
+                elif dy_v >= 60:
+                    # 大运及格→流年额外+15推力，防大运60分流年1星
+                    dims[ln_dim] += 15
 
         avg = int(sum(dims.values()) / 5)
 
