@@ -544,11 +544,33 @@ _AUX_ADJUST = {
 
 # 四化对维度的影响
 _SIHUA_DIM = {
-    "化禄": {"财富": 20, "事业": 12, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
-    "化权": {"财富": 10, "事业": 18, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
+    "化禄": {"财富": 16, "事业": 8, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
+    "化权": {"财富": 10, "事业": 12, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
     "化科": {"财富": 8, "事业": 10, "婚姻": 8, "子女": 10, "父母": 10, "健康": 12},
     "化忌": {"财富": -12, "事业": -10, "婚姻": -10, "子女": -8, "父母": -8, "健康": -10},
 }
+
+# 百分位基准表（2112命盘采样校准，v5.1）
+_PERCENTILE_TABLE = {
+    "20-29":{"财富":{"p90":92,"p75":92,"p50":79,"p25":65,"p10":52},"事业":{"p90":92,"p75":92,"p50":92,"p25":86,"p10":75},"婚姻":{"p90":72,"p75":63,"p50":55,"p25":49,"p10":42},"子女":{"p90":72,"p75":65,"p50":58,"p25":53,"p10":48},"健康":{"p90":81,"p75":73,"p50":65,"p25":57,"p10":50}},
+    "30-39":{"财富":{"p90":92,"p75":91,"p50":78,"p25":66,"p10":54},"事业":{"p90":92,"p75":92,"p50":92,"p25":85,"p10":75},"婚姻":{"p90":75,"p75":68,"p50":58,"p25":49,"p10":41},"子女":{"p90":77,"p75":70,"p50":63,"p25":55,"p10":48},"健康":{"p90":81,"p75":73,"p50":65,"p25":57,"p10":51}},
+    "40-49":{"财富":{"p90":92,"p75":91,"p50":78,"p25":66,"p10":55},"事业":{"p90":92,"p75":92,"p50":92,"p25":87,"p10":76},"婚姻":{"p90":76,"p75":67,"p50":58,"p25":49,"p10":41},"子女":{"p90":78,"p75":70,"p50":62,"p25":54,"p10":47},"健康":{"p90":80,"p75":74,"p50":65,"p25":57,"p10":52}},
+    "50-59":{"财富":{"p90":92,"p75":90,"p50":78,"p25":65,"p10":53},"事业":{"p90":92,"p75":92,"p50":92,"p25":85,"p10":75},"婚姻":{"p90":74,"p75":66,"p50":57,"p25":48,"p10":40},"子女":{"p90":76,"p75":69,"p50":61,"p25":54,"p10":47},"健康":{"p90":80,"p75":72,"p50":65,"p25":57,"p10":51}},
+}
+
+def _score_to_percentile(score, dim, age=35):
+    """将分数映射到同龄层百分位"""
+    if age < 20: age = 20
+    if age >= 60: age = 55
+    decade = f"{(age//10)*10}-{(age//10)*10+9}"
+    tbl = _PERCENTILE_TABLE.get(decade, _PERCENTILE_TABLE["30-39"])
+    dim_data = tbl.get(dim, tbl.get("事业", {}))
+    if not dim_data: return ""
+    if score >= dim_data.get("p90", 99): return "前10%"
+    if score >= dim_data.get("p75", 99): return "前25%"
+    if score >= dim_data.get("p50", 99): return "前50%"
+    if score >= dim_data.get("p25", 99): return "后50%"
+    return "后25%"
 
 # ----- 大运三方四正对应维度 -----
 # 大运命宫三方：命宫-财帛-官禄 为核心三角
@@ -1254,22 +1276,23 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
         return "。".join(parts[:8]) + "。"
 
-    def _guide(dims):
-        """五维指引"""
+    def _guide(dims, age=35):
+        """五维指引 + 社会百分位参照"""
         lines = []
         dmap = {"事业":"事业","财富":"财运","婚姻":"婚姻","子女":"子女","健康":"健康"}
         for k in ["事业","财富","婚姻","子女","健康"]:
             v = dims[k]
+            pct = _score_to_percentile(v, k, age)
             if v >= 80:
-                lines.append("%s★★★★★ 大吉，全力出击" % dmap[k])
+                lines.append("%s★★★★★ 大吉(%s)" % (dmap[k], pct))
             elif v >= 70:
-                lines.append("%s★★★★☆ 中吉，把握良机" % dmap[k])
+                lines.append("%s★★★★☆ 中吉(%s)" % (dmap[k], pct))
             elif v >= 60:
-                lines.append("%s★★★☆☆ 小吉，稳中向好" % dmap[k])
+                lines.append("%s★★★☆☆ 小吉(%s)" % (dmap[k], pct))
             elif v >= 50:
-                lines.append("%s★★☆☆☆ 合格，宜守不宜攻" % dmap[k])
+                lines.append("%s★★☆☆☆ 合格(%s)" % (dmap[k], pct))
             else:
-                lines.append("%s★☆☆☆☆ 偏弱，需格外谨慎" % dmap[k])
+                lines.append("%s★☆☆☆☆ 偏弱(%s)" % (dmap[k], pct))
         return "；".join(lines[:5])
 
     # 构建宫位索引：地支索引 → 宫位数据
@@ -1561,7 +1584,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                 dy_v = dy_dim_scores.get(dy_dim, 50)
                 # 流年维分上限 = min(92, 大运维分 + 22)
                 # 大运50→上限72, 大运70→上限92, 大运90→上限92
-                ceiling = min(92, dy_v + 22)
+                ceiling = min(92, dy_v + 15)
                 dims[ln_dim] = min(dims[ln_dim], ceiling)
 
         avg = int(sum(dims.values()) / 5)
@@ -1573,7 +1596,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
         brief = _brief(*brief_ctx)
 
         # 五维指引
-        guide = _guide(dims)
+        guide = _guide(dims, age=y - solar_year)
 
         items.append({
             "年份": y,
