@@ -590,7 +590,7 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
     descs = {}
 
     for dim in DIMS:
-        base = 45  # 基准分（v3.0: 60合格线，45底+15加成≈60）
+        base = 50  # 基准分（v5.0: 社会平均值锚定，50底+分析加成→60-80中位）
 
         # 1) 大运命宫主星对该维度的贡献（权重0.6，防主星独力破百）
         main_stars = dayun_palace_stars.get("主星", [])
@@ -655,7 +655,7 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
         scores[dim] = total
 
         # 解读文本
-        level = "大吉" if total >= 85 else "中吉" if total >= 75 else "小吉" if total >= 60 else "偏弱" if total >= 45 else "凶"
+        level = "大吉" if total >= 85 else "中吉" if total >= 75 else "小吉" if total >= 65 else "偏弱" if total >= 50 else "凶"
         dim_desc = "%s评级：%s（%d分）" % (dim, level, total)
         if dim_detail_parts:
             dim_desc += "。" + "、".join(dim_detail_parts[:5])
@@ -861,7 +861,7 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
         elif total_score >= 60:
             overall = "小吉"
             overall_desc = "此运合格，无大起大落，宜守成待时。王亭之云：「平运宜守，勿贪急进」."
-        elif total_score >= 45:
+        elif total_score >= 50:
             overall = "偏弱"
             overall_desc = "此运偏弱，需防破耗是非，退守自保，不宜冒进."
         else:
@@ -1055,7 +1055,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
             dy_rating = dayun_ctx.get('rating', '平运')
             rating_desc = {"大吉":"大运极盛，诸事可期","中吉":"运势上扬，稳中求进",
                           "小吉":"平稳十年，守成为上","偏弱":"此运偏弱，宜退守",
-                          "凶":"运势凶险，韬光养晦"}
+                          "大凶":"运势凶险，韬光养晦"}
             dy_desc = rating_desc.get(dy_rating, "运势平稳")
             parts.append(f"你正行{dayun_ctx.get('age_range','')}{dayun_ctx['palace_name']}大运，{dy_desc}")
         elif dayun_ctx:
@@ -1544,16 +1544,25 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
         if dayun_ctx:
             for dy_dim, ln_dim in DY_TO_LN.items():
                 dy_v = dy_dim_scores.get(dy_dim, 50)
-                if dy_v >= 75:
-                    dims[ln_dim] = max(dims[ln_dim], 53)  # 大运中吉→流年至少2星
-                elif dy_v >= 60:
-                    dims[ln_dim] = max(dims[ln_dim], 48)  # 大运小吉→流年不低于1星高区
-                elif dy_v < 45:
+                if dy_v >= 80:
+                    dims[ln_dim] = max(dims[ln_dim], 58)  # 大运极强→流年至少3星
+                elif dy_v >= 65:
+                    dims[ln_dim] = max(dims[ln_dim], 50)  # 大运小吉→流年不低于2星
+                elif dy_v < 50:
                     dims[ln_dim] = min(dims[ln_dim], 72)  # 大运弱→流年上限
 
         # Clamp（全书：忌虽凶不致死，禄虽喜不逆天）
         for dim in DIMS:
             dims[dim] = max(32, min(92, dims[dim]))
+
+        # ═══ ⑦ 大运天花板：流年围绕大运波动，±20为合理区间 ═══
+        if dayun_ctx:
+            for dy_dim, ln_dim in DY_TO_LN.items():
+                dy_v = dy_dim_scores.get(dy_dim, 50)
+                # 流年维分上限 = min(92, 大运维分 + 22)
+                # 大运50→上限72, 大运70→上限92, 大运90→上限92
+                ceiling = min(92, dy_v + 22)
+                dims[ln_dim] = min(dims[ln_dim], ceiling)
 
         avg = int(sum(dims.values()) / 5)
 
