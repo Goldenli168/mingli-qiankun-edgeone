@@ -545,7 +545,7 @@ _AUX_ADJUST = {
 # 四化对维度的影响
 _SIHUA_DIM = {
     "化禄": {"财富": 20, "事业": 12, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
-    "化权": {"财富": 10, "事业": 22, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
+    "化权": {"财富": 10, "事业": 18, "婚姻": 5, "子女": 5, "父母": 5, "健康": 5},
     "化科": {"财富": 8, "事业": 10, "婚姻": 8, "子女": 10, "父母": 10, "健康": 12},
     "化忌": {"财富": -12, "事业": -10, "婚姻": -10, "子女": -8, "父母": -8, "健康": -10},
 }
@@ -1394,13 +1394,13 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
             "健康": _STAR_HEALTH,
         }
 
-        # ═══ ① 大运地基 (70%) + 大运四化叠加 (25%) ═══
+        # ═══ ① 大运地基 (62%) + 大运四化叠加 (25%) ═══
         dy_dim_scores = dayun_ctx.get('dim_scores', {}) if dayun_ctx else {}
         dy_sihua = dayun_ctx.get('dy_sihua', {}) if dayun_ctx else {}
         dy_foundation = {}
         for dy_dim, ln_dim in DY_TO_LN.items():
             dy_base = dy_dim_scores.get(dy_dim, 50)
-            foundation = int(dy_base * 0.70)
+            foundation = int(dy_base * 0.62)
             dims[ln_dim] = foundation
             dy_foundation[ln_dim] = foundation
         # 《全书》：大运四化是"体"，叠加对流年的影响（权重0.25）
@@ -1473,7 +1473,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, dayun_l
 
         # Clamp（全书：忌虽凶不致死，禄虽喜不逆天）
         for dim in DIMS:
-            dims[dim] = max(32, min(95, dims[dim]))
+            dims[dim] = max(32, min(92, dims[dim]))
 
         avg = int(sum(dims.values()) / 5)
 
