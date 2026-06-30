@@ -184,6 +184,78 @@ def _sihua_en_to_cn(mutagen):
     return None
 
 
+# ----- 格局检测 -----
+def _detect_patterns(places, ming_branch, sihua, year_gan):
+    """检测命盘中的著名紫微格局"""
+    patterns = []
+    zhi_to_p = {}
+    for p in places:
+        zhi_to_p[p.get("宫位")] = p
+
+    # 获取指定宫位的主星
+    def _stars(offset):
+        z = (ming_branch - offset) % 12
+        p = zhi_to_p.get(z, {})
+        return p.get("主星", []) + p.get("辅星", [])
+
+    # 1. 命无正曜（命宫无主星）
+    ming_stars = zhi_to_p.get(ming_branch, {}).get("主星", [])
+    if not ming_stars:
+        patterns.append({"name": "命无正曜", "desc": "命宫无主星，借迁移宫太阳天梁论命，一生靠环境与他人搭台，宜借势而为", "level": "info"})
+
+    # 2. 阳梁昌禄格（太阳+天梁+文昌/禄存会照）
+    qianyi = zhi_to_p.get((ming_branch - 6) % 12, {}).get("主星", [])
+    all_stars = sum([zhi_to_p.get(i, {}).get("主星", []) for i in range(12)], [])
+    if "太阳" in qianyi and "天梁" in qianyi and any(s in all_stars for s in ["文昌","禄存"]):
+        patterns.append({"name": "阳梁昌禄", "desc": "太阳天梁在迁移宫照命宫，配合文昌禄存，主光明磊落、仕途顺遂，宜公职竞考", "level": "good"})
+
+    # 3. 权忌同宫（官禄宫同时有化权和化忌）
+    guanlu_sihua = zhi_to_p.get((ming_branch - 8) % 12, {}).get("四化", {})
+    if "化权" in guanlu_sihua and "化忌" in guanlu_sihua:
+        patterns.append({"name": "权忌同宫", "desc": "化权与化忌同入官禄宫，有权有势但口舌是非不断，倪海厦云：权能制忌，有得有失，利创业不利打工", "level": "warn"})
+
+    # 4. 三奇嘉会（禄权科在三方四正）
+    all_sihua = {}
+    for p in places:
+        all_sihua.update(p.get("四化", {}))
+    if all(s in all_sihua for s in ["化禄","化权","化科"]):
+        patterns.append({"name": "三奇嘉会", "desc": "禄权科三奇俱全，紫微最高格局之一，一生多贵人、机遇、名声，福报深厚", "level": "good"})
+
+    # 5. 天机化科在身宫
+    shen_places = [p for p in places if p.get("是否身宫")]
+    for sp in shen_places:
+        sp_sihua = sp.get("四化", {})
+        if "化科" in sp_sihua and sp_sihua["化科"] == "天机":
+            patterns.append({"name": "天机科在身宫", "desc": "天机化科坐身宫财帛，以智慧名声取财，宜技术、咨询、教育行业", "level": "good"})
+
+    # 6. 太阴化禄在福德
+    for p in places:
+        if p.get("宫名") == "福德":
+            fs = p.get("四化", {})
+            if "化禄" in fs and fs["化禄"] == "太阴":
+                patterns.append({"name": "太阴禄照福德", "desc": "太阴化禄在福德宫，福气深厚，精神富足，晚年清福，心态乐观是关键", "level": "good"})
+            break
+
+    # 7. 空宫借星
+    kong_palaces = []
+    for p in places:
+        if not p.get("主星"):
+            kong_palaces.append(p.get("宫名"))
+    if len(kong_palaces) >= 2:
+        patterns.append({"name": "多宫借星", "desc": f"{'、'.join(kong_palaces[:4])}等宫无主星，借对宫星曜论命，人生需借力而行", "level": "info"})
+
+    # 8. 命宫三方见煞（擎羊/陀罗/火星/铃星在三方）
+    sha = ["擎羊","陀罗","火星","铃星"]
+    sanfang_zhis = [ming_branch, (ming_branch-4)%12, (ming_branch-8)%12]
+    sha_count = 0
+    for sz in sanfang_zhis:
+        sf = zhi_to_p.get(sz, {})
+        sf_stars = sf.get("主星", []) + sf.get("辅星", [])
+        sha_count += sum(1 for s in sha if s in sf_stars)
+    if sha_count >= 2:
+        patterns.append({"name": "三方见煞", "desc": "命宫三合方见煞星，人生波折较多但抗压能力强，宜武职技术", "level": "warn"})
+
+    return patterns
 def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None):
     """
     紫微斗数全盘分析
@@ -369,7 +441,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             "解读": desc,
             "是否命宫": is_ming,
             "是否身宫": is_shen,
-            "大限": dx_age,
+            "庙旺": {s: _get_miaowang_label(s, p_zhi) for s in major_stars + minor_stars if s in MIAO_WANG_TABLE},
         })
 
     # 安命主/身主
@@ -397,6 +469,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "五行局": wx,
         "五行局数": ju_num,
         "紫微在": ZHI[ziwei_pos],
+        "格局": _detect_patterns(places, ming_branch, sihua, year_gan),
         "命主": MINGZHU.get(ming_branch, ""),
         "身主": SHENZHU.get(year_zhi_i, ""),
         "十二宫": places,
@@ -524,6 +597,44 @@ _STAR_PARENTS = {
     "贪狼": -5, "武曲": -3, "天机": 5,
 }
 
+# 疾厄宫健康星曜
+_STAR_HEALTH = {
+    "天梁": 25, "天同": 22, "天府": 18, "天相": 15, "紫微": 12, "太阳": 10, "太阴": 10,
+    "破军": -15, "七杀": -12, "廉贞": -10, "巨门": -8, "贪狼": -8, "武曲": -5, "天机": 3,
+}
+
+# 庙旺落陷表（庙旺→得地→落陷）
+MIAO_WANG_TABLE = {
+    "紫微":["子","午","丑","未","寅","申","卯","酉","辰","戌"],
+    "天机":["子","午","卯","酉","辰","戌","巳","亥","寅","申"],
+    "太阳":["寅","卯","辰","巳","午","未","申","酉","戌","亥"],
+    "武曲":["丑","未","辰","戌","巳","亥","卯","酉","寅","申"],
+    "天同":["巳","亥","子","午","卯","酉","寅","申","丑","未"],
+    "廉贞":["寅","申","卯","酉","辰","戌","丑","未","子","午"],
+    "天府":["卯","酉","丑","未","巳","亥","子","午","辰","戌"],
+    "太阴":["酉","戌","亥","子","丑","寅","卯","辰","巳","午"],
+    "贪狼":["寅","申","卯","酉","子","午","辰","戌","丑","未"],
+    "巨门":["寅","申","卯","酉","辰","戌","巳","亥","子","午"],
+    "天相":["卯","酉","丑","未","寅","申","巳","亥","辰","戌"],
+    "天梁":["子","午","卯","酉","辰","戌","丑","未","寅","申"],
+    "七杀":["寅","申","巳","亥","卯","酉","子","午","辰","戌"],
+    "破军":["子","午","巳","亥","寅","申","卯","酉","丑","未"],
+}
+
+def _get_miaowang_label(star, zhi):
+    """返回庙旺标签: 庙/旺/得/陷/平"""
+    if star not in MIAO_WANG_TABLE: return "—"
+    lst = MIAO_WANG_TABLE[star]
+    try:
+        pos = lst.index(zhi)
+        if pos < 2: return "庙"
+        if pos < 4: return "旺"
+        if pos < 6: return "得"
+        if pos < 8: return "平"
+        return "陷"
+    except ValueError:
+        return "—"
+
 # 辅星调节分
 _AUX_ADJUST = {
     "左辅": {"财富": 8, "事业": 10, "婚姻": 12, "子女": 10, "父母": 10},
@@ -590,22 +701,23 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
     返回:
       {维度: 分数} 和 {维度: 解读文本}
     """
-    DIMS = ["财富", "事业", "婚姻", "子女", "父母"]
-    # 少年大运（起始年龄<20）跳过婚姻和子女维度
+    DIMS = ["财富", "事业", "婚姻", "子女", "父母", "健康"]
+    # 少年大运（起始年龄<20）跳过婚姻和子女维度，但保留健康
     youth_skip = start_age is not None and start_age < 20
     if youth_skip:
-        DIMS = ["财富", "事业", "父母"]  # 少年只评财富、事业、父母
+        DIMS = ["财富", "事业", "父母", "健康"]
     DIM_PALACE_MAP = {
         "财富": "财帛宫",
         "事业": "官禄宫",
         "婚姻": "夫妻宫",
         "子女": "子女宫",
         "父母": "父母宫",
+        "健康": "疾厄宫",
     }
     STAR_TABLES = {
         "财富": _STAR_WEALTH, "事业": _STAR_CAREER,
         "婚姻": _STAR_MARRIAGE, "子女": _STAR_CHILDREN,
-        "父母": _STAR_PARENTS,
+        "父母": _STAR_PARENTS, "健康": _STAR_HEALTH,
     }
 
     scores = {}
@@ -784,6 +896,7 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
         "婚姻": 2,   # 夫妻宫 = 命宫逆数2位
         "子女": 3,   # 子女宫 = 命宫逆数3位
         "父母": 11,  # 父母宫 = 命宫逆数11位
+        "健康": 5,   # 疾厄宫 = 命宫逆数5位（v6.0: 流年健康基于疾厄非父母）
     }
 
     # 从 places 中构建宫位索引到宫名映射
@@ -1072,14 +1185,26 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
         s_lu = sihua_stars[0]; s_quan = sihua_stars[1]; s_ke = sihua_stars[2]; s_ji = sihua_stars[3]
         parts = []
 
-        # ═══ 1) 大运基调 ── 首位，因大运定大局 ═══
+        # ═══ 1) 大运基调 ── 去模板化：多变句式 ═══
         if dayun_ctx and dayun_ctx.get('palace_name'):
             dy_rating = dayun_ctx.get('rating', '平运')
-            rating_desc = {"大吉":"大运极盛，诸事可期","中吉":"运势上扬，稳中求进",
-                          "小吉":"平稳十年，守成为上","偏弱":"此运偏弱，宜退守",
-                          "大凶":"运势凶险，韬光养晦"}
-            dy_desc = rating_desc.get(dy_rating, "运势平稳")
-            parts.append(f"你正行{dayun_ctx.get('age_range','')}{dayun_ctx['palace_name']}大运，{dy_desc}")
+            rating_vary = {
+                "大吉": ["此运极盛，诸事可期","大运当头，十年风光","运势登峰，宜抓紧良机"],
+                "中吉": ["运势上扬，稳中求进","此运向好，值得一搏","十年佳运，顺势而为"],
+                "小吉": ["平稳十年，守成为上","此运安稳，稳扎稳打","平平淡淡即是福"],
+                "偏弱": ["此运偏弱，宜退守","十年低谷，熬过即是春","运弱之年，养精蓄銳"],
+                "大凶": ["运势凶险，韬光养晦","大运不利，以守为攻","十年荆棘，忍字当头"],
+            }
+            dy_desc = rating_vary.get(dy_rating, ["运势平稳"] )[zhi_idx % 3]
+            dy_age = dayun_ctx.get('age_range', '')
+            dy_palace = dayun_ctx['palace_name']
+            # 随机句式
+            templates = [
+                f"{dy_age}{dy_palace}大运，{dy_desc}",
+                f"{dy_palace}运中，{dy_desc}",
+                f"此十年行{dy_palace}宫，{dy_desc}",
+            ]
+            parts.append(templates[y % 3])
         elif dayun_ctx:
             parts.append("大运平稳，无大风浪")
 
@@ -1405,12 +1530,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
         dims = {d: 50 for d in DIMS}
 
         # 大运→流年维度映射
-        DY_TO_LN = {"财富":"财富","事业":"事业","婚姻":"婚姻","子女":"子女","父母":"健康"}
+        DY_TO_LN = {"财富":"财富","事业":"事业","婚姻":"婚姻","子女":"子女","健康":"健康"}
 
-        _STAR_HEALTH = {
-            "天梁":25,"天同":22,"天府":18,"天相":15,"紫微":12,"太阳":10,"太阴":10,
-            "破军":-15,"七杀":-12,"廉贞":-10,"巨门":-8,"贪狼":-8,"武曲":-5,"天机":3,
-        }
         STAR_TABLES_LN = {
             "事业": _STAR_CAREER, "财富": _STAR_WEALTH,
             "婚姻": _STAR_MARRIAGE, "子女": _STAR_CHILDREN,
