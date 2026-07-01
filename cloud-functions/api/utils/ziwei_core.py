@@ -441,6 +441,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             "解读": desc,
             "是否命宫": is_ming,
             "是否身宫": is_shen,
+            "大限": dx_age,
             "庙旺": {s: _get_miaowang_label(s, p_zhi) for s in major_stars + minor_stars if _get_miaowang_label(s, p_zhi)},
         })
 
