@@ -664,17 +664,22 @@ MIAO_WANG_TABLE = {
     },
 }
 
+# 7级庙旺系数（庙旺得利平不陷）
+_MW_COEFF_7 = {"庙":1.15,"旺":1.10,"得":1.05,"利":1.00,"平":0.95,"不":0.85,"陷":0.75}
+
+# 令东来5级 → 7级语义映射（庙旺得利平不陷，利/不待补全）
+_FIVE_TO_SEVEN = {"庙":"庙","旺":"旺","平":"得","闲":"平","陷":"陷"}
+
 def _get_miaowang_label(star, zhi):
-    """返回庙旺标签: 庙/旺/平/陷/闲"""
-    return MIAO_WANG_TABLE.get(star, {}).get(zhi, "")
+    """返回7级庙旺标签: 庙/旺/得/利/平/不/陷（数据源:令东来5级→7级语义映射）"""
+    raw = MIAO_WANG_TABLE.get(star, {}).get(zhi, "")
+    return _FIVE_TO_SEVEN.get(raw, "")
 
 
 def _get_miaowang_coeff(star_name, zhi_name):
-    """返回星曜在当前地支的庙旺系数：庙旺1.15, 平闲1.0, 陷0.85"""
+    """返回星曜在当前地支的7级庙旺系数"""
     label = _get_miaowang_label(star_name, zhi_name)
-    if label in ("庙", "旺"): return 1.15
-    if label == "陷": return 0.85
-    return 1.0
+    return _MW_COEFF_7.get(label, 1.0)
 
 # 辅星调节分
 _AUX_ADJUST = {
