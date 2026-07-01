@@ -438,7 +438,7 @@ var _syncedBirth = null;
 
 // 页面加载时恢复上次分析结果（切页不回空白）
 // 缓存版本：评分维度从4维升级到5维时必须清除旧缓存
-var ZIWEI_CACHE_VERSION = 'v6.1';
+var ZIWEI_CACHE_VERSION = 'v6.2';
 (function restoreResult() {
   try {
     var ver = localStorage.getItem('mingli_ziwei_ver');
@@ -667,7 +667,7 @@ function renderResult(data) {
       if (sihuaMap['化科']) sihuaTags += '<span class="sihua-tag sihua-ke">科</span>';
       if (sihuaMap['化忌']) sihuaTags += '<span class="sihua-tag sihua-ji">忌</span>';
 
-      var VALID_MW = ['庙', '旺', '得', '平', '陷'];
+      var VALID_MW = ['庙', '旺', '闲', '平', '陷'];
       var mainStars = (p['主星'] || []).map(function(s) {
         var mw = p['庙旺'] ? (p['庙旺'][s] || '') : '';
         if (VALID_MW.indexOf(mw) === -1) mw = '';
