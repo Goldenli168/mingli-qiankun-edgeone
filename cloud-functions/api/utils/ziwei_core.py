@@ -419,6 +419,98 @@ def _detect_patterns(places, ming_branch, sihua, year_gan):
         patterns.append({"name": "禄马交驰", "desc": "禄存/化禄与天马同宫或会照，主奔波劳碌而招财。宜外务、贸易、物流、跨境行业", "level": "good"})
 
     return patterns
+
+
+# ----- 格局关键星曜映射 -----
+def _pattern_key_stars():
+    """返回格局名→关键星曜集合的映射，用于判断格局在大运/流年中是否被激活"""
+    return {
+        "丹墀桂墀格":    {"太阳", "太阴"},
+        "日月并明格":    {"太阳", "太阴", "天梁"},
+        "日月交辉":      {"太阳", "太阴"},
+        "明珠出海":      {"太阳", "太阴"},
+        "月朗天门":      {"太阴"},
+        "日照雷门":      {"太阳"},
+        "日丽中天":      {"太阳"},
+        "日月同宫":      {"太阳", "太阴"},
+        "日月反背":      {"太阳", "太阴"},
+        "日月夹命":      {"太阳", "太阴"},
+        "紫府同宫":      {"紫微", "天府"},
+        "府相朝垣":      {"天府", "天相"},
+        "机月同梁":      {"天机", "太阴", "天同", "天梁"},
+        "巨日同宫":      {"巨门", "太阳"},
+        "火铃贪格":      {"贪狼", "火星", "铃星"},
+        "七杀朝斗":      {"七杀"},
+        "英星入庙":      {"破军"},
+        "石中隐玉":      {"巨门"},
+        "阳梁昌禄":      {"太阳", "天梁", "文昌", "禄存"},
+        "禄马交驰":      {"天马"},
+        "三奇嘉会":      {"__sihua_lu", "__sihua_quan", "__sihua_ke"},
+        "命无正曜":      set(),
+        "多宫借星":      set(),
+        "三方见煞":      {"擎羊", "陀罗", "火星", "铃星"},
+        "权忌同宫":      {"__sihua_quan", "__sihua_ji"},
+        "天机科在身宫":  {"天机"},
+        "太阴禄照福德":  {"太阴"},
+    }
+
+
+def _get_active_patterns(natal_patterns, active_stars, active_sihua=None):
+    """
+    判断哪些本命格局在当前大运/流年的活跃星曜集合中被激活。
+    
+    active_stars: 当前运程三方四正内的星曜列表（主星+辅星）
+    active_sihua: 当前运程宫位内的四化集合（如 {"化禄":"天机","化权":"太阳"}）
+    
+    返回: [(格局名, 激活程度描述), ...]
+    """
+    if not natal_patterns:
+        return []
+    
+    star_map = _pattern_key_stars()
+    active_set = set(active_stars) if active_stars else set()
+    sihua_set = set(active_sihua.keys()) if active_sihua else set()
+    # 四化相关的星曜也加入激活集
+    if active_sihua:
+        for hua_name, star_name in active_sihua.items():
+            active_set.add(star_name)
+    
+    activations = []
+    for pat in natal_patterns:
+        name = pat.get("name", "")
+        level = pat.get("level", "")
+        keys = star_map.get(name, set())
+        if not keys:
+            continue
+        
+        # 分离四化特殊标记
+        star_keys = {k for k in keys if not k.startswith("__")}
+        sihua_keys = {k.replace("__sihua_", "化") for k in keys if k.startswith("__sihua_")}
+        
+        star_hit = len(star_keys & active_set) if star_keys else 0
+        sihua_hit = len(sihua_keys & sihua_set) if sihua_keys else 0
+        total_keys = len(star_keys) + len(sihua_keys)
+        total_hit = star_hit + sihua_hit
+        
+        if total_hit > 0:
+            if total_hit >= total_keys * 0.75:
+                degree = "充分激活"
+            elif total_hit >= total_keys * 0.5:
+                degree = "部分激活"
+            else:
+                degree = "星曜呼应"
+            # 排除纯信息型格局（太啰嗦）
+            if name not in ("多宫借星", "三方见煞", "命无正曜") or degree == "充分激活":
+                activations.append((name, level, degree))
+    
+    # 排序：充分激活 > 部分激活 > 星曜呼应；good > warn > info
+    order = {"充分激活": 0, "部分激活": 1, "星曜呼应": 2}
+    level_order = {"good": 0, "warn": 1, "info": 2}
+    activations.sort(key=lambda x: (order.get(x[2], 9), level_order.get(x[1], 9)))
+    
+    return activations
+
+
 def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None):
     """
     紫微斗数全盘分析
@@ -620,7 +712,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     # 提取大运原始数据，提前评分供流年三盘联动使用
     _dayun_extracted = _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year)
-    _dayun_scored = _dayun_deep_analysis(_dayun_extracted, places, year_gan)
+    _natal_patterns = _detect_patterns(places, ming_branch, sihua, year_gan)
+    _dayun_scored = _dayun_deep_analysis(_dayun_extracted, places, year_gan, natal_patterns=_natal_patterns)
 
     return {
         "基本信息": {
@@ -633,7 +726,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "五行局": wx,
         "五行局数": ju_num,
         "紫微在": ZHI[ziwei_pos],
-        "格局": _detect_patterns(places, ming_branch, sihua, year_gan),
+        "格局": _natal_patterns,
         "命主": MINGZHU.get(ming_branch, ""),
         "身主": SHENZHU.get(year_zhi_i, ""),
         "十二宫": places,
@@ -643,7 +736,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         # 大运分析（含深度评分，同时传给流年做三盘联动）
         "大运": _dayun_scored,
         # 流年分析（使用已评分的大运，确保地基有效）
-        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, _dayun_scored, ln_weights=ln_weights, birth_sihua=sihua),
+        "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, _dayun_scored, ln_weights=ln_weights, birth_sihua=sihua, natal_patterns=_natal_patterns),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
     }
@@ -817,6 +910,91 @@ _AUX_ADJUST = {
     "地劫": {"财富": -18, "事业": -10, "婚姻": -5, "子女": -3, "父母": -3},
 }
 
+# 凶星宫位调节系数 —— 参照《紫微斗数全书》及紫微麥资料
+# 核心原则: 凶星在特定宫位有正面转化（火空则发、金空则鸣等）
+# key: 星名 → {宫位地支: {dim: multiplier}}
+# multiplier: 1.0=不变, <1=减弱凶性, 负数=转为正面
+_AUX_PALACE_MODIFIER = {
+    # ═══ 地空 — 巳午(火空则发) / 申酉(金空则鸣) ═══
+    "地空": {
+        "巳": {"事业": -0.3, "健康": 0.5},      # 得势, 火空则发
+        "午": {"事业": -0.5, "健康": 0.5},      # 入庙, 火空则发(最强)
+        "申": {"事业": -0.4, "婚姻": 0.7},      # 入庙, 金空则鸣
+        "酉": {"事业": -0.3, "婚姻": 0.7},      # 入庙, 金空则鸣
+    },
+    # ═══ 地劫 — 巳午申(入庙)减弱 / 亥(旺)减弱 / 子丑辰(落陷)加重 ═══
+    "地劫": {
+        "巳": {"事业": 0.5, "财富": 0.7},
+        "午": {"事业": 0.5, "财富": 0.7},
+        "申": {"事业": 0.5, "财富": 0.7},
+        "亥": {"财富": 0.8, "事业": 0.8},
+        "子": {"财富": 1.3, "事业": 1.3, "子女": 1.3},
+        "丑": {"财富": 1.3, "事业": 1.3, "子女": 1.3},
+        "辰": {"财富": 1.3, "事业": 1.3, "子女": 1.3},
+    },
+    # ═══ 火星 — 庙(寅午戌) / 得(巳酉丑) / 平(亥卯未) / 陷(申子辰) ═══
+    "火星": {
+        "寅": {"财富": 0.5, "事业": 0.3, "婚姻": 0.7},
+        "午": {"财富": 0.4, "事业": 0.2, "婚姻": 0.7},
+        "戌": {"财富": 0.5, "事业": 0.3, "婚姻": 0.7},
+        "巳": {"财富": 0.6, "事业": 0.5},
+        "酉": {"财富": 0.6, "事业": 0.5},
+        "丑": {"财富": 0.6, "事业": 0.5},
+        "申": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "子": {"财富": 1.3, "事业": 1.3},
+        "辰": {"财富": 1.3, "事业": 1.3},
+    },
+    # ═══ 铃星 — 庙(寅午戌) / 得(巳酉丑) / 平(亥卯未) / 陷(申子辰) ═══
+    "铃星": {
+        "寅": {"财富": 0.5, "事业": 0.4, "婚姻": 0.7},
+        "午": {"财富": 0.4, "事业": 0.3, "婚姻": 0.7},
+        "戌": {"财富": 0.5, "事业": 0.4, "婚姻": 0.7},
+        "巳": {"财富": 0.7, "事业": 0.6},
+        "酉": {"财富": 0.7, "事业": 0.6},
+        "丑": {"财富": 0.7, "事业": 0.6},
+        "申": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "子": {"财富": 1.3, "事业": 1.3},
+        "辰": {"财富": 1.3, "事业": 1.3},
+    },
+    # ═══ 擎羊 — 庙(辰戌丑未,化煞为权) / 陷(子午卯酉) ═══
+    "擎羊": {
+        "辰": {"事业": -0.3, "财富": 0.5},     # 庙, 化煞为权
+        "戌": {"事业": -0.3, "财富": 0.5},
+        "丑": {"事业": -0.3, "财富": 0.5},
+        "未": {"事业": -0.3, "财富": 0.5},
+        "子": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},  # 陷
+        "午": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "卯": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "酉": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+    },
+    # ═══ 陀罗 — 庙(辰戌丑未,克害较轻) / 陷(寅申巳亥) ═══
+    "陀罗": {
+        "辰": {"财富": 0.6, "事业": 0.6},      # 庙, 克害较轻
+        "戌": {"财富": 0.6, "事业": 0.6},
+        "丑": {"财富": 0.6, "事业": 0.6},
+        "未": {"财富": 0.6, "事业": 0.6},
+        "寅": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},  # 陷
+        "申": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "巳": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+        "亥": {"财富": 1.3, "事业": 1.3, "婚姻": 1.3},
+    },
+}
+
+# 天干四化表（大运/流年共用）
+_SIHUA_TABLE = {
+    "甲": ["廉贞","破军","武曲","太阳"],
+    "乙": ["天机","天梁","紫微","太阴"],
+    "丙": ["天同","天机","文昌","廉贞"],
+    "丁": ["太阴","天同","天机","巨门"],
+    "戊": ["贪狼","太阴","右弼","天机"],
+    "己": ["武曲","贪狼","天梁","文曲"],
+    "庚": ["太阳","武曲","太阴","天同"],
+    "辛": ["巨门","太阳","文曲","文昌"],
+    "壬": ["天梁","紫微","左辅","武曲"],
+    "癸": ["破军","巨门","太阴","贪狼"],
+}
+_SIHUA_LABELS = ["化禄","化权","化科","化忌"]
+
 # 四化对维度的影响
 _SIHUA_DIM = {
     "化禄": {"财富": 16, "事业": 8, "婚姻": 10, "子女": 8, "父母": 8, "健康": 10},
@@ -852,15 +1030,18 @@ def _score_to_percentile(score, dim, age=35):
 # 对宫迁移影响外务
 # 大运夫妻宫、子女宫、父母宫、福德宫 分别影响对应维度
 
-def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age=None):
+def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age=None, dy_gan='', dy_zhi_name='', places=None):
     """
     计算单个大运的五维评分
 
     参数:
       dayun_palace_stars: 大运命宫的主星+辅星列表
-      dayun_sihua: 大运命宫的四化状态 dict
+      dayun_sihua: 大运命宫的四化状态 dict (本命)
       sanfang_stars: 三方四正星曜汇总 {宫名: [主星列表]}
       dim_palaces: 各维度对应宫位星曜 {维度: {主星:[], 辅星:[], 四化:{}}}
+      dy_gan: 大运天干（用于计算大运四化参与评分）
+      dy_zhi_name: 大运地支名（用于凶星座宫位情景调节）
+      places: 十二宫完整数据（用于找大运四化星落宫）
 
     返回:
       {维度: 分数} 和 {维度: 解读文本}
@@ -917,17 +1098,45 @@ def _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, st
                 sign = "+" if v > 0 else ""
                 dim_detail_parts.append("%s宫%s(%s%d)" % (DIM_PALACE_MAP[dim], s, sign, int(v * 0.7)))
 
-        # 3) 辅星调节
+        # 3) 辅星调节（含凶星宫位情景调节 —— 火空则发、金空则鸣等）
         aux_bonus = 0
         for a in aux_stars + dp_aux:
             adj = _AUX_ADJUST.get(a, {})
-            aux_bonus += adj.get(dim, 0)
+            bonus = adj.get(dim, 0)
+            # 宫位情景调节：凶星在特定宫位凶性减弱甚至转为正面
+            if dy_zhi_name and a in _AUX_PALACE_MODIFIER:
+                palace_mod = _AUX_PALACE_MODIFIER[a].get(dy_zhi_name, {})
+                if dim in palace_mod:
+                    modifier = palace_mod[dim]
+                    if modifier < 0:
+                        # 负数表示凶星转为正面（如火空则发）
+                        bonus = int(abs(bonus) * abs(modifier))
+                    else:
+                        bonus = int(bonus * modifier)
+            aux_bonus += bonus
 
-        # 4) 四化影响
+        # 4) 四化影响（本命四化 + 大运天干四化）
         sihua_bonus = 0
         all_sihua = {}
         all_sihua.update(dayun_sihua)
         all_sihua.update(dp_sihua)
+
+        # --- 大运天干四化（权重0.6，参半于本命四化1.0）---
+        if dy_gan and places:
+            dy_sihua_stars = _SIHUA_TABLE.get(dy_gan, ["","","",""])
+            dy_sihua_labels = _SIHUA_LABELS
+            for hi, star_name in enumerate(dy_sihua_stars):
+                if not star_name: continue
+                hua_name = dy_sihua_labels[hi]
+                # 找大运四化星在本命十二宫的落宫
+                for p in places:
+                    if star_name in p.get("主星",[]) + p.get("辅星",[]):
+                        hua_adj_dy = _SIHUA_DIM.get(hua_name, {})
+                        dy_sihua_bonus = int(hua_adj_dy.get(dim, 0) * 0.6)
+                        sihua_bonus += dy_sihua_bonus
+                        if abs(hua_adj_dy.get(dim, 0)) >= 8:
+                            dim_detail_parts.append("%s(大运%s)(%s%d)" % (star_name, hua_name, "+" if hua_adj_dy.get(dim, 0) > 0 else "", int(hua_adj_dy.get(dim, 0) * 0.6)))
+                        break
 
         # 权忌同宫检测：倪海厦"有权能制忌"——权忌同宫时权星优先
         has_quan = any("化权" in h for h in all_sihua.keys())
@@ -1031,17 +1240,18 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
     return desc
 
 
-def _dayun_deep_analysis(dayun_list, places, year_gan):
+def _dayun_deep_analysis(dayun_list, places, year_gan, natal_patterns=None):
     """
-    对每个大运进行深度五维评分分析
+    对每个大运进行深度五维评分分析 + 本命格局激活分析
 
     参数:
       dayun_list: _extract_dayun() 返回的大运列表
       places: 十二宫完整数据
       year_gan: 年干
+      natal_patterns: 本命格局列表（用于判断大运是否激活本命格局）
 
     返回:
-      在每个大运数据中增加 "评分" 和 "深度解读" 字段
+      在每个大运数据中增加 "评分"、"深度解读"、"格局激活" 字段
     """
     # 宫名→宫位数据映射
     palace_by_name = {}
@@ -1077,21 +1287,6 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
     if ming_zhi is None:
         ming_zhi = 0
 
-    # 四化表
-    SIHUA_TABLE = {
-        "甲": ["廉贞","破军","武曲","太阳"],
-        "乙": ["天机","天梁","紫微","太阴"],
-        "丙": ["天同","天机","文昌","廉贞"],
-        "丁": ["太阴","天同","天机","巨门"],
-        "戊": ["贪狼","太阴","右弼","天机"],
-        "己": ["武曲","贪狼","天梁","文曲"],
-        "庚": ["太阳","武曲","太阴","天同"],
-        "辛": ["巨门","太阳","文曲","文昌"],
-        "壬": ["天梁","紫微","左辅","武曲"],
-        "癸": ["破军","巨门","太阴","贪狼"],
-    }
-    SIHUA_LABELS = ["化禄","化权","化科","化忌"]
-    hua_stars = SIHUA_TABLE.get(year_gan, ["","","",""])
 
     for dy in dayun_list:
         # 大运宫位地支索引
@@ -1138,7 +1333,9 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
 
         # 计算评分（传入起始年龄，少年大运自动跳过婚育维度）
         start_age = dy.get("起始年龄", 99)
-        scores, descs = _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age)
+        dy_gan = dy.get("天干", "")
+        dy_zhi_name = dy.get("宫位", "")  # 大运地支名，用于凶星座情景调节
+        scores, descs = _score_dayun(dayun_palace_stars, dayun_sihua, sanfang_stars, dim_palaces, start_age, dy_gan=dy_gan, dy_zhi_name=dy_zhi_name, places=places)
 
         # 综合评分 (加权平均)；少年大运自动调节权重
         if start_age < 20:
@@ -1183,6 +1380,36 @@ def _dayun_deep_analysis(dayun_list, places, year_gan):
                 overall_desc += "。武贪同宫，此运欲望与行动力并重，利开拓不利守成"
         else:
             overall_desc += "。大运命宫无主星，借对宫星曜，行事需借力使势"
+
+        # ----- 本命格局激活分析 -----
+        if natal_patterns:
+            # 收集大运三方四正内所有星曜（用于判断格局激活）
+            all_active_stars = set()
+            for sz in sanfang_zhis:
+                sp = zhi_to_palace.get(sz, {})
+                all_active_stars.update(sp.get("主星", []))
+                all_active_stars.update(sp.get("辅星", []))
+            
+            # 收集大运命宫四化
+            dy_active_sihua = dayun_palace_data.get("四化", {})
+            
+            activations = _get_active_patterns(natal_patterns, list(all_active_stars), dy_active_sihua)
+            
+            if activations:
+                good_acts = [(n, d) for n, l, d in activations if l == "good" and d == "充分激活"]
+                warn_acts = [(n, d) for n, l, d in activations if l == "warn" and d in ("充分激活", "部分激活")]
+                
+                if good_acts:
+                    pat_names = "、".join([n for n, d in good_acts[:2]])
+                    overall_desc += f"。本命{pat_names}在此运被充分激活，格局之力加持，此十年尤为关键"
+                if warn_acts:
+                    pat_names = "、".join([n for n, d in warn_acts[:2]])
+                    overall_desc += f"，但需注意{pat_names}在此运被引动，行事多加谨慎"
+                
+                # 存储激活信息
+                dy["格局激活"] = [{"name": n, "level": l, "degree": d} for n, l, d in activations]
+            else:
+                dy["格局激活"] = []
 
         dy["评分"] = scores
         dy["综合评分"] = total_score
@@ -1244,9 +1471,9 @@ def _extract_dayun(chart, ming_branch, daxian_forward, ju_num, solar_year):
 
 
 # ===== 流年分析（增强版） =====
-def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, dayun_list=None, ln_weights=None, birth_sihua=None):
+def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, dayun_list=None, ln_weights=None, birth_sihua=None, natal_patterns=None):
     """
-    计算流年分析，包含四化评分、白话简评、四维指引。
+    计算流年分析，包含四化评分、白话简评、四维指引 + 本命格局激活分析。
 
     参数:
       solar_year: 出生公历年
@@ -1254,6 +1481,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
       year_zhi_i: 年支索引 (0-11)
       places: 十二宫数据列表
       ming_branch: 命宫地支索引
+      natal_patterns: 本命格局列表（用于判断流年是否激活本命格局）
 
     返回:
       [{"年份": int, "流年干支": str, "纳音": str, "十神": str,
@@ -1297,19 +1525,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
         "癸":{"甲":"伤官","乙":"食神","丙":"正财","丁":"偏财","戊":"正官","己":"七杀","庚":"正印","辛":"偏印","壬":"劫财","癸":"比肩"},
     }
 
-    # 流年四化表（天干→[化禄,化权,化科,化忌]）
-    SIHUA_LN = {
-        "甲":["廉贞","破军","武曲","太阳"],
-        "乙":["天机","天梁","紫微","太阴"],
-        "丙":["天同","天机","文昌","廉贞"],
-        "丁":["太阴","天同","天机","巨门"],
-        "戊":["贪狼","太阴","右弼","天机"],
-        "己":["武曲","贪狼","天梁","文曲"],
-        "庚":["太阳","武曲","太阴","天同"],
-        "辛":["巨门","太阳","文曲","文昌"],
-        "壬":["天梁","紫微","左辅","武曲"],
-        "癸":["破军","巨门","太阴","贪狼"],
-    }
+    # 流年四化表（引用模块级 _SIHUA_TABLE，流年/大运/本命共用同一表）
 
     # 星曜对各维度贡献（正值＝吉，负值＝凶）
     DIM_STAR = {
@@ -1642,7 +1858,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                     "官杀" if ss in ("正官","七杀") else "?"
 
         # 流年四化
-        sihua_stars = SIHUA_LN.get(g, ["","","",""])
+        sihua_stars = _SIHUA_TABLE.get(g, ["","","",""])
 
         # 太岁与命宫的冲合
         chong_type, chong_val, chong_desc = _chong_he(zhi_idx, ming_branch)
@@ -1672,7 +1888,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                         'quality': dy_quality,
                         'stars': dy_stars[:3],
                         'dim_scores': dy.get('评分', {}),  # 大运五维逐分
-                        'dy_sihua': _zhi_to_palace.get(dy_zhi_i, {}).get('四化', {}),  # 大运四化
+                        'dy_sihua': {},  # will be filled below with real 大运天干四化
                     }
                     # 大运天干地支
                     dy_gan = dy.get('天干', '')
@@ -1683,6 +1899,15 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                         if p.get('宫位') == dy_zhi_i:
                             dy_gan = p.get('天干', '') or dy_gan
                     dayun_ctx['gz'] = f"{dy_gan}{dy_zhi}" if dy_gan and dy_zhi else ''
+                    # 计算真正的大运天干四化（不是本命落宫四化）
+                    dy_sihua_real = {}
+                    if dy_gan:
+                        dy_4h_stars = _SIHUA_TABLE.get(dy_gan, ["","","",""])
+                        for hi, star_name in enumerate(dy_4h_stars):
+                            if star_name:
+                                dy_sihua_real[_SIHUA_LABELS[hi]] = star_name
+                    dayun_ctx['dy_sihua'] = dy_sihua_real
+                    dayun_ctx['dy_gan'] = dy_gan  # keep for reference
                     break
 
 
@@ -1711,13 +1936,13 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
             foundation = int(dy_base * 0.62)
             dims[ln_dim] = foundation
             dy_foundation[ln_dim] = foundation
-        # 《全书》：大运四化是"体"，叠加对流年的影响（权重0.25）
+        # 《全书》：大运四化是"体"，叠加对流年的影响（权重0.30）
         for hua_type, star_name in dy_sihua.items():
             for dim in DIMS:
-                dims[dim] += int(_SIHUA_DIM.get(hua_type, {}).get(dim, 0) * 0.25)
+                dims[dim] += int(_SIHUA_DIM.get(hua_type, {}).get(dim, 0) * 0.30)
 
-        # ═══ ①b 生年四化叠加 (20%) ═══
-        # 《全书》：生年四化定一生基调，流年应有呼应
+        # ═══ ①b 生年四化叠加 (12%) ═══
+        # 注：本命四化已内含在大运地基中(大运评分已用1.0权重)，流年中降为点缀
         if birth_sihua:
             for hi, star_name in enumerate(birth_sihua):
                 if not star_name: continue
@@ -1726,7 +1951,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                 for p_data in _zhi_to_palace.values():
                     if star_name in p_data.get("主星",[]) + p_data.get("辅星",[]):
                         for dim in DIMS:
-                            dims[dim] += int(_SIHUA_DIM.get(hua_name, {}).get(dim, 0) * 0.20)
+                            dims[dim] += int(_SIHUA_DIM.get(hua_name, {}).get(dim, 0) * 0.12)
                         break
 
         # ═══ ①c 庙旺系数调节（使用模块级令东来权威表）═══
@@ -1761,9 +1986,9 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                 if star_name in p_data.get("主星",[]) + p_data.get("辅星",[]):
                     p_name = p_data.get("宫名","")
                     sihua_info[star_name] = (p_name, 1.0)
-                    # 四化主效应
+                    # 四化主效应（权重0.45：流年四化是"应事"层，不应压倒本命和大运）
                     for dim in DIMS:
-                        dims[dim] += _SIHUA_DIM.get(hua_name, {}).get(dim, 0)
+                        dims[dim] += int(_SIHUA_DIM.get(hua_name, {}).get(dim, 0) * 0.45)
                     # 星曜自身在各维度的贡献（轻量加权+庙旺系数）
                     mw = mi_wang_cache.get(star_name, 1.0)
                     for dim, tbl in STAR_TABLES_LN.items():
@@ -1782,11 +2007,21 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                 mw = mi_wang_cache.get(s, 1.0)
                 for dim, tbl in STAR_TABLES_LN.items():
                     dims[dim] += int(tbl.get(s, 0) * 0.25 * mw)
-            # 辅星贡献
+            # 辅星贡献（含宫位情景调节）
             for a in ln_palace.get("辅星", []):
                 adj = _AUX_ADJUST.get(a, {})
                 for dim in DIMS:
-                    dims[dim] += int(adj.get(dim, 0) * 0.40)
+                    bonus = adj.get(dim, 0)
+                    # 凶星宫位情景调节
+                    if z and a in _AUX_PALACE_MODIFIER:
+                        palace_mod = _AUX_PALACE_MODIFIER[a].get(z, {})
+                        if dim in palace_mod:
+                            modifier = palace_mod[dim]
+                            if modifier < 0:
+                                bonus = int(abs(bonus) * abs(modifier))
+                            else:
+                                bonus = int(bonus * modifier)
+                    dims[dim] += int(bonus * 0.40)
 
         # ═══ ④ 三方四正联动（轻量） ═══
         SANFANG_OFFSETS = [0, 6, 4, 8]
@@ -1852,6 +2087,37 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
         brief = _brief(*brief_ctx)
 
+        # ----- 本命格局在流年中的激活分析 -----
+        if natal_patterns and ln_palace:
+            # 收集流年命宫及其三方四正的星曜和四化
+            ln_zhi = ln_palace.get("宫位", -1)
+            if ln_zhi >= 0:
+                ln_active_stars = set(ln_palace_main)
+                ln_active_stars.update(ln_palace.get("辅星", []))
+                # 加入流年迁移宫（对宫）的星曜
+                dup_idx = (ln_zhi - 6) % 12
+                dup_palace = _zhi_to_palace.get(dup_idx, {})
+                ln_active_stars.update(dup_palace.get("主星", []))
+                ln_active_stars.update(dup_palace.get("辅星", []))
+                
+                ln_active_sihua = ln_palace.get("四化", {})
+                # 也合并迁移宫四化
+                dup_sihua = dup_palace.get("四化", {})
+                if dup_sihua:
+                    ln_active_sihua = {**ln_active_sihua, **dup_sihua}
+                
+                ln_activations = _get_active_patterns(natal_patterns, list(ln_active_stars), ln_active_sihua)
+                if ln_activations:
+                    # 取最高优先级的充分激活good格局
+                    fully_good = [n for n, l, d in ln_activations if l == "good" and d == "充分激活"]
+                    fully_warn = [n for n, l, d in ln_activations if l == "warn" and d == "充分激活"]
+                    if fully_good:
+                        brief = brief[:-1] + "。本命" + "、".join(fully_good[:1]) + "流年引动，格局之光加持" + "。"
+                    elif fully_warn:
+                        brief = brief[:-1] + "。本命" + "、".join(fully_warn[:1]) + "流年引动，宜谨慎行事" + "。"
+            else:
+                ln_activations = []
+
         # 五维指引
         guide = _guide(dims, age=y - solar_year)
 
@@ -1885,29 +2151,14 @@ def _calc_feihua(year_gan, places):
     GAN  = list("甲乙丙丁戊己庚辛壬癸")
     ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
 
-    # 年干四化表
-    SIHUA_TABLE = {
-        "甲": ["廉贞","破军","武曲","太阳"],
-        "乙": ["天机","天梁","紫微","太阴"],
-        "丙": ["天同","天机","文昌","廉贞"],
-        "丁": ["太阴","天同","天机","巨门"],
-        "戊": ["贪狼","太阴","右弼","天机"],
-        "己": ["武曲","贪狼","天梁","文曲"],
-        "庚": ["太阳","武曲","太阴","天同"],
-        "辛": ["巨门","太阳","文曲","文昌"],
-        "壬": ["天梁","紫微","左辅","武曲"],
-        "癸": ["破军","巨门","太阴","贪狼"],
-    }
-    SIHUA_LABELS = ["化禄","化权","化科","化忌"]
-
-    hua_list = SIHUA_TABLE.get(year_gan, ["", "", "", ""])
+    hua_list = _SIHUA_TABLE.get(year_gan, ["", "", "", ""])
     feihua = []
 
     for i in range(4):
         star_name = hua_list[i]
         if not star_name:
             continue
-        label = SIHUA_LABELS[i]
+        label = _SIHUA_LABELS[i]
         # 找化曜所在宫位
         from_palace = ""
         for p in places:
