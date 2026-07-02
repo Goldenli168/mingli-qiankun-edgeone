@@ -142,4 +142,4 @@ def liunian_api():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "命理乾坤 API"})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v7.0"})
