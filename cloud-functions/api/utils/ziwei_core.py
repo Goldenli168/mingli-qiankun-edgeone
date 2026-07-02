@@ -186,49 +186,201 @@ def _sihua_en_to_cn(mutagen):
 
 # ----- 格局检测 -----
 def _detect_patterns(places, ming_branch, sihua, year_gan):
-    """检测命盘中的著名紫微格局"""
+    """检测命盘中的著名紫微格局（参照《紫微斗数全书》）"""
     patterns = []
     zhi_to_p = {}
     for p in places:
         zhi_to_p[p.get("宫位")] = p
 
-    # 获取指定宫位的主星
-    def _stars(offset):
-        z = (ming_branch - offset) % 12
-        p = zhi_to_p.get(z, {})
+    # ---- 辅助函数 ----
+    def _stars_at(branch):
+        """获取某地支的全部星曜（主星+辅星）"""
+        p = zhi_to_p.get(branch, {})
         return p.get("主星", []) + p.get("辅星", [])
 
-    # 1. 命无正曜（命宫无主星）
-    ming_stars = zhi_to_p.get(ming_branch, {}).get("主星", [])
-    if not ming_stars:
-        patterns.append({"name": "命无正曜", "desc": "命宫无主星，借迁移宫太阳天梁论命，一生靠环境与他人搭台，宜借势而为", "level": "info"})
+    def _stars_offset(offset):
+        """获取命宫偏移某宫位的全部星曜"""
+        return _stars_at((ming_branch - offset) % 12)
 
-    # 2. 阳梁昌禄格（太阳+天梁+文昌/禄存会照）
-    qianyi = zhi_to_p.get((ming_branch - 6) % 12, {}).get("主星", [])
+    def _sihua_at(branch):
+        """获取某地支的四化信息"""
+        return zhi_to_p.get(branch, {}).get("四化", {})
+
+    def _sihua_offset(offset):
+        """获取命宫偏移某宫位的四化信息"""
+        return _sihua_at((ming_branch - offset) % 12)
+
+    def _palace_name(branch):
+        """获取某地支的宫名"""
+        return zhi_to_p.get(branch, {}).get("宫名", "")
+
+    # 常用参考
+    ming_stars = zhi_to_p.get(ming_branch, {}).get("主星", [])
+    dup_gong = (ming_branch - 6) % 12  # 对宫（迁移宫）
+    dup_stars = zhi_to_p.get(dup_gong, {}).get("主星", [])
     all_stars = sum([zhi_to_p.get(i, {}).get("主星", []) for i in range(12)], [])
-    if "太阳" in qianyi and "天梁" in qianyi and any(s in all_stars for s in ["文昌","禄存"]):
+    ming_zhi_name = zhi_to_p.get(ming_branch, {}).get("地支", "")
+    shen_places = [p for p in places if p.get("是否身宫")]
+    sha = ["擎羊", "陀罗", "火星", "铃星"]
+
+    # ---- 1. 日月并明格 / 丹墀桂墀格（《全书》经典富贵格局） ----
+    sun_branch = None
+    moon_branch = None
+    for i in range(12):
+        ss = zhi_to_p.get(i, {}).get("主星", [])
+        if "太阳" in ss:
+            sun_branch = i
+        if "太阴" in ss:
+            moon_branch = i
+
+    rymm_detected = False
+
+    # Case 1: 天梁在丑(1)坐命 + 太阳在巳(5) + 太阴在酉(9) — 日月庙旺合照命宫
+    if ming_branch == 1 and "天梁" in ming_stars and sun_branch == 5 and moon_branch == 9:
+        rymm_detected = True
+        patterns.append({"name": "日月并明格", "desc": "天梁丑宫坐命，日月庙旺合照。少年即以学问扬名，一世荣华。曾国藩同格，宜公职、学术、教育", "level": "good"})
+
+    # Case 2: 命宫午(6)无正曜 + 寅(2)巨门太阳 + 子(0)天同太阴 — 日月入庙旺朝照
+    if not rymm_detected and ming_branch == 6 and not ming_stars:
+        yin_stars = zhi_to_p.get(2, {}).get("主星", [])
+        zi_stars = zhi_to_p.get(0, {}).get("主星", [])
+        if "巨门" in yin_stars and "太阳" in yin_stars and "天同" in zi_stars and "太阴" in zi_stars:
+            rymm_detected = True
+            patterns.append({"name": "日月并明格", "desc": "命宫午无正曜，日月入庙旺朝照。外出贵显，宜传播、外交、文教事业", "level": "good"})
+
+    # Case 3: 太阳坐命辰(4)/巳(5) + 太阴在对宫酉(9)/戌(10) — 丹墀桂墀
+    if not rymm_detected and "太阳" in ming_stars and ming_branch in [4, 5]:
+        exp_moon = [9, 10] if ming_branch == 4 else [9]  # 辰→戌, 巳→酉
+        if moon_branch in exp_moon and "太阴" in zhi_to_p.get(moon_branch, {}).get("主星", []):
+            rymm_detected = True
+            patterns.append({"name": "丹墀桂墀格", "desc": "太阳在辰/巳坐命，太阴在酉/戌坐对宫，日月皆旺。心地光明，少年得志，早遂青云之志", "level": "good"})
+
+    # Case 4: 太阴坐命酉(9)/戌(10) + 太阳在对宫辰(4)/巳(5) — 丹墀桂墀
+    if not rymm_detected and "太阴" in ming_stars and ming_branch in [9, 10]:
+        exp_sun = [4] if ming_branch == 10 else [4, 5]  # 戌→辰, 酉→巳
+        if sun_branch in exp_sun and "太阳" in zhi_to_p.get(sun_branch, {}).get("主星", []):
+            rymm_detected = True
+            patterns.append({"name": "丹墀桂墀格", "desc": "太阴在酉/戌坐命，太阳在巳/辰坐对宫，日月皆旺。心地善良光明磊落，一分耕耘一分收获", "level": "good"})
+
+    # 兜底宽泛判定：日月都在命宫三方四正且皆庙旺（旺系数>=1.10），记为"日月交辉"
+    if not rymm_detected and sun_branch is not None and moon_branch is not None:
+        # 要求日月都在命宫三方四正内（命宫、财帛、官禄、迁移）
+        sanfang_zhis = {ming_branch, (ming_branch - 4) % 12, (ming_branch - 8) % 12, dup_gong}
+        if sun_branch in sanfang_zhis and moon_branch in sanfang_zhis:
+            sun_mw = _get_miaowang_coeff("太阳", ZHI[sun_branch])
+            moon_mw = _get_miaowang_coeff("太阴", ZHI[moon_branch])
+            if sun_mw >= 1.10 and moon_mw >= 1.10:
+                patterns.append({"name": "日月交辉", "desc": "太阳太阴皆庙旺且在三方四正照命，日月同辉。心地光明磊落，有贵人运，利公职外务", "level": "good"})
+
+    # ---- 2. 明珠出海格 — 命未(7)无主星 + 太阳卯(3) + 太阴亥(11) ----
+    if ming_branch == 7 and not ming_stars and sun_branch == 3 and moon_branch == 11:
+        patterns.append({"name": "明珠出海", "desc": "安命在未无正曜，日月在卯亥照命。公职考试金榜题名，政界发展飞黄腾达", "level": "good"})
+
+    # ---- 3. 月朗天门格 — 太阴在亥(11)坐命 ----
+    if ming_branch == 11 and "太阴" in ming_stars:
+        patterns.append({"name": "月朗天门", "desc": "太阴在亥宫坐命，又名月落亥宫。太阴主富，亥为天门，富中带贵，利求财积累", "level": "good"})
+
+    # ---- 4. 日照雷门格 — 太阳在卯(3)坐命 ----
+    if ming_branch == 3 and "太阳" in ming_stars:
+        patterns.append({"name": "日照雷门", "desc": "太阳在卯宫坐命，旭日东升之象。又名日出扶桑格，为人热情开朗，带贵气，利公职外务", "level": "good"})
+
+    # ---- 5. 日丽中天格 — 太阳在午(6)坐命 ----
+    if ming_branch == 6 and "太阳" in ming_stars:
+        patterns.append({"name": "日丽中天", "desc": "太阳在午宫坐命，光芒最盛之时。又名金灿光辉格，光明正大，领导气质，利仕途掌权", "level": "good"})
+
+    # ---- 6. 日月同宫格 — 日月同在丑(1)/未(7)坐命 ----
+    if ming_branch in [1, 7] and "太阳" in ming_stars and "太阴" in ming_stars:
+        patterns.append({"name": "日月同宫", "desc": "日月同在丑/未宫坐命，日月交辉。主晋升之象，事业稳步上升，人际关系圆融", "level": "good"})
+
+    # ---- 7. 日月反背格 — 太阳戌+太阴辰，两星皆弱 ----
+    if ("太阳" in ming_stars and ming_branch == 10 and moon_branch == 4) or \
+       ("太阴" in ming_stars and ming_branch == 4 and sun_branch == 10):
+        patterns.append({"name": "日月反背", "desc": "太阳在戌太阴在辰，两星光芒皆弱。劳碌命，求人不如求己，早年辛苦，宜脚踏实地", "level": "warn"})
+
+    # ---- 8. 日月夹命格 — 命丑/未 + 日月在左右邻宫相夹 ----
+    if ming_branch in [1, 7]:
+        left_zhi = (ming_branch - 1) % 12
+        right_zhi = (ming_branch + 1) % 12
+        left_stars = zhi_to_p.get(left_zhi, {}).get("主星", [])
+        right_stars = zhi_to_p.get(right_zhi, {}).get("主星", [])
+        has_sun = "太阳" in left_stars or "太阳" in right_stars
+        has_moon = "太阴" in left_stars or "太阴" in right_stars
+        if has_sun and has_moon:
+            patterns.append({"name": "日月夹命", "desc": "太阳太阴在左右邻宫相夹命宫。有财运，利事业发展，贵人助力强", "level": "good"})
+
+    # ---- 9. 紫府同宫格 — 紫微+天府同宫在寅(2)或申(8) ----
+    if ming_branch in [2, 8] and "紫微" in ming_stars and "天府" in ming_stars:
+        patterns.append({"name": "紫府同宫", "desc": "紫微天府二帝同宫坐命，贵气极重。宜领导管理岗位，但决策需果断不可犹豫", "level": "good"})
+
+    # ---- 10. 府相朝垣格 — 天府+天相在三方四正照命 ----
+    sanfang = [(ming_branch - 4) % 12, (ming_branch - 8) % 12, dup_gong]
+    has_tf = any("天府" in zhi_to_p.get(s, {}).get("主星", []) for s in sanfang)
+    has_tx = any("天相" in zhi_to_p.get(s, {}).get("主星", []) for s in sanfang)
+    if has_tf and has_tx:
+        patterns.append({"name": "府相朝垣", "desc": "天府天相在三方四正照命，衣食无忧。为官或做主管机运佳，宜稳定发展", "level": "good"})
+
+    # ---- 11. 机月同梁格 — 命宫三方见天机+太阴+天同+天梁 ----
+    sanfang_all_stars = []
+    for sz in sanfang + [ming_branch]:
+        sanfang_all_stars.extend(zhi_to_p.get(sz, {}).get("主星", []))
+    if all(s in sanfang_all_stars for s in ["天机", "太阴", "天同", "天梁"]):
+        patterns.append({"name": "机月同梁", "desc": "天机太阴天同天梁四星在三方四正交会。所谓机月同梁做吏人，宜公职军公教", "level": "info"})
+
+    # ---- 12. 巨日同宫格 — 巨门+太阳同宫在寅(2)或申(8) ----
+    if ming_branch in [2, 8] and "巨门" in ming_stars and "太阳" in ming_stars:
+        patterns.append({"name": "巨日同宫", "desc": "巨门太阳同在寅/申坐命。又名官封三代格，为贵格，求名易求利，宜从政或公众人物", "level": "good"})
+
+    # ---- 13. 火铃贪格 — 贪狼守命 + 火星/铃星在命或三方 ----
+    if "贪狼" in ming_stars:
+        huo_ling = ["火星", "铃星"]
+        has_hl = any(h in _stars_at(ming_branch) for h in huo_ling)
+        if not has_hl:
+            for sz in sanfang:
+                if any(h in _stars_at(sz) for h in huo_ling):
+                    has_hl = True
+                    break
+        if has_hl:
+            patterns.append({"name": "火铃贪格", "desc": "贪狼守命遇火星/铃星会照，有突然发达、获横财之象。爆发力强，宜把握机遇", "level": "good"})
+
+    # ---- 14. 七杀朝斗 — 七杀在子(0)/午(6)/寅(2)/申(8)守命 ----
+    if "七杀" in ming_stars and ming_branch in [0, 6, 2, 8]:
+        patterns.append({"name": "七杀朝斗", "desc": "七杀坐命于子午寅申，威权果敢，作风强势。为贵格亦可成富，宜军警武职或创业", "level": "good"})
+
+    # ---- 15. 英星入庙 — 破军在子(0)/午(6)守命 ----
+    if "破军" in ming_stars and ming_branch in [0, 6]:
+        patterns.append({"name": "英星入庙", "desc": "破军坐命于子午，有领导力，喜冒险犯难，具开创精神。宜开拓型事业，敢为天下先", "level": "good"})
+
+    # ---- 16. 石中隐玉 — 巨门在子(0)/午(6)守命 ----
+    if "巨门" in ming_stars and ming_branch in [0, 6]:
+        patterns.append({"name": "石中隐玉", "desc": "巨门坐命于子午，有才能但先苦后甘。早年辛苦中晚年发达，宜专业深耕积累口碑", "level": "good"})
+
+    # ---- 17. 命无正曜（命宫无主星） ----
+    if not ming_stars:
+        patterns.append({"name": "命无正曜", "desc": "命宫无主星，借迁移宫星曜论命。一生靠环境与他人搭台，宜借势而为", "level": "info"})
+
+    # ---- 18. 阳梁昌禄格（太阳+天梁+文昌/禄存会照） ----
+    if "太阳" in dup_stars and "天梁" in dup_stars and any(s in all_stars for s in ["文昌", "禄存"]):
         patterns.append({"name": "阳梁昌禄", "desc": "太阳天梁在迁移宫照命宫，配合文昌禄存，主光明磊落、仕途顺遂，宜公职竞考", "level": "good"})
 
-    # 3. 权忌同宫（官禄宫同时有化权和化忌）
-    guanlu_sihua = zhi_to_p.get((ming_branch - 8) % 12, {}).get("四化", {})
+    # ---- 19. 权忌同宫（官禄宫同时有化权和化忌） ----
+    guanlu_sihua = _sihua_offset(8)
     if "化权" in guanlu_sihua and "化忌" in guanlu_sihua:
         patterns.append({"name": "权忌同宫", "desc": "化权与化忌同入官禄宫，有权有势但口舌是非不断，倪海厦云：权能制忌，有得有失，利创业不利打工", "level": "warn"})
 
-    # 4. 三奇嘉会（禄权科在三方四正）
+    # ---- 20. 三奇嘉会（禄权科在三方四正） ----
     all_sihua = {}
     for p in places:
         all_sihua.update(p.get("四化", {}))
-    if all(s in all_sihua for s in ["化禄","化权","化科"]):
+    if all(s in all_sihua for s in ["化禄", "化权", "化科"]):
         patterns.append({"name": "三奇嘉会", "desc": "禄权科三奇俱全，紫微最高格局之一，一生多贵人、机遇、名声，福报深厚", "level": "good"})
 
-    # 5. 天机化科在身宫
-    shen_places = [p for p in places if p.get("是否身宫")]
+    # ---- 21. 天机化科在身宫 ----
     for sp in shen_places:
         sp_sihua = sp.get("四化", {})
         if "化科" in sp_sihua and sp_sihua["化科"] == "天机":
-            patterns.append({"name": "天机科在身宫", "desc": "天机化科坐身宫财帛，以智慧名声取财，宜技术、咨询、教育行业", "level": "good"})
+            patterns.append({"name": "天机科在身宫", "desc": "天机化科坐身宫，以智慧名声取财，宜技术、咨询、教育行业", "level": "good"})
 
-    # 6. 太阴化禄在福德
+    # ---- 22. 太阴化禄在福德 ----
     for p in places:
         if p.get("宫名") == "福德":
             fs = p.get("四化", {})
@@ -236,7 +388,7 @@ def _detect_patterns(places, ming_branch, sihua, year_gan):
                 patterns.append({"name": "太阴禄照福德", "desc": "太阴化禄在福德宫，福气深厚，精神富足，晚年清福，心态乐观是关键", "level": "good"})
             break
 
-    # 7. 空宫借星
+    # ---- 23. 空宫借星 ----
     kong_palaces = []
     for p in places:
         if not p.get("主星"):
@@ -244,16 +396,27 @@ def _detect_patterns(places, ming_branch, sihua, year_gan):
     if len(kong_palaces) >= 2:
         patterns.append({"name": "多宫借星", "desc": f"{'、'.join(kong_palaces[:4])}等宫无主星，借对宫星曜论命，人生需借力而行", "level": "info"})
 
-    # 8. 命宫三方见煞（擎羊/陀罗/火星/铃星在三方）
-    sha = ["擎羊","陀罗","火星","铃星"]
-    sanfang_zhis = [ming_branch, (ming_branch-4)%12, (ming_branch-8)%12]
+    # ---- 24. 命宫三方见煞（擎羊/陀罗/火星/铃星在三方） ----
+    sanfang_zhis = [ming_branch, (ming_branch - 4) % 12, (ming_branch - 8) % 12]
     sha_count = 0
     for sz in sanfang_zhis:
-        sf = zhi_to_p.get(sz, {})
-        sf_stars = sf.get("主星", []) + sf.get("辅星", [])
+        sf_stars = _stars_at(sz)
         sha_count += sum(1 for s in sha if s in sf_stars)
     if sha_count >= 2:
         patterns.append({"name": "三方见煞", "desc": "命宫三合方见煞星，人生波折较多但抗压能力强，宜武职技术", "level": "warn"})
+
+    # ---- 25. 禄马交驰 — 命宫或三方有禄存/化禄+天马 ----
+    has_lu = any(s in _stars_at(ming_branch) for s in ["禄存"]) or "化禄" in _sihua_at(ming_branch)
+    has_ma = "天马" in _stars_at(ming_branch)
+    if not (has_lu and has_ma):
+        for sz in sanfang:
+            sz_stars = _stars_at(sz)
+            if "天马" in sz_stars:
+                if any(s in sz_stars for s in ["禄存"]) or "化禄" in _sihua_at(sz):
+                    has_lu, has_ma = True, True
+                    break
+    if has_lu and has_ma:
+        patterns.append({"name": "禄马交驰", "desc": "禄存/化禄与天马同宫或会照，主奔波劳碌而招财。宜外务、贸易、物流、跨境行业", "level": "good"})
 
     return patterns
 def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None):
