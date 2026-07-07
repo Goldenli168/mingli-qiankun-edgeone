@@ -741,8 +741,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "飞化分析": _calc_feihua(year_gan, places),
         # P1: 财富级别定性评估
         "财富级别": _assess_wealth_level(places, _natal_patterns),
-        # P3: 来因宫
-        "来因宫": _find_laiyin_palace(places, year_gan),
+        # P3: 来因宫（月柱地支定位法，与文墨天机一致）
+        "来因宫": _find_laiyin_palace(places, year_gan, lunar_month),
     }
 
 
@@ -1351,22 +1351,51 @@ def _dayun_deep_analysis(dayun_list, places, year_gan, natal_patterns=None):
             total_score += scores.get(dim, 50) * w
         total_score = int(round(total_score))
 
-        # 综合评级
+        # 综合评级（多套句式去模板化）
+        import random
+        seed = total_score + start_age
+        random.seed(seed)
         if total_score >= 85:
             overall = "大吉"
-            overall_desc = "此运极佳，诸事顺遂，宜积极进取。陆斌兆云：「大运得令，十年风光」."
+            descs_pool = [
+                "此运极佳，诸事顺遂，宜积极进取。陆斌兆云：「大运得令，十年风光」.",
+                "十年佳运当头，贵人提携、机遇涌现，当放开手脚大展宏图.",
+                "运势登峰，此十年是你人生的高光时刻，宜抓紧每一个风口.",
+                "天时地利具备，此运顺势而为便可水到渠成，不必过度操劳.",
+            ]
+            overall_desc = random.choice(descs_pool)
         elif total_score >= 75:
             overall = "中吉"
-            overall_desc = "此运良好，虽有波折不碍大局，稳中求进。倪海厦云：「三方会吉，不失为佳运」."
+            descs_pool = [
+                "此运良好，虽有波折不碍大局，稳中求进。倪海厦云：「三方会吉，不失为佳运」.",
+                "运势稳步上扬，十年向好值得一搏，守住主业伺机扩展.",
+                "此运整体向上，偶有小挫不必惊慌，大方向是好的.",
+            ]
+            overall_desc = random.choice(descs_pool)
         elif total_score >= 60:
             overall = "小吉"
-            overall_desc = "此运合格，无大起大落，宜守成待时。王亭之云：「平运宜守，勿贪急进」."
+            descs_pool = [
+                "此运平稳，无大起大落，宜守成待时。王亭之云：「平运宜守，勿贪急进」.",
+                "十年平淡如水，虽无大风浪亦无大惊喜，习惯就好——积累即是胜利.",
+                "此运不温不火，适合沉淀积累而非冒险扩张，静待下一波机遇.",
+            ]
+            overall_desc = random.choice(descs_pool)
         elif total_score >= 50:
             overall = "偏弱"
-            overall_desc = "此运偏弱，需防破耗是非，退守自保，不宜冒进."
+            descs_pool = [
+                "此运偏弱，需防破耗是非，退守自保，不宜冒进.",
+                "十年低谷期，养精蓄锐比盲目冲撞明智——熬过去就是春天.",
+                "此运阻力较大，宜精细化管理，避开高风险决策，小步慢走.",
+            ]
+            overall_desc = random.choice(descs_pool)
         else:
             overall = "大凶"
-            overall_desc = "此运整体运势凶险，诸事多阻，宜韬光养晦，避凶趋吉。倪海厦云：「大运逢煞，十年坎坷，唯忍字可渡」."
+            descs_pool = [
+                "此运整体运势凶险，诸事多阻，宜韬光养晦，避凶趋吉。倪海厦云：「大运逢煞，十年坎坷，唯忍字可渡」.",
+                "运逢低谷，十年荆棘路——但请记住：最低处正是反弹的起点，守心为上.",
+                "此运多艰，不可轻举妄动，以退为进、以守为攻是最佳策略.",
+            ]
+            overall_desc = random.choice(descs_pool)
 
         # 追加命宫主星对大运的影响
         ming_main = dayun_palace_stars.get("主星", [])
@@ -2234,15 +2263,32 @@ def _assess_wealth_level(places, patterns):
     else: level,icon = "小康","📊"
     return {"级别":level,"分数":score,"细节":details,"图标":icon}
 
-# ===== 来因宫 =====
-def _find_laiyin_palace(places, year_gan):
-    LAIM = {"甲":"寅","乙":"卯","丙":"巳","丁":"午","戊":"巳","己":"午","庚":"申","辛":"酉","壬":"亥","癸":"子"}
-    lai_zhi = LAIM.get(year_gan,"")
+# ===== 来因宫（月柱地支定位法 — 与文墨天机/钦天四化一致）=====
+# 算法: 五虎遁月 → 农历月柱地支 → 对应本命十二宫
+# 例: 丁壬年五虎遁起壬寅, 六月=丁未, 地支未→夫妻宫
+def _find_laiyin_palace(places, year_gan, lunar_month):
+    WUHU_BASE = {"甲":"丙","乙":"戊","丙":"庚","丁":"壬","戊":"甲",
+                  "己":"丙","庚":"戊","辛":"庚","壬":"壬","癸":"甲"}
+    GAN = list("甲乙丙丁戊己庚辛壬癸")
+    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    
+    base_gan = WUHU_BASE.get(year_gan, "甲")
+    base_idx = GAN.index(base_gan)
+    # 正月寅, 月干从base_gan开始, 月支从寅开始
+    month_gan_idx = (base_idx + lunar_month - 1) % 10
+    month_zhi = ZHI[(2 + lunar_month - 1) % 12]  # 正月=寅(index 2)
+    month_zhi_name = month_zhi
+    lai_palace_name = "?"
     for p in places:
-        if p["地支"] == lai_zhi:
-            return {"宫名":p["宫名"],"地支":lai_zhi,"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
-                    "四化":p.get("四化",{}),"释义":f"来因宫在{p['宫名']}——一生课题在于{p['宫名']}领域"}
-    return {"宫名":"未找到","地支":lai_zhi}
+        if p["地支"] == month_zhi: lai_palace_name = p["宫名"]; break
+    lai_desc = f"月柱{GAN[month_gan_idx]}{month_zhi}入{lai_palace_name}"
+    
+    for p in places:
+        if p["地支"] == month_zhi:
+            stars = "、".join(p.get("主星", [])) or "空宫"
+            return {"宫名":p["宫名"],"地支":month_zhi,"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
+                    "四化":p.get("四化",{}),"释义":f"来因宫在{p['宫名']}({lai_desc})——一生课题在于{p['宫名']}领域"}
+    return {"宫名":"未找到","地支":month_zhi,"释义":"来因宫定位异常"}
 
 
 # ========== 以下是原 __main__ 测试代码 ==========

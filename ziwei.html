@@ -221,6 +221,8 @@
   .feihua-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .feihua-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
   .feihua-card { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; transition: all 0.3s; position: relative; overflow: hidden; }
+  .wealth-card { background: linear-gradient(135deg, var(--bg-card2), rgba(201,168,76,0.1)) !important; border-color: rgba(201,168,76,0.25) !important; }
+  .laiyin-card { background: linear-gradient(135deg, var(--bg-card2), rgba(46,204,113,0.08)) !important; border-color: rgba(46,204,113,0.2) !important; }
   .feihua-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
   .feihua-card.fh-lu::before { background: #2ecc71; }
   .feihua-card.fh-quan::before { background: #3498db; }
@@ -629,7 +631,7 @@ function renderResult(data) {
     
     // 财富级别卡
     if (wealthLevel['级别']) {
-      summaryHtml += '<div class="feihua-card wealth-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(201,168,76,0.1))">' +
+      summaryHtml += '<div class="feihua-card wealth-card" style="flex:1;min-width:200px">' +
         '<div style="font-size:2.5em;text-align:center">' + (wealthLevel['图标']||'💰') + '</div>' +
         '<div style="text-align:center;font-size:1.3em;font-weight:bold;color:var(--gold);margin:8px 0">' + wealthLevel['级别'] + '</div>' +
         '<div style="font-size:0.78em;color:var(--text-dim);text-align:center">' + (wealthLevel['细节']||[]).join(' · ') + '</div>' +
@@ -640,7 +642,7 @@ function renderResult(data) {
     if (laiyin['宫名'] && laiyin['宫名'] != '未找到') {
       var laiStars = (laiyin['主星']||[]).join('、') || '空宫';
       if (laiyin['辅星'] && laiyin['辅星'].length > 0) laiStars += ' +' + laiyin['辅星'].join('、');
-      summaryHtml += '<div class="feihua-card laiyin-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(46,204,113,0.08))">' +
+      summaryHtml += '<div class="feihua-card laiyin-card" style="flex:1;min-width:200px">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--gold)">来因宫 · 一生课题</div>' +
         '<div style="text-align:center;font-size:1.4em;font-weight:bold;margin:8px 0">' + laiyin['宫名'] + '</div>' +
         '<div style="font-size:0.78em;color:var(--text-dim);text-align:center">' + laiStars + '</div>' +
