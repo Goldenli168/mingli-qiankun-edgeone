@@ -926,10 +926,24 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
-    // 逐月简报（仅当前+未来2年有数据）
+    // 逐月卡片面板（仅当前+未来2年有数据）
     if (ln['逐月'] && ln['逐月'].length > 0) {
-      html += '<tr class="ln-monthly"><td colspan="' + (5 + dimCfg.length) + '" style="padding:4px 12px;font-size:0.72em;color:var(--text-dim);background:var(--bg-card2);border-radius:0 0 4px 4px">' +
-        '📆 逐月: ' + ln['逐月'].join(' &nbsp;|&nbsp; ') + '</td></tr>';
+      html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
+        '<div class="monthly-panel" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 10px;background:var(--bg-card2);border-radius:0 0 8px 8px;margin:0 1px">';
+      var monthColors = ['#e74c3c','#e67e22','#2ecc71','#3498db','#9b59b6','#1abc9c'];
+      for (var mi = 0; mi < ln['逐月'].length; mi++) {
+        var m = ln['逐月'][mi];
+        var col = monthColors[mi % monthColors.length];
+        // Parse: "正二月：出行变动(星1、星2)"
+        var parts = m.split('：');
+        var label = parts[0] || m;
+        var detail = parts[1] || '';
+        html += '<div style="background:var(--bg-card);border-radius:6px;padding:6px 8px;border-left:3px solid ' + col + ';font-size:0.72em;line-height:1.5">' +
+          '<span style="font-weight:bold;color:' + col + '">' + label + '</span>' +
+          '<span style="color:var(--text-dim);margin-left:4px">' + detail + '</span>' +
+        '</div>';
+      }
+      html += '</div></td></tr>';
     }
   }
   html += '</tbody></table></div>';
