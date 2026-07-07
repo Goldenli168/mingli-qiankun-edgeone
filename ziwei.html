@@ -393,6 +393,12 @@
     <div class="feihua-grid" id="patternGrid"></div>
   </div>
 
+  <!-- P1: 财富级别 + P3: 来因宫 -->
+  <div class="feihua-section" id="summarySection" style="margin-bottom:20px; display:none;">
+    <h3>📊 命盘总览</h3>
+    <div id="summaryGrid"></div>
+  </div>
+
   <div class="daxian-section" id="daxianSection">
     <h3>☰ 大限信息</h3>
     <div class="daxian-details" id="daxianDetails"></div>
@@ -438,7 +444,7 @@ var _syncedBirth = null;
 
 // 页面加载时恢复上次分析结果（切页不回空白）
 // 缓存版本：评分维度从4维升级到5维时必须清除旧缓存
-var ZIWEI_CACHE_VERSION = 'v7.0';
+var ZIWEI_CACHE_VERSION = 'v7.3';
 (function restoreResult() {
   try {
     var ver = localStorage.getItem('mingli_ziwei_ver');
@@ -613,6 +619,39 @@ function renderResult(data) {
     '</div>';
   }).join('');
 
+  // P1+P3: 财富级别 + 来因宫 汇总展示
+  var wealthLevel = data['财富级别'] || {};
+  var laiyin = data['来因宫'] || {};
+  var summarySection = document.getElementById('summarySection');
+  if (wealthLevel['级别'] || laiyin['宫名']) {
+    summarySection.style.display = 'block';
+    var summaryHtml = '<div style="display:flex;gap:16px;flex-wrap:wrap">';
+    
+    // 财富级别卡
+    if (wealthLevel['级别']) {
+      summaryHtml += '<div class="feihua-card wealth-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(201,168,76,0.1))">' +
+        '<div style="font-size:2.5em;text-align:center">' + (wealthLevel['图标']||'💰') + '</div>' +
+        '<div style="text-align:center;font-size:1.3em;font-weight:bold;color:var(--gold);margin:8px 0">' + wealthLevel['级别'] + '</div>' +
+        '<div style="font-size:0.78em;color:var(--text-dim);text-align:center">' + (wealthLevel['细节']||[]).join(' · ') + '</div>' +
+      '</div>';
+    }
+    
+    // 来因宫卡
+    if (laiyin['宫名'] && laiyin['宫名'] != '未找到') {
+      var laiStars = (laiyin['主星']||[]).join('、') || '空宫';
+      if (laiyin['辅星'] && laiyin['辅星'].length > 0) laiStars += ' +' + laiyin['辅星'].join('、');
+      summaryHtml += '<div class="feihua-card laiyin-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(46,204,113,0.08))">' +
+        '<div style="text-align:center;font-size:0.82em;color:var(--gold)">来因宫 · 一生课题</div>' +
+        '<div style="text-align:center;font-size:1.4em;font-weight:bold;margin:8px 0">' + laiyin['宫名'] + '</div>' +
+        '<div style="font-size:0.78em;color:var(--text-dim);text-align:center">' + laiStars + '</div>' +
+        '<div style="font-size:0.75em;color:var(--text);text-align:center;margin-top:4px">' + (laiyin['释义']||'') + '</div>' +
+      '</div>';
+    }
+    
+    summaryHtml += '</div>';
+    document.getElementById('summaryGrid').innerHTML = summaryHtml;
+  }
+
   var daxian = data['大限信息'];
   var daxianDetails = document.getElementById('daxianDetails');
   daxianDetails.innerHTML = [
@@ -736,7 +775,7 @@ function renderResult(data) {
 
     dayunHtml += '<div class="dayun-card' + (isCurrent ? ' current' : '') + '" onclick="this.classList.toggle(\'expanded\')">' +
       '<div class="dayun-header">' +
-        '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info">' + (dy['天干']||'') + (dy['地支']||'') + '宫</span></div>' +
+        '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info" style="color:var(--gold)">' + (dy['大运宫名']||(dy['天干']||'')+(dy['地支']||'')+'宫') + '</span></div>' +
         '<span class="dayun-badge ' + ratingCls + '">' + totalScore + ' ' + rating + '</span>' +
       '</div>' +
       '<div class="stars-line"><span class="star-label">主星</span>' + majorStr + (minorStr ? ' &nbsp;<span class="star-label">辅</span>' + minorStr : '') + '</div>' +

@@ -218,7 +218,7 @@ def _detect_patterns(places, ming_branch, sihua, year_gan):
     ming_stars = zhi_to_p.get(ming_branch, {}).get("主星", [])
     dup_gong = (ming_branch - 6) % 12  # 对宫（迁移宫）
     dup_stars = zhi_to_p.get(dup_gong, {}).get("主星", [])
-    all_stars = sum([zhi_to_p.get(i, {}).get("主星", []) for i in range(12)], [])
+    all_stars = sum([zhi_to_p.get(i, {}).get("主星", []) + zhi_to_p.get(i, {}).get("辅星", []) for i in range(12)], [])
     ming_zhi_name = zhi_to_p.get(ming_branch, {}).get("地支", "")
     shen_places = [p for p in places if p.get("是否身宫")]
     sha = ["擎羊", "陀罗", "火星", "铃星"]
@@ -739,6 +739,10 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, _dayun_scored, ln_weights=ln_weights, birth_sihua=sihua, natal_patterns=_natal_patterns),
         # 各宫位飞化分析
         "飞化分析": _calc_feihua(year_gan, places),
+        # P1: 财富级别定性评估
+        "财富级别": _assess_wealth_level(places, _natal_patterns),
+        # P3: 来因宫
+        "来因宫": _find_laiyin_palace(places, year_gan),
     }
 
 
@@ -1366,6 +1370,23 @@ def _dayun_deep_analysis(dayun_list, places, year_gan, natal_patterns=None):
 
         # 追加命宫主星对大运的影响
         ming_main = dayun_palace_stars.get("主星", [])
+        
+        # 大运宫位名+主题（深Seek风格个性化描述）
+        dy_palace_name = dayun_palace_data.get("宫名", "")
+        PALACE_THEME = {
+            "命宫": "自我重塑之运，个人形象与社会角色的关键十年",
+            "兄弟": "手足同僚之运，人际关系、合作联盟定基调",
+            "夫妻": "婚姻感情之运，配偶缘分与合作关系为主线",
+            "子女": "子嗣创意之运，生育、教育、投资项目为主题",
+            "财帛": "财富积累之运，正偏财运与资产配置定乾坤",
+            "疾厄": "健康安身之运，身体为本，养生保健为要务",
+            "迁移": "出行变动之运，外出发展、驿马奔波为主题",
+            "交友": "人际交往之运，朋友下属、社会资源为主线",
+            "官禄": "事业升迁之运，职场地位、权力角逐为主题",
+            "田宅": "家宅房产之运，不动产、家庭根基定基调",
+            "福德": "精神享受之运，内心满足、福报桃花为主题",
+            "父母": "长辈荫庇之运，父母健康、上下级关系为主线",
+        }
         if ming_main:
             star_summary = "、".join(ming_main)
             overall_desc += " 大运命宫主星" + star_summary + "坐镇"
@@ -1411,11 +1432,16 @@ def _dayun_deep_analysis(dayun_list, places, year_gan, natal_patterns=None):
             else:
                 dy["格局激活"] = []
 
+        # 注入大运宫位主题到综合解读开头
+        if dy_palace_name and dy_palace_name in PALACE_THEME:
+            overall_desc = f"行{dy_palace_name}大运——{PALACE_THEME[dy_palace_name]}。" + overall_desc
+
         dy["评分"] = scores
         dy["综合评分"] = total_score
         dy["综合评级"] = overall
         dy["综合解读"] = overall_desc
         dy["深度解读"] = descs
+        dy["大运宫名"] = dy_palace_name
 
     return dayun_list
 
@@ -2176,6 +2202,47 @@ def _calc_feihua(year_gan, places):
         })
 
     return feihua
+
+
+# ===== 财富级别评估 =====
+def _assess_wealth_level(places, patterns):
+    score = 50; details = []; caibo = tianzhai = None
+    for p in places:
+        if p.get("宫名") == "财帛": caibo = p
+        if p.get("宫名") == "田宅": tianzhai = p
+    if caibo:
+        cb_stars = caibo.get("主星", []); cb_aux = caibo.get("辅星", []); cb_sihua = caibo.get("四化", {})
+        ws = {"天府":18,"武曲":15,"太阴":12,"禄存":15,"紫微":10,"贪狼":8}
+        for s in cb_stars:
+            if s in ws: score += ws[s]; details.append(f"{s}坐财帛")
+        if "化禄" in cb_sihua: score += 20; details.append(f"{cb_sihua['化禄']}化禄入财帛")
+        for s in cb_aux + cb_stars:
+            if s in {"陀罗":-10,"地空":-12,"地劫":-12,"擎羊":-8}: score += {"陀罗":-10,"地空":-12,"地劫":-12,"擎羊":-8}[s]; details.append(f"{s}耗财")
+    if tianzhai:
+        for s in tianzhai.get("主星", []):
+            if s in {"贪狼":12,"天府":15,"太阴":10,"武曲":10,"紫微":8}:
+                score += {"贪狼":12,"天府":15,"太阴":10,"武曲":10,"紫微":8}[s]; details.append(f"{s}守田宅")
+    gn = [p["name"] for p in patterns if p.get("level")=="good"]
+    if "三奇嘉会" in gn: score += 15; details.append("三奇嘉会")
+    if "禄马交驰" in gn: score += 12; details.append("禄马交驰")
+    riyue_names = ["丹墀桂墀格","日月并明格","日月交辉"]
+    if any(n in gn for n in riyue_names): score += 10
+    if score>=100: level,icon = "大富之命","💎"
+    elif score>=80: level,icon = "上富","🏆"
+    elif score>=65: level,icon = "中富","💰"
+    elif score>=50: level,icon = "小富","🪙"
+    else: level,icon = "小康","📊"
+    return {"级别":level,"分数":score,"细节":details,"图标":icon}
+
+# ===== 来因宫 =====
+def _find_laiyin_palace(places, year_gan):
+    LAIM = {"甲":"寅","乙":"卯","丙":"巳","丁":"午","戊":"巳","己":"午","庚":"申","辛":"酉","壬":"亥","癸":"子"}
+    lai_zhi = LAIM.get(year_gan,"")
+    for p in places:
+        if p["地支"] == lai_zhi:
+            return {"宫名":p["宫名"],"地支":lai_zhi,"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
+                    "四化":p.get("四化",{}),"释义":f"来因宫在{p['宫名']}——一生课题在于{p['宫名']}领域"}
+    return {"宫名":"未找到","地支":lai_zhi}
 
 
 # ========== 以下是原 __main__ 测试代码 ==========
