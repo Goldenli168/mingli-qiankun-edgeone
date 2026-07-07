@@ -1,6 +1,6 @@
 """
-命理乾坤 · 紫微斗数核心计算引擎 v4.0
-基于 iztro-py 排盘库，确保排盘结果正确
+命理乾坤 · 紫微斗数核心计算引擎 v7.4
+基于 iztro-py 排盘，联合八字喜用神解读
 """
 
 import datetime
@@ -715,7 +715,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     _natal_patterns = _detect_patterns(places, ming_branch, sihua, year_gan)
     _dayun_scored = _dayun_deep_analysis(_dayun_extracted, places, year_gan, natal_patterns=_natal_patterns)
 
-    return {
+    result = {
         "基本信息": {
             "性别": sex,
             "公历": f"{solar_year}年{solar_month}月{solar_day}日",
@@ -744,6 +744,65 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         # P3: 来因宫（月柱地支定位法，与文墨天机一致）
         "来因宫": _find_laiyin_palace(places, year_gan, lunar_month),
     }
+
+    # ① 八字+紫微联合解读：注入喜用神
+    try:
+        import sys, os
+        _utils_dir = os.path.dirname(os.path.abspath(__file__))
+        if _utils_dir not in sys.path: sys.path.insert(0, _utils_dir)
+        import bazi_core
+        fp = bazi_core.get_four_pillars(solar_year, solar_month, solar_day, hour, birthplace="", minute=0)
+        bazi = bazi_core.analyze_bazi(fp, sex)
+        result["八字联合"] = {
+            "日主": bazi["日主五行"],
+            "身强身弱": bazi["日主状态"],
+            "喜用神": bazi["喜用神"],
+            "忌神": bazi.get("忌神", []),
+            "提示": f"日主{bazi['日主五行']}{bazi['日主状态']}，喜{'、'.join(bazi['喜用神'])}，行事宜{'、'.join(bazi['喜用神'])}方位/行业",
+        }
+    except Exception as e:
+        result["八字联合"] = {"提示": f"八字暂不可用({type(e).__name__})"}
+
+    # ② 流年逐月简报：当前年+未来2年
+    import datetime
+    now_year = datetime.datetime.now().year
+    _liunian_raw = result["流年"]
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if now_year <= yr <= now_year + 2:
+            ln["逐月"] = _monthly_brief_compact(yr, places, _zhi_to_for_monthly(places), ming_branch)
+    
+    return result
+
+
+def _zhi_to_for_monthly(places):
+    d = {}
+    for p in places: d[p.get("宫位")] = p
+    return d
+
+
+def _monthly_brief_compact(year, places, zhi_to_p, ming_branch):
+    """流年逐月简报：仅当前+未来2年，6个双月组"""
+    MONTHS = [("正二月",["寅","卯"]), ("三四月",["辰","巳"]), ("五六月",["午","未"]),
+              ("七八月",["申","酉"]), ("九十月",["戌","亥"]), ("十一十二月",["子","丑"])]
+    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    TOPICS = {"财帛":"财运抬头","官禄":"事业关键","夫妻":"感情波动","迁移":"出行变动",
+              "疾厄":"健康注意","田宅":"房产家事","子女":"孩子创意","福德":"精神享受"}
+    months = []
+    for label, branches in MONTHS:
+        topic, stars = "平稳过渡", ""
+        for b in branches:
+            zi = ZHI.index(b)
+            p = zhi_to_p.get(zi, {})
+            if not topic or topic == "平稳过渡":
+                pn = p.get("宫名","")
+                topic = TOPICS.get(pn, "平稳过渡")
+            ss = p.get("主星", [])
+            if ss and not stars: stars = "、".join(ss[:2])
+        note = f"{label}：{topic}"
+        if stars: note += f"({stars})"
+        months.append(note)
+    return months
 
 
 def interpret_place(place_name, stars, aux_stars_here, sihua_status):
@@ -1820,21 +1879,35 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                     # 通用冲突句式
                     parts.append(f"{best_label}正旺但{worst_label}拖后腿——倪师曰：禄忌对冲之年，得一头失一头，分清轻重")
 
-        # ═══ 7) 行动锦囊 ── 倪海厦风格一句话 ═══
+        # ═══ 7) 行动锦囊 + 人情味收尾 ═══
         tips_pool = []
+        mood = ""
         if s_ji:
-            tips_pool = ["忌星之年以守为攻，倪师常言：不动如山", "稳字当头今年最忌贪快", "熬过此年便是春天"]
+            tips_pool = ["忌星之年以守为攻，倪师常言：不动如山", "稳字当头，今年最忌贪快", "熬过此年便是春天"]
+            mood = ["扛住了就是蜕变的开始","今年的苦是明年甜的代价","有时候慢就是最快的速度"][zhi_idx%3]
         elif s_lu:
             tips_pool = ["禄临之年该出手时就出手", "好运不等人，大胆往前闯", "春耕秋收——今年种什么都收成"]
+            mood = ["这是你该发光的一年","别忘了感恩帮你的人","旺年更要惜福"][zhi_idx%3]
+        elif avg >= 75:
+            tips_pool = ["顺势而为，借力打力", "守住优势，扩大战果"]
+            mood = "好年景就像顺风船——别乱转舵"
+        elif dims["事业"] >= 70 and dims["财富"] < 50:
+            tips_pool = ["事业红火但钱包吃紧，少折腾多存粮"]
+            mood = "名声是长期资产，现金是短期氧气——都重要"
         elif "冲" in chong_str:
             tips_pool = ["冲则动、动则变、变则通", "主动求变胜过被动挨打"]
+            mood = "变动之年，唯一的危险是不敢动"
         elif "合" in chong_str:
             tips_pool = ["天地合气顺势而为即可", "贵人就在身边，开口就有"]
+            mood = "今年的运气像顺水推舟——不用太费力"
         else:
-            tips_pool = ["平平淡淡才是真，稳扎稳打", "守好本分，该来的自然会来"]
+            tips_pool = ["平平淡淡才是真", "守好本分该来的自然会来"]
+            mood = ["平淡也是福","积蓄力量也是一种前进","种子在地下的时候是看不见的"][zhi_idx%3]
         parts.append(tips_pool[zhi_idx % len(tips_pool)])
+        if mood:
+            parts.append(mood)
 
-        return "。".join(parts[:8]) + "。"
+        return "。".join(parts[:9]) + "。"
 
     def _guide(dims, age=35):
         """五维指引 + 社会百分位参照"""

@@ -649,6 +649,19 @@ function renderResult(data) {
         '<div style="font-size:0.75em;color:var(--text);text-align:center;margin-top:4px">' + (laiyin['释义']||'') + '</div>' +
       '</div>';
     }
+
+    // 八字联合卡
+    var baziJoint = data['八字联合'] || {};
+    if (baziJoint['提示']) {
+      var xiYong = (baziJoint['喜用神']||[]).join('、');
+      var ji = (baziJoint['忌神']||[]).join('、') || '火土';
+      summaryHtml += '<div class="feihua-card bazi-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(52,152,219,0.08));border-color:rgba(52,152,219,0.2)">' +
+        '<div style="text-align:center;font-size:0.82em;color:var(--gold)">八字联合 · 喜用神</div>' +
+        '<div style="text-align:center;font-size:1em;margin:8px 0">日主<b>' + (baziJoint['日主']||'') + '</b> ' + (baziJoint['身强身弱']||'') + '</div>' +
+        '<div style="font-size:0.82em;text-align:center"><span style="color:#2ecc71">喜<span style="font-weight:bold">' + xiYong + '</span></span> &nbsp; <span style="color:#e74c3c">忌' + ji + '</span></div>' +
+        '<div style="font-size:0.75em;color:var(--text);text-align:center;margin-top:6px">' + (baziJoint['提示']||'') + '</div>' +
+      '</div>';
+    }
     
     summaryHtml += '</div>';
     document.getElementById('summaryGrid').innerHTML = summaryHtml;
@@ -913,6 +926,11 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
+    // 逐月简报（仅当前+未来2年有数据）
+    if (ln['逐月'] && ln['逐月'].length > 0) {
+      html += '<tr class="ln-monthly"><td colspan="' + (5 + dimCfg.length) + '" style="padding:4px 12px;font-size:0.72em;color:var(--text-dim);background:var(--bg-card2);border-radius:0 0 4px 4px">' +
+        '📆 逐月: ' + ln['逐月'].join(' &nbsp;|&nbsp; ') + '</td></tr>';
+    }
   }
   html += '</tbody></table></div>';
   return html;
