@@ -770,7 +770,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     for ln in _liunian_raw:
         yr = ln["年份"]
         if now_year <= yr <= now_year + 2:
-            ln["逐月"] = _monthly_brief_compact(yr, places, _zhi_to_for_monthly(places), ming_branch)
+            ln["逐月"] = _monthly_brief_compact(yr, places, _zhi_to_for_monthly(places), ming_branch,
+                                                   g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
+                                                   sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
     return result
 
@@ -781,27 +783,69 @@ def _zhi_to_for_monthly(places):
     return d
 
 
-def _monthly_brief_compact(year, places, zhi_to_p, ming_branch):
-    """流年逐月简报：仅当前+未来2年，6个双月组"""
-    MONTHS = [("正二月",["寅","卯"]), ("三四月",["辰","巳"]), ("五六月",["午","未"]),
-              ("七八月",["申","酉"]), ("九十月",["戌","亥"]), ("十一十二月",["子","丑"])]
-    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+def _monthly_brief_compact(year, places, zhi_to_p, ming_branch, g="", z="", sihua=None):
+    """流年逐月简报：按流年太岁旋转，每年不同。
+    
+    算法: 流年太岁入某宫为该年流年命宫，正月从此开始逐月顺时针推。
+    例: 2026丙午年，太岁午入子女宫 → 正月子女宫 → 二月财帛宫 → ...
+    """
+    MONTHS = [("正二月",0,1), ("三四月",2,3), ("五六月",4,5),
+              ("七八月",6,7), ("九十月",8,9), ("十一十二月",10,11)]
+    ZHI_CHARS = list("子丑寅卯辰巳午未申酉戌亥")
+    
+    # 太岁在命盘中的位置
+    year_zhi_ch = z if z else ""
+    year_zhi_i = ZHI_CHARS.index(year_zhi_ch) if year_zhi_ch in ZHI_CHARS else -1
+    taisui_palace = zhi_to_p.get(year_zhi_i, {})  # 流年命宫所在的本命宫位
+    taisui_pn = taisui_palace.get("宫名", "")
+    
+    # 构建 流年命宫 → 逐月顺时针映射
+    # 从 流年命宫 开始，按月顺时针遍历十二宫
+    PALACE_ORDER = ["命宫","兄弟","夫妻","子女","财帛","疾厄","迁移","交友","官禄","田宅","福德","父母"]
+    # 找到 taisui_pn 在 PALACE_ORDER 中的位置作为起点
+    taisui_order_idx = PALACE_ORDER.index(taisui_pn) if taisui_pn in PALACE_ORDER else 0
+    
+    # 宫名 → 宫位数据 (zhi_to_p 按地支索引, 需要反向映射)
+    name_to_palace = {p.get("宫名"): p for p in places}
+    
     TOPICS = {"财帛":"财运抬头","官禄":"事业关键","夫妻":"感情波动","迁移":"出行变动",
-              "疾厄":"健康注意","田宅":"房产家事","子女":"孩子创意","福德":"精神享受"}
+              "疾厄":"健康注意","田宅":"房产家事","子女":"孩子创意","福德":"精神享受",
+              "命宫":"自我主场","兄弟":"人际合作","父母":"长辈事宜","交友":"社交人脉"}
+    
+    # 流年四化用于高亮月份
+    sihua_stars = sihua or ["","","",""]
+    s_lu, s_quan, s_ke, s_ji = sihua_stars
+    
     months = []
-    for label, branches in MONTHS:
-        topic, stars = "平稳过渡", ""
-        for b in branches:
-            zi = ZHI.index(b)
-            p = zhi_to_p.get(zi, {})
-            if not topic or topic == "平稳过渡":
-                pn = p.get("宫名","")
-                topic = TOPICS.get(pn, "平稳过渡")
-            ss = p.get("主星", [])
-            if ss and not stars: stars = "、".join(ss[:2])
+    for label, month_idx1, month_idx2 in MONTHS:
+        # 每个月对应的宫位: (taisui_order_idx + month) % 12
+        pn1 = PALACE_ORDER[(taisui_order_idx + month_idx1) % 12]
+        pn2 = PALACE_ORDER[(taisui_order_idx + month_idx2) % 12]
+        
+        p1 = name_to_palace.get(pn1, {})
+        p2 = name_to_palace.get(pn2, {})
+        
+        topic1 = TOPICS.get(pn1, pn1)
+        topic2 = TOPICS.get(pn2, pn2)
+        topic = topic1 if topic1 == topic2 else f"{topic1}｜{topic2}"
+        
+        # 星曜
+        stars1 = p1.get("主星", [])
+        stars2 = p2.get("主星", [])
+        all_s = list(dict.fromkeys(stars1 + stars2))  # unique ordered
+        star_str = "、".join(all_s[:2]) if all_s else ""
+        
+        # 四化高亮: 如果流年四化星落在这两个宫位
+        highlights = []
+        for s, label_h in [(s_lu,"禄"), (s_quan,"权"), (s_ke,"科"), (s_ji,"忌")]:
+            if s and (s in stars1 + p1.get("辅星",[]) or s in stars2 + p2.get("辅星",[])):
+                highlights.append(f"{label_h}")
+        
         note = f"{label}：{topic}"
-        if stars: note += f"({stars})"
+        if star_str: note += f" ({star_str})"
+        if highlights: note += f" {'·'.join(highlights)}⚡"
         months.append(note)
+    
     return months
 
 
