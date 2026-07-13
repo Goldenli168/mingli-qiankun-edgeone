@@ -791,7 +791,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 "dayun": dayun_now,
                 "ln_gz": ln["流年干支"],
                 "ln_sihua": ln.get("流年干支",""),
-                "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"), "health": ln.get("健康分","?"),
+                "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
+                "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
+                "parents": ln.get("父母分","?"), "health": ln.get("健康分","?"),
                 "ln_brief_old": ln["简评"],
             }
             llm = _llm_liunian_brief(ctx)
@@ -810,8 +812,15 @@ def _llm_liunian_brief(chart_context: dict) -> str | None:
     """调用 DeepSeek 生成个性化流年简评，失败返回 None 回退到模板"""
     import json, urllib.request, ssl
     
-    prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前流年写一段150字左右的白话简评。
-风格要求：自然口语，像朋友聊天分析，不要机械罗列星曜名，要有情绪和节奏感。
+    prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前流年写一段200字左右的白话简评。
+风格要求：自然口语像朋友聊天，有情绪和节奏感，结合评分高低给出轻重缓急的建议。
+必须覆盖以下六个方面（评分高的多鼓励，评分低的给提醒和化解方法）：
+- 工作事业（{chart_context.get('career','?')}分）
+- 财富运势（{chart_context.get('wealth','?')}分）
+- 婚姻感情（{chart_context.get('marriage','?')}分）
+- 子女家庭（{chart_context.get('children','?')}分）
+- 父母长辈（{chart_context.get('parents','?')}分）
+- 身体健康（{chart_context.get('health','?')}分）
 命盘信息：
 - 出生：{chart_context.get('birth','')}
 - 八字日主：{chart_context.get('bazi','')}
@@ -819,10 +828,8 @@ def _llm_liunian_brief(chart_context: dict) -> str | None:
 - 命宫：{chart_context.get('ming','')}，身宫：{chart_context.get('shen','')}
 - 来因宫：{chart_context.get('laiyin','')}
 - 当前大运：{chart_context.get('dayun','')}
-- 当前流年干支：{chart_context.get('ln_gz','')}，流年四化：{chart_context.get('ln_sihua','')}
-- 评分：事业{chart_context.get('career','?')} 财富{chart_context.get('wealth','?')} 健康{chart_context.get('health','?')}
-- 流年命宫：{chart_context.get('ln_palace','')}，主星：{chart_context.get('ln_stars','')}
-只输出简评内容，不要标题、不要markdown、不要引号包裹。"""
+- 流年干支：{chart_context.get('ln_gz','')}
+只输出简评内容，不要标题、不要markdown格式标记、不要引号包裹。"""
     
     try:
         ctx = ssl.create_default_context()
@@ -831,7 +838,7 @@ def _llm_liunian_brief(chart_context: dict) -> str | None:
         data = json.dumps({
             "model": "deepseek-chat",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300,
+            "max_tokens": 500,
             "temperature": 0.8,
             "stream": False
         }).encode('utf-8')
