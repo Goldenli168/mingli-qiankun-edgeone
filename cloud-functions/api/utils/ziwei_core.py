@@ -2384,28 +2384,18 @@ def _assess_wealth_level(places, patterns):
 # 算法: 五虎遁月 → 农历月柱地支 → 对应本命十二宫
 # 例: 丁壬年五虎遁起壬寅, 六月=丁未, 地支未→夫妻宫
 def _find_laiyin_palace(places, year_gan, lunar_month):
-    WUHU_BASE = {"甲":"丙","乙":"戊","丙":"庚","丁":"壬","戊":"甲",
-                  "己":"丙","庚":"戊","辛":"庚","壬":"壬","癸":"甲"}
-    GAN = list("甲乙丙丁戊己庚辛壬癸")
-    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    """来因宫 = 生年年干所在的宫位（文墨天机/梁派飞星标准算法）
     
-    base_gan = WUHU_BASE.get(year_gan, "甲")
-    base_idx = GAN.index(base_gan)
-    # 正月寅, 月干从base_gan开始, 月支从寅开始
-    month_gan_idx = (base_idx + lunar_month - 1) % 10
-    month_zhi = ZHI[(2 + lunar_month - 1) % 12]  # 正月=寅(index 2)
-    month_zhi_name = month_zhi
-    lai_palace_name = "?"
+    原理: 每个本命宫位通过五虎遁分配了天干。生年年干唯一匹配其中一个宫位。
+    例: 丁卯年→夫妻宫(丁未), 癸巳年→福德宫(癸亥)
+    """
     for p in places:
-        if p["地支"] == month_zhi: lai_palace_name = p["宫名"]; break
-    lai_desc = f"月柱{GAN[month_gan_idx]}{month_zhi}入{lai_palace_name}"
-    
-    for p in places:
-        if p["地支"] == month_zhi:
+        if p.get("天干") == year_gan:
             stars = "、".join(p.get("主星", [])) or "空宫"
-            return {"宫名":p["宫名"],"地支":month_zhi,"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
-                    "四化":p.get("四化",{}),"释义":f"来因宫在{p['宫名']}({lai_desc})——一生课题在于{p['宫名']}领域"}
-    return {"宫名":"未找到","地支":month_zhi,"释义":"来因宫定位异常"}
+            return {"宫名":p["宫名"],"地支":p.get("地支",""),"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
+                    "四化":p.get("四化",{}),
+                    "释义":f"来因宫在{p['宫名']}(年干{year_gan}落{p.get('天干','')}{p.get('地支','')})——一生课题在于{p['宫名']}领域"}
+    return {"宫名":"未找到","释义":"来因宫定位异常"}
 
 
 # ========== 以下是原 __main__ 测试代码 ==========
