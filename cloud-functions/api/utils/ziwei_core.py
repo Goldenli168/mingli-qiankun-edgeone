@@ -862,6 +862,7 @@ def _build_summary_context(result, patterns):
 # ===== LLM 自然语言流年简评（DeepSeek API，模板fallback） =====
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+_LLM_CACHE = {}  # {cache_key: result_text}，进程生命周期内缓存，避免重复调用
 
 def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
@@ -898,17 +899,25 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     else:
         return None
     
+    # 缓存命中：同命盘+同类型直接复用，不重复调API
+    cache_key = f"{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
+    if cache_key in _LLM_CACHE:
+        return _LLM_CACHE[cache_key]
+    
     try:
         ctx_ssl = ssl.create_default_context()
         ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
         data = json.dumps({"model":"deepseek-chat","messages":[{"role":"user","content":prompt}],
-            "max_tokens":500,"temperature":0.8,"stream":False}).encode('utf-8')
+            "max_tokens":500,"temperature":0.7,"stream":False}).encode('utf-8')
         req = urllib.request.Request(DEEPSEEK_URL, data=data,
             headers={'Content-Type':'application/json','Authorization':f'Bearer {DEEPSEEK_API_KEY}','User-Agent':'mq/1.0'})
         with urllib.request.urlopen(req, timeout=20, context=ctx_ssl) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             content = result['choices'][0]['message']['content'].strip()
-            return content if len(content) > 10 else None
+            if len(content) > 10:
+                _LLM_CACHE[cache_key] = content
+                return content
+            return None
     except Exception:
         return None
 
