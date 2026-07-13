@@ -742,7 +742,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         # P1: 财富级别定性评估
         "财富级别": _assess_wealth_level(places, _natal_patterns),
         # P3: 来因宫（月柱地支定位法，与文墨天机一致）
-        "来因宫": _find_laiyin_palace(places, year_gan, lunar_month),
+        "来因宫": _find_laiyin_palace(places, year_gan, ZHI[year_zhi_i], lunar_month),
     }
 
     # ① 八字+紫微联合解读：注入喜用神
@@ -2383,19 +2383,30 @@ def _assess_wealth_level(places, patterns):
 # ===== 来因宫（月柱地支定位法 — 与文墨天机/钦天四化一致）=====
 # 算法: 五虎遁月 → 农历月柱地支 → 对应本命十二宫
 # 例: 丁壬年五虎遁起壬寅, 六月=丁未, 地支未→夫妻宫
-def _find_laiyin_palace(places, year_gan, lunar_month):
+def _find_laiyin_palace(places, year_gan, year_zhi, lunar_month):
     """来因宫 = 生年年干所在的宫位（文墨天机/梁派飞星标准算法）
     
-    原理: 每个本命宫位通过五虎遁分配了天干。生年年干唯一匹配其中一个宫位。
-    例: 丁卯年→夫妻宫(丁未), 癸巳年→福德宫(癸亥)
+    原理: 五虎遁给十二宫分配天干, 年干匹配的宫位即为来因宫。
+    当10天干配12地支产生重复时, 优先选与年支相同的那个。
+    例: 壬寅年→年干壬在兄弟(壬子)和父母(壬寅), 年支寅→选父母
     """
+    candidates = []
     for p in places:
         if p.get("天干") == year_gan:
-            stars = "、".join(p.get("主星", [])) or "空宫"
-            return {"宫名":p["宫名"],"地支":p.get("地支",""),"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
-                    "四化":p.get("四化",{}),
-                    "释义":f"来因宫在{p['宫名']}(年干{year_gan}落{p.get('天干','')}{p.get('地支','')})——一生课题在于{p['宫名']}领域"}
-    return {"宫名":"未找到","释义":"来因宫定位异常"}
+            candidates.append(p)
+    
+    if len(candidates) == 1:
+        p = candidates[0]
+    elif len(candidates) > 1:
+        # 破平: 优先选与年支匹配的
+        p = next((p for p in candidates if p.get("地支") == year_zhi), candidates[0])
+    else:
+        return {"宫名":"未找到","释义":"来因宫定位异常"}
+    
+    stars = "、".join(p.get("主星", [])) or "空宫"
+    return {"宫名":p["宫名"],"地支":p.get("地支",""),"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
+            "四化":p.get("四化",{}),
+            "释义":f"来因宫在{p['宫名']}(年干{year_gan}落{p.get('天干','')}{p.get('地支','')})——一生课题在于{p['宫名']}领域"}
 
 
 # ========== 以下是原 __main__ 测试代码 ==========
