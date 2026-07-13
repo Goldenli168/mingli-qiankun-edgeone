@@ -3,6 +3,7 @@
 基于 iztro-py 排盘，联合八字喜用神解读
 """
 
+import os
 import datetime
 
 # ===== 天干地支 =====
@@ -774,7 +775,76 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
+    # ③b LLM 自然语言流年简评（当前年，替代模板）
+    import datetime as _dt
+    _now = _dt.datetime.now().year
+    for ln in _liunian_raw:
+        if ln["年份"] == _now:
+            # 构建简化的命盘上下文
+            dayun_now = _find_dayun_for_age(result["大运"], _now - solar_year)
+            ctx = {
+                "birth": result["基本信息"]["公历"],
+                "bazi": result.get("八字联合",{}).get("提示",""),
+                "patterns": "、".join([p["name"] for p in _natal_patterns[:4]]),
+                "ming": result["命宫地支"], "shen": result["身宫地支"],
+                "laiyin": result["来因宫"]["宫名"],
+                "dayun": dayun_now,
+                "ln_gz": ln["流年干支"],
+                "ln_sihua": ln.get("流年干支",""),
+                "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"), "health": ln.get("健康分","?"),
+                "ln_brief_old": ln["简评"],
+            }
+            llm = _llm_liunian_brief(ctx)
+            if llm:
+                ln["简评"] = llm
+            break
+    
     return result
+
+
+# ===== LLM 自然语言流年简评（DeepSeek API，模板fallback） =====
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+
+def _llm_liunian_brief(chart_context: dict) -> str | None:
+    """调用 DeepSeek 生成个性化流年简评，失败返回 None 回退到模板"""
+    import json, urllib.request, ssl
+    
+    prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前流年写一段150字左右的白话简评。
+风格要求：自然口语，像朋友聊天分析，不要机械罗列星曜名，要有情绪和节奏感。
+命盘信息：
+- 出生：{chart_context.get('birth','')}
+- 八字日主：{chart_context.get('bazi','')}
+- 本命格局：{chart_context.get('patterns','')}
+- 命宫：{chart_context.get('ming','')}，身宫：{chart_context.get('shen','')}
+- 来因宫：{chart_context.get('laiyin','')}
+- 当前大运：{chart_context.get('dayun','')}
+- 当前流年干支：{chart_context.get('ln_gz','')}，流年四化：{chart_context.get('ln_sihua','')}
+- 评分：事业{chart_context.get('career','?')} 财富{chart_context.get('wealth','?')} 健康{chart_context.get('health','?')}
+- 流年命宫：{chart_context.get('ln_palace','')}，主星：{chart_context.get('ln_stars','')}
+只输出简评内容，不要标题、不要markdown、不要引号包裹。"""
+    
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        data = json.dumps({
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.8,
+            "stream": False
+        }).encode('utf-8')
+        req = urllib.request.Request(DEEPSEEK_URL, data=data, 
+            headers={'Content-Type': 'application/json', 
+                     'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                     'User-Agent': 'mingli-qiankun/1.0'})
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            content = result['choices'][0]['message']['content'].strip()
+            return content if len(content) > 10 else None
+    except Exception:
+        return None
 
 
 def _zhi_to_for_monthly(places):
@@ -783,12 +853,15 @@ def _zhi_to_for_monthly(places):
     return d
 
 
+def _find_dayun_for_age(dayun_list, age):
+    for dy in dayun_list:
+        if dy.get('起始年龄', 0) <= age <= dy.get('结束年龄', 999):
+            return f"{dy.get('起始年龄')}-{dy.get('结束年龄')}岁,{dy.get('大运宫名','')},{dy.get('综合评级','')},{dy.get('综合评分','')}分"
+    return ""
+
+
 def _monthly_brief_compact(year, places, zhi_to_p, ming_branch, g="", z="", sihua=None):
-    """流年逐月简报：按流年太岁旋转，每年不同。
-    
-    算法: 流年太岁入某宫为该年流年命宫，正月从此开始逐月顺时针推。
-    例: 2026丙午年，太岁午入子女宫 → 正月子女宫 → 二月财帛宫 → ...
-    """
+    """流年逐月简报"""
     MONTHS = [("正二月",0,1), ("三四月",2,3), ("五六月",4,5),
               ("七八月",6,7), ("九十月",8,9), ("十一十二月",10,11)]
     ZHI_CHARS = list("子丑寅卯辰巳午未申酉戌亥")
