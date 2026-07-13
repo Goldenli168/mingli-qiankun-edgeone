@@ -775,26 +775,23 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 自然语言流年简评（当前年+未来2年，替代模板）
+    # ③b LLM 自然语言流年简评（当前年起所有未来年，替代模板）
     import datetime as _dt
     _now = _dt.datetime.now().year
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if _now <= yr <= _now + 2:
+        if yr >= _now:
             ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
             llm = _llm_generate("liunian", ctx)
             if llm:
                 ln["简评"] = llm
 
-    # ③c LLM 当前大运综合解读（替代模板）
-    _current_age = _now - solar_year
+    # ③c LLM 大运综合解读（全部10个大运，替代模板）
     for dy in result["大运"]:
-        if dy.get('起始年龄', 0) <= _current_age <= dy.get('结束年龄', 999):
-            dctx = _build_dayun_context(dy, result, _natal_patterns)
-            dllm = _llm_generate("dayun", dctx)
-            if dllm:
-                dy["综合解读"] = dllm
-            break
+        dctx = _build_dayun_context(dy, result, _natal_patterns)
+        dllm = _llm_generate("dayun", dctx)
+        if dllm:
+            dy["综合解读"] = dllm
 
     # ③d LLM 全局命盘总结（新增模块）
     sctx = _build_summary_context(result, _natal_patterns)
