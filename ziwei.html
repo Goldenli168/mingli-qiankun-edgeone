@@ -390,6 +390,12 @@
 
   <div id="palaceDetails"></div>
 
+  <!-- Stage 4: 全局命盘总结 -->
+  <div class="feihua-section" id="summaryTextSection" style="margin-bottom:20px; display:none;">
+    <h3>📜 命盘总结</h3>
+    <div id="summaryText" style="font-size:0.92em;line-height:1.8;color:var(--text);padding:12px 16px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border)"></div>
+  </div>
+
   <div class="feihua-section" id="patternSection" style="margin-bottom:20px;">
     <h3>☰ 命盘格局</h3>
     <div class="feihua-grid" id="patternGrid"></div>
@@ -666,6 +672,13 @@ function renderResult(data) {
     
     summaryHtml += '</div>';
     document.getElementById('summaryGrid').innerHTML = summaryHtml;
+  }
+
+  // Stage 4: 全局命盘总结
+  var summaryText = data['命盘总结'] || '';
+  if (summaryText) {
+    document.getElementById('summaryTextSection').style.display = 'block';
+    document.getElementById('summaryText').innerHTML = summaryText.replace(/\n/g, '<br>');
   }
 
   var daxian = data['大限信息'];

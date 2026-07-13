@@ -775,77 +775,137 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 自然语言流年简评（当前年，替代模板）
+    # ③b LLM 自然语言流年简评（当前年+未来2年，替代模板）
     import datetime as _dt
     _now = _dt.datetime.now().year
     for ln in _liunian_raw:
-        if ln["年份"] == _now:
-            # 构建简化的命盘上下文
-            dayun_now = _find_dayun_for_age(result["大运"], _now - solar_year)
-            ctx = {
-                "birth": result["基本信息"]["公历"],
-                "bazi": result.get("八字联合",{}).get("提示",""),
-                "patterns": "、".join([p["name"] for p in _natal_patterns[:4]]),
-                "ming": result["命宫地支"], "shen": result["身宫地支"],
-                "laiyin": result["来因宫"]["宫名"],
-                "dayun": dayun_now,
-                "ln_gz": ln["流年干支"],
-                "ln_sihua": ln.get("流年干支",""),
-                "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
-                "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
-                "parents": ln.get("父母分","?"), "health": ln.get("健康分","?"),
-                "ln_brief_old": ln["简评"],
-            }
-            llm = _llm_liunian_brief(ctx)
+        yr = ln["年份"]
+        if _now <= yr <= _now + 2:
+            ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
+            llm = _llm_generate("liunian", ctx)
             if llm:
                 ln["简评"] = llm
+
+    # ③c LLM 当前大运综合解读（替代模板）
+    _current_age = _now - solar_year
+    for dy in result["大运"]:
+        if dy.get('起始年龄', 0) <= _current_age <= dy.get('结束年龄', 999):
+            dctx = _build_dayun_context(dy, result, _natal_patterns)
+            dllm = _llm_generate("dayun", dctx)
+            if dllm:
+                dy["综合解读"] = dllm
             break
+
+    # ③d LLM 全局命盘总结（新增模块）
+    sctx = _build_summary_context(result, _natal_patterns)
+    sllm = _llm_generate("summary", sctx)
+    if sllm:
+        result["命盘总结"] = sllm
     
     return result
+
+
+def _build_liunian_context(ln, result, patterns, solar_year):
+    _now = __import__('datetime').datetime.now().year
+    dayun_now = _find_dayun_for_age(result["大运"], ln["年份"] - solar_year)
+    return {
+        "birth": result["基本信息"]["公历"],
+        "bazi": result.get("八字联合",{}).get("提示",""),
+        "patterns": "、".join([p["name"] for p in patterns[:4]]),
+        "ming": result["命宫地支"], "shen": result["身宫地支"],
+        "laiyin": result["来因宫"]["宫名"],
+        "dayun": dayun_now,
+        "ln_gz": ln["流年干支"],
+        "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
+        "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
+        "health": ln.get("健康分","?"),
+        "ln_brief_old": ln["简评"],
+    }
+
+def _build_dayun_context(dy, result, patterns):
+    twelves = []
+    for p in result["十二宫"]:
+        s = "、".join(p.get("主星",[])) or "空宫"
+        twelves.append(f'{p["宫名"]}({s})')
+    return {
+        "birth": result["基本信息"]["公历"],
+        "bazi": result.get("八字联合",{}).get("提示",""),
+        "patterns": "、".join([p["name"] for p in patterns[:4]]),
+        "laiyin": result["来因宫"]["宫名"],
+        "dayun_age": f'{dy.get("起始年龄","?")}-{dy.get("结束年龄","?")}岁',
+        "dayun_gong": dy.get("大运宫名",""),
+        "dayun_stars": "、".join(dy.get("主星",[])),
+        "dayun_score": dy.get("综合评分","?"),
+        "dayun_rating": dy.get("综合评级","?"),
+        "scores": {k: dy.get("评分",{}).get(k,50) for k in ["财富","事业","婚姻","子女","健康","父母"]},
+        "twelve": "，".join(twelves),
+    }
+
+def _build_summary_context(result, patterns):
+    twelves = []
+    for p in result["十二宫"]:
+        s = "、".join(p.get("主星",[])) or "空宫"
+        a = "、".join(p.get("辅星",[])[:3])
+        tag = "命宫" if p.get("是否命宫") else "身宫" if p.get("是否身宫") else ""
+        twelves.append(f'{p["宫名"]}{tag}({s}{"+"+a if a else ""})')
+    return {
+        "birth": result["基本信息"]["公历"],
+        "bazi": result.get("八字联合",{}).get("提示",""),
+        "patterns": "、".join([p["name"] for p in patterns]),
+        "laiyin": f'{result["来因宫"]["宫名"]}({result["来因宫"].get("释义","")})',
+        "wealth": result.get("财富级别",{}).get("级别","?"),
+        "ming": result["命宫地支"], "shen": result["身宫地支"],
+        "twelve": "；".join(twelves),
+    }
 
 
 # ===== LLM 自然语言流年简评（DeepSeek API，模板fallback） =====
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-def _llm_liunian_brief(chart_context: dict) -> str | None:
-    """调用 DeepSeek 生成个性化流年简评，失败返回 None 回退到模板"""
+def _llm_generate(gen_type: str, ctx: dict) -> str | None:
+    """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
     import json, urllib.request, ssl
     
-    prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前流年写一段200字左右的白话简评。
-风格要求：自然口语像朋友聊天，有情绪和节奏感，结合评分高低给出轻重缓急的建议。
-必须覆盖以下五个方面（评分高的多鼓励，评分低的给提醒和化解方法）：
-- 工作事业（{chart_context.get('career','?')}分）
-- 财富运势（{chart_context.get('wealth','?')}分）
-- 婚姻感情（{chart_context.get('marriage','?')}分）
-- 子女家庭（{chart_context.get('children','?')}分）
-- 身体健康（{chart_context.get('health','?')}分）
-命盘信息：
-- 出生：{chart_context.get('birth','')}
-- 八字日主：{chart_context.get('bazi','')}
-- 本命格局：{chart_context.get('patterns','')}
-- 命宫：{chart_context.get('ming','')}，身宫：{chart_context.get('shen','')}
-- 来因宫：{chart_context.get('laiyin','')}
-- 当前大运：{chart_context.get('dayun','')}
-- 流年干支：{chart_context.get('ln_gz','')}
-只输出简评内容，不要标题、不要markdown格式标记、不要引号包裹。"""
+    if gen_type == "liunian":
+        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}写一段200字左右的白话简评。
+风格：自然口语像朋友聊天，有情绪和节奏感，评分高的多鼓励，评分低的给提醒和化解方法。
+必须覆盖五个方面：
+- 工作事业({ctx.get('career','?')}分)
+- 财富运势({ctx.get('wealth','?')}分)
+- 婚姻感情({ctx.get('marriage','?')}分)
+- 子女家庭({ctx.get('children','?')}分)
+- 身体健康({ctx.get('health','?')}分)
+命盘：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，
+命宫{ctx.get('ming','')}身宫{ctx.get('shen','')}，来因宫{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。
+只输出简评，不要标题、markdown、引号包裹。"""
+    
+    elif gen_type == "dayun":
+        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前大运写一段150字白话解读。
+大运：{ctx.get('dayun_age','')}，{ctx.get('dayun_gong','')}宫，{ctx.get('dayun_score','')}分({ctx.get('dayun_rating','')})。
+维度：{ctx.get('scores','')}
+背景：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，来因宫{ctx.get('laiyin','')}。
+十二宫：{ctx.get('twelve','')}
+结合大运宫位主题和评分高低，口语化分析这十年核心趋势，不要罗列数据。"""
+    
+    elif gen_type == "summary":
+        prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
+出生{ctx.get('birth','')}，{ctx.get('bazi','')}。
+格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin','')}，财富级别：{ctx.get('wealth','')}。
+命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。
+十二宫：{ctx.get('twelve','')}
+口语化概括核心特质、优势领域、注意短板，点睛建议收尾。不要罗列星曜。"""
+    else:
+        return None
     
     try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        data = json.dumps({
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.8,
-            "stream": False
-        }).encode('utf-8')
-        req = urllib.request.Request(DEEPSEEK_URL, data=data, 
-            headers={'Content-Type': 'application/json', 
-                     'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                     'User-Agent': 'mingli-qiankun/1.0'})
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+        ctx_ssl = ssl.create_default_context()
+        ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
+        data = json.dumps({"model":"deepseek-chat","messages":[{"role":"user","content":prompt}],
+            "max_tokens":500,"temperature":0.8,"stream":False}).encode('utf-8')
+        req = urllib.request.Request(DEEPSEEK_URL, data=data,
+            headers={'Content-Type':'application/json','Authorization':f'Bearer {DEEPSEEK_API_KEY}','User-Agent':'mq/1.0'})
+        with urllib.request.urlopen(req, timeout=20, context=ctx_ssl) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             content = result['choices'][0]['message']['content'].strip()
             return content if len(content) > 10 else None
