@@ -814,12 +814,11 @@ def _llm_liunian_brief(chart_context: dict) -> str | None:
     
     prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前流年写一段200字左右的白话简评。
 风格要求：自然口语像朋友聊天，有情绪和节奏感，结合评分高低给出轻重缓急的建议。
-必须覆盖以下六个方面（评分高的多鼓励，评分低的给提醒和化解方法）：
+必须覆盖以下五个方面（评分高的多鼓励，评分低的给提醒和化解方法）：
 - 工作事业（{chart_context.get('career','?')}分）
 - 财富运势（{chart_context.get('wealth','?')}分）
 - 婚姻感情（{chart_context.get('marriage','?')}分）
 - 子女家庭（{chart_context.get('children','?')}分）
-- 父母长辈（{chart_context.get('parents','?')}分）
 - 身体健康（{chart_context.get('health','?')}分）
 命盘信息：
 - 出生：{chart_context.get('birth','')}
