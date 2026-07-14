@@ -875,7 +875,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     if gen_type == "liunian":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}输出两段，用三个竖线|||分隔：
-第一段：30字以内的punchline，涵盖五维（事业/财富/婚姻/子女/健康），一针见血，像老友一句话点醒你。
+第一段：50字以内的punchline，涵盖事业/财富/婚姻/子女/健康五维，一针见血像老友点醒你。
 第二段：100字白话详细分析，评分高的多鼓励，评分低的给提醒。
 五维：事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}
 命盘：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，
