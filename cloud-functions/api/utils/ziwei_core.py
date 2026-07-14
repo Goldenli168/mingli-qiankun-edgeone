@@ -791,9 +791,10 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
             llm = _llm_generate("liunian", ctx)
             if llm:
-                parts = llm.split("|||", 1)
-                ln["简评"] = parts[0].strip()[:35]
+                parts = llm.split("|||", 2)
+                ln["简评"] = parts[0].strip()[:50]
                 ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
+                ln["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
 
     # ③c LLM 大运综合解读+维度点评（一次调用覆盖全部）
     for dy in result["大运"]:
@@ -882,13 +883,14 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import json, urllib.request, ssl
     
     if gen_type == "liunian":
-        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}输出两段，用三个竖线|||分隔：
-第一段：50字以内的punchline，涵盖事业/财富/婚姻/子女/健康五维，一针见血像老友点醒你。
-第二段：100字白话详细分析，评分高的多鼓励，评分低的给提醒。
+        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}输出三段，用|||分隔：
+一：50字punchline（事业/财富/婚姻/子女/健康五维）。
+二：100字白话详细分析。
+三：六个月度关键提醒，格式为 正二月:15字内的提醒, 三四月:..., 五六月:..., 七八月:..., 九十月:..., 十一十二月:...。每月点出最需注意的一件事，一针见血。
 五维：事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}
 命盘：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，
 命宫{ctx.get('ming','')}身宫{ctx.get('shen','')}，来因宫{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。
-严格按格式输出，不要标题/markdown/引号。示例：事业冲家庭稳，感情别较真|||今年事业上升期但感情方面容易因工作疏忽对方，建议多花时间陪伴。"""
+严格用|||分隔三段，不要标题/markdown/引号。"""
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
