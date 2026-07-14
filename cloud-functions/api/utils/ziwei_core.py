@@ -775,12 +775,18 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 自然语言流年简评（当前6年覆盖大运后半段，不超过60s）
+    # ③b LLM 流年简评（本年度+当前大运剩余所有年）
     import datetime as _dt
     _now = _dt.datetime.now().year
+    _age = _now - solar_year
+    _dy_end = _now  # 默认只做今年
+    for dy in result["大运"]:
+        if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
+            _dy_end = solar_year + dy.get('结束年龄', _age)
+            break
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if _now <= yr <= _now + 5:
+        if _now <= yr <= _dy_end:
             ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
             llm = _llm_generate("liunian", ctx)
             if llm:
