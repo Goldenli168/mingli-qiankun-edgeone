@@ -796,19 +796,20 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
                 ln["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
 
-    # ③c LLM 大运综合解读+维度点评（一次调用覆盖全部）
+    # ③c LLM 当前大运综合解读+维度点评（仅当前大运，控API调用量）
     for dy in result["大运"]:
-        if _time.time() > _llm_deadline: break
-        dctx = _build_dayun_context(dy, result, _natal_patterns)
-        dllm = _llm_generate("dayun", dctx)
-        if dllm:
-            parts = dllm.split("|||")
-            dy["综合解读"] = parts[0].strip() if len(parts)>0 else dllm
-            # 解析维度点评: 财富:xxx|||事业:xxx|||...
-            dim_labels = ["财富","事业","婚姻","子女","父母","健康"]
-            for i, label in enumerate(dim_labels):
-                if i+1 < len(parts):
-                    dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
+        if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
+            if _time.time() > _llm_deadline: break
+            dctx = _build_dayun_context(dy, result, _natal_patterns)
+            dllm = _llm_generate("dayun", dctx)
+            if dllm:
+                parts = dllm.split("|||")
+                dy["综合解读"] = parts[0].strip() if len(parts)>0 else dllm
+                dim_labels = ["财富","事业","婚姻","子女","父母","健康"]
+                for i, label in enumerate(dim_labels):
+                    if i+1 < len(parts):
+                        dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
+            break
 
     # ③d LLM 全局命盘总结（新增模块）
     sctx = _build_summary_context(result, _natal_patterns)
