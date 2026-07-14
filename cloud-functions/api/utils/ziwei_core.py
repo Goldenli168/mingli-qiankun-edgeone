@@ -795,13 +795,19 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 ln["简评"] = parts[0].strip()[:35]
                 ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
 
-    # ③c LLM 大运综合解读（全部10个大运，50s硬超时保护）
+    # ③c LLM 大运综合解读+维度点评（一次调用覆盖全部）
     for dy in result["大运"]:
         if _time.time() > _llm_deadline: break
         dctx = _build_dayun_context(dy, result, _natal_patterns)
         dllm = _llm_generate("dayun", dctx)
         if dllm:
-            dy["综合解读"] = dllm
+            parts = dllm.split("|||")
+            dy["综合解读"] = parts[0].strip() if len(parts)>0 else dllm
+            # 解析维度点评: 财富:xxx|||事业:xxx|||...
+            dim_labels = ["财富","事业","婚姻","子女","父母","健康"]
+            for i, label in enumerate(dim_labels):
+                if i+1 < len(parts):
+                    dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:120]
 
     # ③d LLM 全局命盘总结（新增模块）
     sctx = _build_summary_context(result, _natal_patterns)
@@ -885,12 +891,14 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 严格按格式输出，不要标题/markdown/引号。示例：事业冲家庭稳，感情别较真|||今年事业上升期但感情方面容易因工作疏忽对方，建议多花时间陪伴。"""
     
     elif gen_type == "dayun":
-        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的当前大运写一段150字白话解读。
-大运：{ctx.get('dayun_age','')}，{ctx.get('dayun_gong','')}宫，{ctx.get('dayun_score','')}分({ctx.get('dayun_rating','')})。
-维度：{ctx.get('scores','')}
+        sc = ctx.get('scores','')
+        prompt = f"""你是资深紫微斗数命理师。请为以下命盘的大运{ctx.get('dayun_age','')}({ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分/{ctx.get('dayun_rating','')})输出7段，用|||分隔：
+第1段：150字白话总体解读。
+第2-7段：分别针对财富(财运)、事业(官禄)、婚姻(夫妻)、子女(子田)、父母(父母)、健康(疾厄)各写一句≤40字点评，结合宫位和分数，一针见血。
+维度参考：{sc}
 背景：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，来因宫{ctx.get('laiyin','')}。
 十二宫：{ctx.get('twelve','')}
-结合大运宫位主题和评分高低，口语化分析这十年核心趋势，不要罗列数据。"""
+严格用|||分隔7段，不要标题/markdown/引号。示例：十年事业财运稳步上升，但感情方面需多加经营|||财运稳中有升，但忌投机|||事业有贵人相助，适合深耕专业|||感情易因工作繁忙而疏远|||子女运平顺|||父母健康需关注|||注意肠胃问题"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。

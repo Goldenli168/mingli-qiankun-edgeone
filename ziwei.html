@@ -721,13 +721,15 @@ function renderResult(data) {
     // 八字联合卡
     var baziJoint = data['八字联合'] || {};
     if (baziJoint['提示']) {
-      var xiYong = (baziJoint['喜用神']||[]).join('、');
+      var xiYong = (baziJoint['喜用神']||[]);
+      var wuxingColor = {'金':'#ffd700','木':'#2ecc71','水':'#3498db','火':'#e74c3c','土':'#c9a84c'};
+      var xiHtml = xiYong.map(function(x){return '<span style="display:inline-block;padding:2px 8px;margin:0 2px;border-radius:4px;font-weight:bold;color:#1a1a1a;background:'+(wuxingColor[x]||'#888')+'">'+x+'</span>';}).join('');
       var ji = (baziJoint['忌神']||[]).join('、');
       var jiPart = ji ? ' &nbsp; <span style="color:#e74c3c">忌' + ji + '</span>' : '';
       summaryHtml += '<div class="feihua-card bazi-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(52,152,219,0.08));border-color:rgba(52,152,219,0.2)">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--gold)">八字联合 · 喜用神</div>' +
         '<div style="text-align:center;font-size:1em;margin:8px 0">日主<b>' + (baziJoint['日主']||'') + '</b> ' + (baziJoint['身强身弱']||'') + '</div>' +
-        '<div style="font-size:0.82em;text-align:center"><span style="color:#2ecc71">喜<span style="font-weight:bold">' + xiYong + '</span></span>' + jiPart + '</div>' +
+        '<div style="font-size:0.82em;text-align:center;margin:8px 0">' + xiHtml + jiPart + '</div>' +
         '<div style="font-size:0.75em;color:var(--text);text-align:center;margin-top:6px">' + (baziJoint['提示']||'') + '</div>' +
       '</div>';
     }
@@ -865,11 +867,21 @@ function renderResult(data) {
     var deepHtml = '';
     var overallDesc = dy['综合解读'] || '';
     if (overallDesc) deepHtml += '<div class="deep-title">综合解读</div><div class="deep-text">' + overallDesc + '</div>';
+    // LLM 维度点评（P2）
+    var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
+    var llmScore = dy['评分'] || {};
+    for (var k in llmDims) {
+      var t = llmScore[k+'_llm'] || '';
+      if (t) deepHtml += '<div class="dim-section"><span class="dim-label ' + (dimClsMap[k]||'') + '">' + llmDims[k] + '</span><span class="dim-desc">' + t + '</span></div>';
+    }
+    // 模板维度（fallback，无LLM时用）
     var deepDims = dy['深度解读'] || {};
-    for (var ddi = 0; ddi < dims.length; ddi++) {
-      var dd = dims[ddi];
-      var ddText = deepDims[dd] || '';
-      if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
+    if (!llmScore['财富_llm']) {
+      for (var ddi = 0; ddi < dims.length; ddi++) {
+        var dd = dims[ddi];
+        var ddText = deepDims[dd] || '';
+        if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
+      }
     }
 
     var stateCls = '';
