@@ -169,6 +169,9 @@
   .dayun-deep { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .dayun-card.expanded .dayun-deep { display: block; }
   .dayun-card.expanded { max-width: none; width: 100%; flex-basis: 100%; }
+  .dayun-card.past { opacity: 0.55; }
+  .dayun-card.past:hover { opacity: 1; }
+  .dayun-card.future { border-color: rgba(201,168,76,0.15); background: rgba(17,24,39,0.6); }
   .dayun-deep .deep-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
   .dayun-deep .deep-text { font-size: 0.7em; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
   .dayun-deep .dim-section { margin-bottom: 6px; }
@@ -282,12 +285,18 @@
     .navbar { padding: 10px 16px; }
   }
   @media (max-width: 480px) {
-    .palace-grid { gap: 2px; }
-    .palace-cell { padding: 4px 3px; border-radius: 6px; min-height: 50px; }
-    .palace-name { font-size: 0.65em; }
+    .palace-grid { gap: 2px; grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
+    .palace-grid .palace-cell.center { grid-column: span 2; min-height: 36px; font-size: 0.62em; }
+    .palace-cell { padding: 6px 5px; border-radius: 6px; min-height: 52px; }
+    .palace-name { font-size: 0.7em; }
     .palace-gz { font-size: 0.58em; }
-    .palace-main-stars { font-size: 0.6em; }
+    .palace-main-stars { font-size: 0.62em; }
+    .palace-aux-stars { display: none; }
     .overview-info { grid-template-columns: 1fr; }
+    .liunian-table th:nth-child(n+6), .liunian-table td:nth-child(n+6) { display: none; }
+    .liunian-table .ln-brief { max-width: 120px; font-size: 0.78em; }
+    .liunian-filter { flex-wrap: wrap; }
+    .dayun-card { min-width: 100%; max-width: 100%; }
   }
 </style>
 </head>
@@ -370,7 +379,18 @@
 
 <div class="loading" id="loading">
   <div class="spinner"></div>
-  <div class="loading-text">正在排盘分析，请稍候…</div>
+  <div class="loading-text" id="loadingText">正在排盘分析，请稍候…</div>
+  <div class="loading-stages" id="loadingStages" style="display:none;margin-top:8px;font-size:0.78em;color:var(--text-dim)">
+    <span style="color:var(--gold)">⏳</span> AI 正在进行深度分析，预计 30-50 秒，请耐心等待…
+  </div>
+</div>
+
+<div class="error-section" id="errorSection" style="display:none;max-width:720px;margin:20px auto;padding:0 20px">
+  <div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:10px;padding:20px;text-align:center">
+    <div style="font-size:1.2em;color:var(--red-light);margin-bottom:8px">分析超时</div>
+    <div style="font-size:0.88em;color:var(--text-dim);margin-bottom:14px">AI 分析耗时过长，建议稍后重试或查看缓存结果</div>
+    <button onclick="doAnalyze()" style="padding:8px 24px;background:var(--gold);color:#1a1a1a;border:none;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:2px">重试分析</button>
+  </div>
 </div>
 
 <div class="result-section" id="result">
@@ -583,6 +603,8 @@ function doAnalyze() {
   var btn = document.getElementById('btnAnalyze');
   btn.disabled = true;
   document.getElementById('loading').classList.add('show');
+  document.getElementById('loadingStages').style.display = 'block';
+  document.getElementById('errorSection').style.display = 'none';
   document.getElementById('result').classList.remove('show');
 
   // 检查缓存
@@ -616,10 +638,15 @@ function doAnalyze() {
       }));
     } catch(e) {}
   })
-  .catch(function(e) { alert('分析失败：' + e.message); })
+  .catch(function(e) {
+    document.getElementById('errorSection').style.display = 'block';
+    document.getElementById('loading').classList.remove('show');
+    btn.disabled = false;
+  })
   .finally(function() {
     btn.disabled = false;
     document.getElementById('loading').classList.remove('show');
+    document.getElementById('loadingStages').style.display = 'none';
   });
 }
 
@@ -711,9 +738,17 @@ function renderResult(data) {
 
   // Stage 4: 全局命盘总结
   var summaryText = data['命盘总结'] || '';
+  var stSec = document.getElementById('summaryTextSection');
   if (summaryText) {
-    document.getElementById('summaryTextSection').style.display = 'block';
+    stSec.style.display = 'block';
     document.getElementById('summaryText').innerHTML = summaryText.replace(/\n/g, '<br>');
+    // P1#4: 放到命盘总览后面
+    var overviewCard = document.getElementById('overviewCard');
+    if (overviewCard && overviewCard.nextSibling !== stSec) {
+      overviewCard.parentNode.insertBefore(stSec, overviewCard.nextSibling);
+    }
+  } else {
+    stSec.style.display = 'none';
   }
 
   var daxian = data['大限信息'];
@@ -837,7 +872,12 @@ function renderResult(data) {
       if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
     }
 
-    dayunHtml += '<div class="dayun-card' + (isCurrent ? ' current' : '') + '" onclick="this.classList.toggle(\'expanded\')">' +
+    var stateCls = '';
+    var nowAge = new Date().getFullYear() - (data['基本信息']||{}).birthYear || (new Date().getFullYear() - parseInt(document.getElementById('year').value));
+    if (isCurrent) stateCls = ' current';
+    else if (dy['结束年龄'] < nowAge) stateCls = ' past';
+    else stateCls = ' future';
+    dayunHtml += '<div class="dayun-card' + stateCls + '" onclick="this.classList.toggle(\'expanded\')">' +
       '<div class="dayun-header">' +
         '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info" style="color:var(--gold)">' + (dy['大运宫名']||(dy['天干']||'')+(dy['地支']||'')+'宫') + '</span></div>' +
         '<span class="dayun-badge ' + ratingCls + '">' + totalScore + ' ' + rating + '</span>' +
@@ -849,6 +889,11 @@ function renderResult(data) {
     '</div>';
   }
   document.getElementById('dayunTimeline').innerHTML = dayunHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无大运数据</p>';
+  // P0#3: 当前大运默认展开
+  setTimeout(function() {
+    var cur = document.querySelector('.dayun-card.current');
+    if (cur) cur.classList.add('expanded');
+  }, 50);
 
   var feihuaList = data['飞化分析'] || [];
   var feihuaHtml = '';

@@ -775,11 +775,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 流年简评（本年度+当前大运剩余所有年）
-    import datetime as _dt
-    _now = _dt.datetime.now().year
+    # ③b LLM 流年简评（本年度+当前大运剩余所有年，50s硬超时保护）
+    import datetime as _dt, time as _time
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50
     _age = _now - solar_year
-    _dy_end = _now  # 默认只做今年
+    _dy_end = _now
     for dy in result["大运"]:
         if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
             _dy_end = solar_year + dy.get('结束年龄', _age)
@@ -787,15 +787,17 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     for ln in _liunian_raw:
         yr = ln["年份"]
         if _now <= yr <= _dy_end:
+            if _time.time() > _llm_deadline: break  # 超时停止，保留已有结果
             ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
             llm = _llm_generate("liunian", ctx)
             if llm:
                 parts = llm.split("|||", 1)
-                ln["简评"] = parts[0].strip()[:35]  # 表格展示punchline
-                ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""  # 折叠详情
+                ln["简评"] = parts[0].strip()[:35]
+                ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
 
-    # ③c LLM 大运综合解读（全部10个大运，替代模板）
+    # ③c LLM 大运综合解读（全部10个大运，50s硬超时保护）
     for dy in result["大运"]:
+        if _time.time() > _llm_deadline: break
         dctx = _build_dayun_context(dy, result, _natal_patterns)
         dllm = _llm_generate("dayun", dctx)
         if dllm:
