@@ -796,26 +796,51 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
                 ln["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
 
-    # ③c LLM 当前大运综合解读+维度点评（仅当前大运，控API调用量）
+    # ③b+c+d LLM 并行批量生成(流年+大运+总结),控总时
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    tasks = []  # [(gen_type, target_ref, ctx), ...]
+    
+    # 流年
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if _now <= yr <= _dy_end:
+            tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
+    
+    # 大运(全部)
     for dy in result["大运"]:
-        if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
-            if _time.time() > _llm_deadline: break
-            dctx = _build_dayun_context(dy, result, _natal_patterns)
-            dllm = _llm_generate("dayun", dctx)
-            if dllm:
-                parts = dllm.split("|||")
-                dy["综合解读"] = parts[0].strip() if len(parts)>0 else dllm
-                dim_labels = ["财富","事业","婚姻","子女","父母","健康"]
-                for i, label in enumerate(dim_labels):
-                    if i+1 < len(parts):
-                        dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
-            break
-
-    # ③d LLM 全局命盘总结（新增模块）
-    sctx = _build_summary_context(result, _natal_patterns)
-    sllm = _llm_generate("summary", sctx)
-    if sllm:
-        result["命盘总结"] = sllm
+        tasks.append(("dayun", dy, _build_dayun_context(dy, result, _natal_patterns)))
+    
+    # 总结
+    tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    
+    # 并行执行, 5线程, 50s超时总控
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
+        for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
+            t = futures[fut]
+            try:
+                llm = fut.result(timeout=10)
+                gen_type, target, ctx = t
+                if not llm: continue
+                
+                if gen_type == "liunian":
+                    parts = llm.split("|||", 2)
+                    target["简评"] = parts[0].strip()[:50]
+                    target["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
+                    target["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
+                    
+                elif gen_type == "dayun":
+                    parts = llm.split("|||")
+                    target["综合解读"] = parts[0].strip() if parts else llm
+                    for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
+                        if i+1 < len(parts):
+                            target.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
+                            
+                elif gen_type == "summary":
+                    target["命盘总结"] = llm
+            except Exception:
+                pass  # 单个失败不影响整体
     
     return result
 
