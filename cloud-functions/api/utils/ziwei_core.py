@@ -807,7 +807,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             dim_labels = ["财富","事业","婚姻","子女","父母","健康"]
             for i, label in enumerate(dim_labels):
                 if i+1 < len(parts):
-                    dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:120]
+                    dy.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
 
     # ③d LLM 全局命盘总结（新增模块）
     sctx = _build_summary_context(result, _natal_patterns)
@@ -894,7 +894,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         sc = ctx.get('scores','')
         prompt = f"""你是资深紫微斗数命理师。请为以下命盘的大运{ctx.get('dayun_age','')}({ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分/{ctx.get('dayun_rating','')})输出7段，用|||分隔：
 第1段：150字白话总体解读。
-第2-7段：分别针对财富(财运)、事业(官禄)、婚姻(夫妻)、子女(子田)、父母(父母)、健康(疾厄)各写一句≤40字点评，结合宫位和分数，一针见血。
+第2-7段：财富、事业、婚姻、子女、父母、健康。每段80-120字，列举可能发生的事件场景，给出2-3条具体建议。结合宫位分数，口语化但不敷衍。
+示例：财运稳中有升，可能通过专业技能或副业获得额外收入。但要注意合伙投资的陷阱，建议分散风险、避免跟风。|||事业有贵人相助，适合深耕专业领域或争取管理岗位...
 维度参考：{sc}
 背景：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，来因宫{ctx.get('laiyin','')}。
 十二宫：{ctx.get('twelve','')}
@@ -919,7 +920,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ctx_ssl = ssl.create_default_context()
         ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
         data = json.dumps({"model":"deepseek-chat","messages":[{"role":"user","content":prompt}],
-            "max_tokens":500,"temperature":0.7,"stream":False}).encode('utf-8')
+            "max_tokens":800,"temperature":0.7,"stream":False}).encode('utf-8')
         req = urllib.request.Request(DEEPSEEK_URL, data=data,
             headers={'Content-Type':'application/json','Authorization':f'Bearer {DEEPSEEK_API_KEY}','User-Agent':'mq/1.0'})
         with urllib.request.urlopen(req, timeout=20, context=ctx_ssl) as resp:
