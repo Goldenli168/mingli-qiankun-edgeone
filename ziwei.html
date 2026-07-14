@@ -935,8 +935,8 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       '<td>' + (ln['流年干支']||'') + '</td>' +
       '<td class="ln-ss">' + (ln['十神']||'') + '</td>' +
       '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
-      '<td class="ln-brief" style="cursor:' + (hasDetail ? 'pointer' : 'default') + '" onclick="' + (hasDetail ? 'toggleDetail(\'' + detailId + '\')' : '') + '">' +
-        (ln['简评']||'') + (hasDetail ? ' <span style="font-size:0.8em;color:var(--gold)" id="' + detailId + '-icon">▾</span>' : '') +
+      '<td class="ln-brief' + (hasDetail ? ' ln-tip' : '') + '"' + (hasDetail ? ' data-tip="' + escapeHtml(ln['简评详情']||'') + '"' : '') + '>' +
+        (ln['简评']||'') +
       '</td>';
     for (var di = 0; di < dimCfg.length; di++) {
       var dimScore = ln[dimCfg[di].key + '分'] || '';
@@ -944,12 +944,6 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
-    // 简评详情折叠行（仅LLM生成的有详情）
-    if (hasDetail) {
-      html += '<tr id="' + detailId + '" class="ln-detail-row" style="display:none"><td colspan="' + (5 + dimCfg.length) + '" style="padding:8px 14px;font-size:0.82em;line-height:1.7;color:var(--text);background:var(--bg-card2);border-left:3px solid var(--gold)">' +
-        ln['简评详情'] +
-      '</td></tr>';
-    }
     // 逐月卡片面板（仅当前+未来2年有数据）
     if (ln['逐月'] && ln['逐月'].length > 0) {
       html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
@@ -974,18 +968,51 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
   return html;
 }
 
-function toggleDetail(id) {
-  var row = document.getElementById(id);
-  var icon = document.getElementById(id + '-icon');
-  if (!row) return;
-  if (row.style.display === 'none' || !row.style.display) {
-    row.style.display = '';
-    if (icon) icon.innerHTML = '▴';
-  } else {
-    row.style.display = 'none';
-    if (icon) icon.innerHTML = '▾';
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// 简评浮窗：hover/click 展示详情
+(function() {
+  var tip = document.createElement('div');
+  tip.id = 'brief-tooltip';
+    tip.style.cssText = 'display:none;position:fixed;z-index:9999;max-width:320px;padding:12px 16px;background:var(--bg-card);border:2px solid var(--gold);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,0.35);font-size:0.84em;line-height:1.75;color:var(--text);pointer-events:none;';
+    document.body.appendChild(tip);
+
+    // 给 .ln-tip 加样式
+    var s = document.createElement('style');
+    s.textContent = '.ln-tip{cursor:pointer;text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:3px;text-decoration-style:dotted}.ln-tip:hover{color:var(--gold)}';
+    document.head.appendChild(s);
+
+  var activeEl = null;
+  function show(e) {
+    var txt = this.getAttribute('data-tip');
+    if (!txt) return;
+    tip.textContent = txt;
+    tip.style.display = 'block';
+    var x = e.clientX + 16, y = e.clientY - 10;
+    if (x + 330 > window.innerWidth) x = e.clientX - 330;
+    if (y + 100 > window.innerHeight) y = window.innerHeight - 110;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    activeEl = this;
   }
-}
+  function hide() { tip.style.display = 'none'; activeEl = null; }
+
+  document.addEventListener('mouseover', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (el && el !== activeEl) show.call(el, e);
+  });
+  document.addEventListener('mouseout', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (el && el === activeEl && !el.contains(e.relatedTarget)) hide();
+  });
+  // 点击切换（移动端）
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (!el) { hide(); return; }
+    if (el === activeEl && tip.style.display === 'block') { hide(); return; }
+    show.call(el, e); tip.style.pointerEvents = 'auto';
+    setTimeout(function() { tip.style.pointerEvents = 'none'; }, 2000);
+  });
+})();
 </script>
 </body>
 </html>
