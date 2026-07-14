@@ -928,18 +928,28 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
     var isNow = (ln['年份'] === nowYear);
     var sc = ln['评分']||50;
     var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? 'var(--gold)' : 'var(--red-light)';
+    var detailId = 'ln-detail-' + ln['年份'];
+    var hasDetail = (ln['简评详情'] && ln['简评详情'].length > 5);
     html += '<tr' + (isNow ? ' class="ln-now"' : '') + '>' +
       '<td class="ln-yr">' + ln['年份'] + (isNow?' ▸':'') + '</td>' +
       '<td>' + (ln['流年干支']||'') + '</td>' +
       '<td class="ln-ss">' + (ln['十神']||'') + '</td>' +
       '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
-      '<td class="ln-brief">' + (ln['简评']||'') + '</td>';
+      '<td class="ln-brief" style="cursor:' + (hasDetail ? 'pointer' : 'default') + '" onclick="' + (hasDetail ? 'toggleDetail(\'' + detailId + '\')' : '') + '">' +
+        (ln['简评']||'') + (hasDetail ? ' <span style="font-size:0.8em;color:var(--gold)" id="' + detailId + '-icon">▾</span>' : '') +
+      '</td>';
     for (var di = 0; di < dimCfg.length; di++) {
       var dimScore = ln[dimCfg[di].key + '分'] || '';
       var dimStars = starMap[ln[dimCfg[di].key]] || '—';
       html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
+    // 简评详情折叠行（仅LLM生成的有详情）
+    if (hasDetail) {
+      html += '<tr id="' + detailId + '" class="ln-detail-row" style="display:none"><td colspan="' + (5 + dimCfg.length) + '" style="padding:8px 14px;font-size:0.82em;line-height:1.7;color:var(--text);background:var(--bg-card2);border-left:3px solid var(--gold)">' +
+        ln['简评详情'] +
+      '</td></tr>';
+    }
     // 逐月卡片面板（仅当前+未来2年有数据）
     if (ln['逐月'] && ln['逐月'].length > 0) {
       html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
@@ -962,6 +972,19 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
   }
   html += '</tbody></table></div>';
   return html;
+}
+
+function toggleDetail(id) {
+  var row = document.getElementById(id);
+  var icon = document.getElementById(id + '-icon');
+  if (!row) return;
+  if (row.style.display === 'none' || !row.style.display) {
+    row.style.display = '';
+    if (icon) icon.innerHTML = '▴';
+  } else {
+    row.style.display = 'none';
+    if (icon) icon.innerHTML = '▾';
+  }
 }
 </script>
 </body>
