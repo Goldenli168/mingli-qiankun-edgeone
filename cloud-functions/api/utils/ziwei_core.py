@@ -761,7 +761,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
             try:
-                llm = fut.result(timeout=5)
+                llm = fut.result(timeout=15)  # 大运要2000 tokens,留够API返回时间
                 gen_type, target, ctx = t
                 if not llm: continue
                 
@@ -858,13 +858,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深紫微斗数命理师。请为以下命盘的大运{ctx.get('dayun_age','')}({ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分/{ctx.get('dayun_rating','')})输出7段，用|||分隔：
-第1段：不低于100字的综合分析，覆盖此十年整体基调、核心机遇、主要风险点、重点关注领域，给出一条方向性人生建议。必须口语化、有人情味，不要说教。
-第2-7段：财富、事业、婚姻、子女、父母、健康。每段不低于100字，必须结合具体宫位分数和星曜特征，列举至少2个可能发生的事件场景，给出至少2条可操作的具体建议。对评分低于60的领域务必指出风险并给出化解方向。
-维度参考：{sc}
-背景：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，来因宫{ctx.get('laiyin','')}。
-十二宫：{ctx.get('twelve','')}
-严格用|||分隔7段，每段不少于100字，不要标题/markdown/引号。"""
+        prompt = f"""命盘大运{ctx.get('dayun_age','')}，{ctx.get('dayun_gong','')}宫，{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。输出7段用|||分隔：
+第1段≥100字：此十年整体基调、核心机遇、风险点、方向性建议。口语化有人情味。
+第2-7段各≥100字：财富、事业、婚姻、子女、父母、健康。结合维度分指出得失，低于60分须说风险给化解方向，每条列具体建议。维度：{sc}。
+背景：{ctx.get('birth','')}, {ctx.get('bazi','')}, 格局{ctx.get('patterns','')}, 来因{ctx.get('laiyin','')}，宫位{ctx.get('twelve','')[:300]}|||分隔7段无标题"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
