@@ -6,6 +6,8 @@ EdgeOne Pages Cloud Function - Flask 模式
 
 import sys
 import os
+import secrets
+import hashlib
 
 # 将 cloud-functions 目录加入 Python 路径，确保 utils 模块可被正确导入
 sys.path.insert(0, os.path.dirname(__file__))
@@ -20,6 +22,42 @@ from utils.ziwei_core import full_ziwei_analysis
 
 app = Flask(__name__)
 
+# ========== API 鉴权配置 ==========
+#
+# 部署时在 EdgeOne 环境变量中设置 ML_API_KEY
+# 本地开发可通过环境变量或默认值自动生成
+#
+# 安全策略:
+#   - /health 无需鉴权
+#   - OPTIONS (CORS 预检) 无需鉴权
+#   - 其他所有 API 需要 X-API-Key 头
+
+def _get_api_key():
+    """获取 API Key: 环境变量 > 根据机器信息自动生成 > 默认开发密钥"""
+    key = os.environ.get("ML_API_KEY", "")
+    if key:
+        return key
+    # 本地开发: 基于主机名生成确定性密钥(免配)
+    hostname = os.environ.get("COMPUTERNAME", "localhost")
+    return f"ml-dev-{hashlib.sha256(hostname.encode()).hexdigest()[:12]}"
+
+API_KEY = _get_api_key()
+
+# 白名单路由: 不需要鉴权
+_AUTH_WHITELIST = {"/health"}
+
+@app.before_request
+def require_api_key():
+    """API 鉴权中间件 — 除白名单路由外均需验证 X-API-Key"""
+    if request.method == "OPTIONS":
+        return None  # CORS 预检放行
+    if request.path in _AUTH_WHITELIST:
+        return None
+
+    client_key = request.headers.get("X-API-Key", "")
+    if not client_key or client_key != API_KEY:
+        return jsonify({"error": "未授权访问", "code": 401}), 401
+
 # ========== 八字命理 API ==========
 
 @app.route("/analyze", methods=["POST", "OPTIONS"])
@@ -27,7 +65,7 @@ def analyze():
     if request.method == "OPTIONS":
         resp = app.make_default_options_response()
         resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         return resp
 
@@ -63,7 +101,7 @@ def ziwei_api():
     if request.method == "OPTIONS":
         resp = app.make_default_options_response()
         resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         return resp
 
@@ -142,4 +180,4 @@ def liunian_api():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v7.0"})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v7.6"})

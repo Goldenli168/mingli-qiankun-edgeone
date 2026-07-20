@@ -1,5 +1,5 @@
 """临时本地预览服务器 — 命理乾坤"""
-import sys, os
+import sys, os, hashlib
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, 'cloud-functions', 'api'))
 
@@ -7,6 +7,20 @@ from flask import Flask, request, jsonify, send_from_directory, send_file
 app = Flask(__name__)
 
 from utils.bazi_core import full_analysis
+
+# ========== API 鉴权（与 EdgeOne 云函数一致） ==========
+_API_KEY = os.environ.get("ML_API_KEY", "mingli-qiankun-v7")  # 本地开发用固定密钥
+_AUTH_WHITELIST = {"/health", "/"}
+
+@app.before_request
+def require_api_key():
+    if request.method == "OPTIONS":
+        return None
+    if request.path in _AUTH_WHITELIST:
+        return None
+    client_key = request.headers.get("X-API-Key", "")
+    if not client_key or client_key != _API_KEY:
+        return jsonify({"error": "未授权访问", "code": 401}), 401
 
 @app.route('/')
 def root():
@@ -23,7 +37,7 @@ def static_files(path):
 def analyze():
     if request.method == 'OPTIONS':
         resp = app.make_default_options_response()
-        resp.headers['Access-Control-Allow-Origin'] = '*'; resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Access-Control-Allow-Origin'] = '*'; resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
         resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'; return resp
     data = request.get_json(force=True)
     try:

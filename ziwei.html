@@ -4,59 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>命理乾坤 · 紫微斗数</title>
+<link rel="stylesheet" href="mingli-shared.css">
 <style>
-  :root {
-    --bg-dark: #0a0e1a; --bg-card: #111827; --bg-card2: #1a2236;
-    --gold: #c9a84c; --gold-light: #e8d48b;
-    --red: #c0392b; --red-light: #e74c3c;
-    --blue: #2980b9; --green: #27ae60;
-    --text: #e8e8e8; --text-dim: #8892a4;
-    --border: #2a3550; --purple: #9b59b6;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "SimSun", "宋体", serif;
-    background: var(--bg-dark); color: var(--text); min-height: 100vh;
-    background-image: radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 50%, rgba(192,57,43,0.03) 0%, transparent 50%);
-  }
+  /* ============================================================
+     紫微斗数页 — 专属样式 (Ziwei Page-Specific Styles)
+     共享样式参见: mingli-shared.css
+     ============================================================ */
 
-  .navbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; background: var(--bg-card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); }
-  .navbar .brand { font-size: 1.3em; color: var(--gold); letter-spacing: 6px; font-weight: bold; text-shadow: 0 0 20px rgba(201,168,76,0.25); }
-  .navbar .nav-tabs { display: flex; gap: 6px; }
-  .nav-tab { padding: 8px 22px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 0.92em; color: var(--text-dim); background: transparent; transition: all 0.3s; text-decoration: none; display: inline-block; letter-spacing: 2px; }
-  .nav-tab:hover { border-color: var(--gold); color: var(--gold); }
-  .nav-tab.active { background: rgba(201,168,76,0.12); border-color: var(--gold); color: var(--gold); }
+  /* ---- 结果区宽度 (紫微需要更宽) ---- */
+  .result-section { max-width: 1100px; }
 
-  .header { text-align: center; padding: 28px 20px 12px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(201,168,76,0.06) 0%, transparent 100%); }
-  .header h1 { font-size: 2em; color: var(--gold); letter-spacing: 8px; text-shadow: 0 0 30px rgba(201,168,76,0.3); }
-  .header .subtitle { color: var(--text-dim); font-size: 0.88em; margin-top: 6px; letter-spacing: 3px; }
-
-  .input-section { max-width: 720px; margin: 28px auto; padding: 0 20px; }
-  .input-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-  .input-card h2 { color: var(--gold); font-size: 1.15em; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); letter-spacing: 3px; }
-  .form-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .form-group { flex: 1; min-width: 100px; }
-  .form-group label { display: block; color: var(--text-dim); font-size: 0.84em; margin-bottom: 5px; letter-spacing: 1px; }
-  .form-group input, .form-group select { width: 100%; padding: 9px 11px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 1em; font-family: inherit; transition: border-color 0.3s; }
-  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 8px rgba(201,168,76,0.15); }
-  .sex-group { display: flex; gap: 12px; margin-top: 5px; }
-  .sex-btn { flex: 1; padding: 9px; text-align: center; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.3s; background: var(--bg-card2); color: var(--text-dim); font-family: inherit; font-size: 1em; }
-  .sex-btn.active-male { border-color: var(--blue); color: var(--blue); background: rgba(41,128,185,0.1); }
-  .sex-btn.active-female { border-color: var(--red-light); color: var(--red-light); background: rgba(231,76,60,0.08); }
-  .btn-analyze { width: 100%; padding: 13px; margin-top: 18px; background: linear-gradient(135deg, var(--gold) 0%, #a08030 100%); color: #1a1a1a; border: none; border-radius: 8px; font-size: 1.1em; font-family: inherit; letter-spacing: 4px; cursor: pointer; transition: all 0.3s; font-weight: bold; }
-  .btn-analyze:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(201,168,76,0.3); }
-  .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-  .loading { text-align: center; padding: 60px 20px; display: none; }
-  .loading.show { display: block; }
-  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { color: var(--text-dim); letter-spacing: 2px; }
-
-  .result-section { max-width: 1100px; margin: 30px auto; padding: 0 20px 60px; display: none; }
-  .result-section.show { display: block; }
-
+  /* ---- 命盘总览 ---- */
   .overview-card { background: var(--bg-card); border: 1px solid var(--gold); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; position: relative; }
   .overview-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold)); }
   .overview-card h3 { color: var(--gold); font-size: 1.05em; letter-spacing: 3px; margin-bottom: 14px; }
@@ -65,20 +23,11 @@
   .overview-item .label { font-size: 0.76em; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 4px; }
   .overview-item .value { font-size: 1.15em; color: var(--gold); font-weight: bold; }
 
+  /* ---- 十二宫网格 ---- */
   .palace-grid-wrapper { margin-bottom: 24px; }
   .palace-grid-wrapper h3 { color: var(--gold); font-size: 1.05em; letter-spacing: 3px; margin-bottom: 16px; }
-
-  .palace-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(4, auto);
-    gap: 6px;
-  }
-  .palace-cell {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 8px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
-    min-height: 80px;
-  }
+  .palace-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, auto); gap: 6px; }
+  .palace-cell { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; min-height: 80px; }
   .palace-cell:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(201,168,76,0.15); }
   .palace-cell.ming { border-color: var(--red-light); }
   .palace-cell.ming::before { content: '命'; position: absolute; top: 4px; right: 6px; font-size: 0.6em; color: var(--red-light); background: rgba(231,76,60,0.12); padding: 1px 5px; border-radius: 6px; }
@@ -87,7 +36,6 @@
   .palace-cell.ming.shen::before { right: 28px; }
   .palace-cell.center { background: var(--bg-card2); border: 1px dashed var(--border); cursor: default; min-height: auto; }
   .palace-cell.center:hover { transform: none; box-shadow: none; border-color: var(--border); }
-
   .palace-name { font-size: 0.85em; color: var(--gold); letter-spacing: 2px; margin-bottom: 4px; font-weight: bold; }
   .palace-gz { font-size: 0.68em; color: var(--text-dim); margin-bottom: 4px; }
   .palace-main-stars { font-size: 0.78em; color: var(--gold-light); margin-bottom: 3px; line-height: 1.4; }
@@ -107,6 +55,7 @@
   .sihua-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
   .palace-daxian { font-size: 0.62em; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 4px; margin-top: 3px; }
 
+  /* ---- 宫位详情浮窗 ---- */
   .palace-detail { display: none; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 10px; padding: 18px 20px; margin: 12px 0; position: relative; }
   .palace-detail.show { display: block; }
   .palace-detail::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--gold), transparent); }
@@ -115,6 +64,7 @@
   .palace-detail .close-btn { position: absolute; top: 10px; right: 14px; background: none; border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; width: 26px; height: 26px; border-radius: 50%; font-size: 0.85em; line-height: 24px; text-align: center; transition: all 0.3s; }
   .palace-detail .close-btn:hover { border-color: var(--gold); color: var(--gold); }
 
+  /* ---- 四化飞星 ---- */
   .sihua-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
   .sihua-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 14px; }
   .sihua-details { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -122,6 +72,7 @@
   .sihua-detail-item .label { font-size: 0.74em; color: var(--text-dim); margin-bottom: 4px; }
   .sihua-detail-item .value { font-size: 1.1em; font-weight: bold; }
 
+  /* ---- 大限信息 ---- */
   .daxian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
   .daxian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 14px; }
   .daxian-details { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -129,6 +80,7 @@
   .daxian-detail-item .label { font-size: 0.74em; color: var(--text-dim); margin-bottom: 4px; }
   .daxian-detail-item .value { font-size: 1.1em; font-weight: bold; color: var(--gold); }
 
+  /* ---- 大运卡片 ---- */
   .dayun-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .dayun-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .dayun-timeline { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -149,6 +101,7 @@
   .badge-pianxiong { background: rgba(231,76,60,0.14); color: var(--red-light); }
   .badge-daxiong { background: rgba(192,57,43,0.2); color: #e74c3c; }
 
+  /* ---- 大运五维评分条 ---- */
   .score-bars { margin: 6px 0; }
   .score-bar-row { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.72em; }
   .score-bar-label { width: 36px; color: var(--text-dim); flex-shrink: 0; text-align: right; padding-right: 6px; }
@@ -166,6 +119,7 @@
   .bar-parents .score-bar-fill { background: linear-gradient(90deg, #c9a84c, #e8d48b); }
   .bar-parents .score-bar-val { color: var(--gold-light); }
 
+  /* ---- 大运展开详情 ---- */
   .dayun-deep { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .dayun-card.expanded .dayun-deep { display: block; }
   .dayun-card.expanded { max-width: none; width: 100%; flex-basis: 100%; }
@@ -184,7 +138,7 @@
   .dayun-deep .dim-desc { font-size: 0.68em; color: var(--text-dim); line-height: 1.6; margin-left: 4px; }
   .dayun-card .expand-hint { font-size: 0.58em; color: var(--text-dim); text-align: center; margin-top: 6px; opacity: 0.7; }
 
-  /* 大运卡片内嵌流年迷你表 */
+  /* ---- 大运内嵌流年迷你表 ---- */
   .ln-mini-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); letter-spacing: 1px; }
   .ln-mini-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 6px; }
   .ln-mini-table { width: 100%; border-collapse: collapse; font-size: 0.62em; min-width: 500px; }
@@ -197,6 +151,7 @@
   .ln-mini-table .ln-now td { background: rgba(201,168,76,0.08); }
   .ln-mini-table tr:hover td { background: rgba(201,168,76,0.04); }
 
+  /* ---- 流年总表 ---- */
   .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .liunian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .liunian-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -220,6 +175,7 @@
   .liunian-filter button { padding: 6px 14px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 0.82em; transition: all 0.3s; }
   .liunian-filter button:hover { border-color: var(--gold); color: var(--gold); }
 
+  /* ---- 四化飞化分析 ---- */
   .feihua-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .feihua-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .feihua-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
@@ -243,15 +199,9 @@
   .feihua-card .fh-source .src-palace { color: var(--gold); font-weight: bold; }
   .feihua-card .fh-desc { font-size: 0.78em; color: var(--text); line-height: 1.7; }
 
-  .sync-banner {
-    max-width: 720px; margin: 18px auto 0; padding: 0 20px;
-  }
-  .sync-card {
-    background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(201,168,76,0.06) 100%);
-    border: 1px solid rgba(39,174,96,0.3); border-radius: 12px;
-    padding: 16px 22px; display: none; align-items: center;
-    justify-content: space-between; gap: 16px; flex-wrap: wrap;
-  }
+  /* ---- 八字同步横幅 ---- */
+  .sync-banner { max-width: 720px; margin: 18px auto 0; padding: 0 20px; }
+  .sync-card { background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(201,168,76,0.06) 100%); border: 1px solid rgba(39,174,96,0.3); border-radius: 12px; padding: 16px 22px; display: none; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .sync-card.show { display: flex; }
   .sync-card .sync-icon { font-size: 1.6em; flex-shrink: 0; }
   .sync-card .sync-info { flex: 1; min-width: 200px; }
@@ -259,22 +209,12 @@
   .sync-card .sync-detail { color: var(--text-dim); font-size: 0.82em; line-height: 1.5; }
   .sync-card .sync-detail strong { color: var(--gold); }
   .sync-card .sync-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .sync-card .btn-sync {
-    padding: 9px 20px; border: none; border-radius: 8px;
-    background: linear-gradient(135deg, var(--green) 0%, #1e8449 100%);
-    color: #fff; font-family: inherit; font-size: 0.9em;
-    letter-spacing: 2px; cursor: pointer; transition: all 0.3s; font-weight: bold;
-  }
+  .sync-card .btn-sync { padding: 9px 20px; border: none; border-radius: 8px; background: linear-gradient(135deg, var(--green) 0%, #1e8449 100%); color: #fff; font-family: inherit; font-size: 0.9em; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; font-weight: bold; }
   .sync-card .btn-sync:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(39,174,96,0.3); }
-  .sync-card .btn-sync-alt {
-    padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px;
-    background: transparent; color: var(--text-dim); font-family: inherit;
-    font-size: 0.82em; cursor: pointer; transition: all 0.3s; letter-spacing: 1px;
-  }
+  .sync-card .btn-sync-alt { padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-dim); font-family: inherit; font-size: 0.82em; cursor: pointer; transition: all 0.3s; letter-spacing: 1px; }
   .sync-card .btn-sync-alt:hover { border-color: var(--gold); color: var(--gold); }
 
-  .disclaimer { text-align: center; color: var(--text-dim); font-size: 0.75em; padding: 20px; border-top: 1px solid var(--border); margin-top: 10px; }
-
+  /* ---- 紫微页响应式 ---- */
   @media (max-width: 768px) {
     .palace-grid { gap: 3px; }
     .palace-cell { padding: 6px 4px; min-height: 60px; }
@@ -282,7 +222,6 @@
     .palace-main-stars { font-size: 0.66em; }
     .palace-aux-stars { font-size: 0.6em; }
     .overview-info { grid-template-columns: repeat(2, 1fr); }
-    .navbar { padding: 10px 16px; }
   }
   @media (max-width: 480px) {
     .palace-grid { gap: 2px; grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
@@ -450,10 +389,11 @@
 </div>
 
 <script>
-var currentSex = '男';
-var currentResult = null;
-var activeDetailIdx = -1;
-var _syncedBirth = null;
+// ============================================================
+// 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
+// ============================================================
+
+// ---- 全局状态 ----
 
 // 页面加载时检查是否有八字页同步的生辰信息
 (function initSync() {
@@ -613,7 +553,7 @@ function doAnalyze() {
 
   fetch('/api/ziwei', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
     body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex})
   })
   .then(function(resp) { return resp.json(); })
