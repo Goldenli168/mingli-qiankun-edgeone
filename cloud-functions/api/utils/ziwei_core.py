@@ -712,9 +712,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 流年简评（本年度+当前大运剩余所有年，50s硬超时保护）
+    # ③b LLM 流年简评（本年度+当前大运剩余所有年，40s硬超时保护，配合EdgeOne 60s限制）
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 40
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -757,7 +757,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
             try:
-                llm = fut.result(timeout=10)
+                llm = fut.result(timeout=5)
                 gen_type, target, ctx = t
                 if not llm: continue
                 
@@ -947,7 +947,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
             "max_tokens":800,"temperature":0.7,"stream":False}).encode('utf-8')
         req = urllib.request.Request(DEEPSEEK_URL, data=data,
             headers={'Content-Type':'application/json','Authorization':f'Bearer {DEEPSEEK_API_KEY}','User-Agent':'mq/1.0'})
-        with urllib.request.urlopen(req, timeout=20, context=ctx_ssl) as resp:
+        with urllib.request.urlopen(req, timeout=8, context=ctx_ssl) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             content = result['choices'][0]['message']['content'].strip()
             if len(content) > 10:
