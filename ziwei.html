@@ -326,8 +326,8 @@
 
 <div class="error-section" id="errorSection" style="display:none;max-width:720px;margin:20px auto;padding:0 20px">
   <div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:10px;padding:20px;text-align:center">
-    <div style="font-size:1.2em;color:var(--red-light);margin-bottom:8px">分析超时</div>
-    <div style="font-size:0.88em;color:var(--text-dim);margin-bottom:14px">AI 分析耗时过长，建议稍后重试或查看缓存结果</div>
+    <div id="errorTitle" style="font-size:1.2em;color:var(--red-light);margin-bottom:8px">分析超时</div>
+    <div id="errorMsg" style="font-size:0.88em;color:var(--text-dim);margin-bottom:14px">AI 分析耗时过长，建议稍后重试或查看缓存结果</div>
     <button onclick="doAnalyze()" style="padding:8px 24px;background:var(--gold);color:#1a1a1a;border:none;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:2px">重试分析</button>
   </div>
 </div>
@@ -556,7 +556,18 @@ function doAnalyze() {
     headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
     body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex})
   })
-  .then(function(resp) { return resp.json(); })
+  .then(function(resp) {
+    if (!resp.ok) {
+      var errTitle = '分析超时', errMsg = 'AI 分析耗时过长，建议稍后重试或查看缓存结果';
+      if (resp.status === 401) { errTitle = '服务认证失败'; errMsg = '密钥验证不通过，请刷新页面后重试'; }
+      else if (resp.status === 500) { errTitle = '服务器错误'; errMsg = '服务器内部处理异常，请稍后重试'; }
+      else if (resp.status === 504) { errTitle = '分析超时'; errMsg = 'AI 正在全力运算中，EdgeOne 限制了单次请求时间，请稍后重试'; }
+      document.getElementById('errorTitle').textContent = errTitle;
+      document.getElementById('errorMsg').textContent = errMsg;
+      throw new Error(errTitle);
+    }
+    return resp.json();
+  })
   .then(function(data) {
     if (data.error) { alert(data.error); return; }
     currentResult = data;

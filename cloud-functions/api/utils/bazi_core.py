@@ -1765,6 +1765,28 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
         step = dy["step"]
         bz["流年"][str(step)] = calc_liunian_list(actual_year, fp, bz, dy, sex)
     bz["命理总论"] = gen_overview(bz, sex)
+    # LLM 命理总论增强（异步非阻塞，失败不影响主流程）
+    try:
+        from .llm_client import llm_call
+        fp4 = bz["四柱"]
+        bazi_str = f"{fp4['year'][0]}{fp4['year'][1]} {fp4['month'][0]}{fp4['month'][1]} {fp4['day'][0]}{fp4['day'][1]} {fp4['hour'][0]}{fp4['hour'][1]}"
+        llm_prompt = f"""你是资深八字命理师。请为以下命盘写一段120-180字的白话命理总论，用口语化的方式告诉命主：
+- 日主性格一句话概括
+- 一生总体运势基调
+- 最突出的优势领域
+- 最需要留意的短板
+- 一条点睛的人生建议
+出生：{year}年{month}月{day}日{hour}时，{sex}，出生地{birthplace}
+八字：{bazi_str}，日主{bz['日主']}({bz['日主五行']})，{bz['日主状态']}
+格局：{bz.get('格局','')}，喜用神：{'、'.join(bz.get('喜用神',[]))}
+五行：金{bz['五行统计'].get('金',0)} 木{bz['五行统计'].get('木',0)} 水{bz['五行统计'].get('水',0)} 火{bz['五行统计'].get('火',0)} 土{bz['五行统计'].get('土',0)}
+纳音：{bz.get('纳音',{}).get('年','')}·{bz.get('纳音',{}).get('日','')}
+不要罗列星曜和术语，用通俗易懂的语言。"""
+        llm_result = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}")
+        if llm_result:
+            bz["命理总论LLM"] = llm_result.strip()
+    except Exception:
+        pass
     bz["基本信息"] = {"性别": sex, "出生地": birthplace,
                          "公历": f"{year}年{month}月{day}日{hour}时"}
     return bz

@@ -840,73 +840,11 @@ def _build_summary_context(result, patterns):
     }
 
 
-# ===== LLM 缓存持久化（磁盘 JSON 存储，跨冷启动存活） =====
-import json as _json
-import time as _time
-
-# 缓存文件路径：EdgeOne 云函数 /tmp 可写，本地开发写到项目目录
-_CACHE_DIR = os.environ.get("TMPDIR", os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__))))
-_LLM_CACHE_FILE = os.path.join(_CACHE_DIR, "ml_llm_cache.json")
-_LLM_CACHE_MAX = 500           # 最大条目数
-_LLM_CACHE_TTL = 7 * 86400     # 7 天过期（单位：秒）
-
-
-def _load_llm_cache() -> dict:
-    """启动时从磁盘恢复 LLM 缓存，自动剔除过期条目"""
-    if not os.path.exists(_LLM_CACHE_FILE):
-        return {}
-    try:
-        with open(_LLM_CACHE_FILE, 'r', encoding='utf-8') as f:
-            raw = _json.load(f)
-        now = _time.time()
-        # 剔除过期 + 值结构兼容（旧版可能直接存字符串）
-        clean = {}
-        for k, v in raw.items():
-            if isinstance(v, dict) and v.get('ts', 0) > now - _LLM_CACHE_TTL:
-                clean[k] = v['content']
-            elif isinstance(v, str):
-                clean[k] = v  # 兼容旧格式，不过期判定
-        return clean
-    except Exception:
-        return {}
-
-
-def _save_llm_cache_entry(key: str, content: str):
-    """写入一条缓存到磁盘，超量时 LRU 淘汰最旧条目"""
-    # 先加载现有文件（合并其他进程可能写入的条目）
-    merged = {}
-    if os.path.exists(_LLM_CACHE_FILE):
-        try:
-            with open(_LLM_CACHE_FILE, 'r', encoding='utf-8') as f:
-                merged = _json.load(f)
-        except Exception:
-            pass
-
-    now = _time.time()
-    merged[key] = {'content': content, 'ts': now}
-
-    # LRU: 超过上限时保留最新的 N 条
-    if len(merged) > _LLM_CACHE_MAX:
-        sorted_items = sorted(merged.items(), key=lambda x: (
-            x[1].get('ts', 0) if isinstance(x[1], dict) else 0
-        ))
-        merged = dict(sorted_items[-_LLM_CACHE_MAX:])
-
-    try:
-        with open(_LLM_CACHE_FILE, 'w', encoding='utf-8') as f:
-            _json.dump(merged, f, ensure_ascii=False)
-    except Exception:
-        pass  # 磁盘写入失败不影响主流程
-
-
-# ===== LLM 自然语言流年简评（DeepSeek API，模板fallback） =====
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
-_LLM_CACHE = _load_llm_cache()  # 启动时从磁盘恢复缓存
+# ===== LLM 调用（委托给共享 llm_client 模块） =====
+from .llm_client import llm_call
 
 def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
-    import json, urllib.request, ssl
     
     if gen_type == "liunian":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}输出三段，用|||分隔：
@@ -938,28 +876,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     else:
         return None
     
-    # 缓存命中：同命盘+同类型直接复用，不重复调API
-    cache_key = f"{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
-    if cache_key in _LLM_CACHE:
-        return _LLM_CACHE[cache_key]
-    
-    try:
-        ctx_ssl = ssl.create_default_context()
-        ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
-        data = json.dumps({"model":"deepseek-chat","messages":[{"role":"user","content":prompt}],
-            "max_tokens":800,"temperature":0.7,"stream":False}).encode('utf-8')
-        req = urllib.request.Request(DEEPSEEK_URL, data=data,
-            headers={'Content-Type':'application/json','Authorization':f'Bearer {DEEPSEEK_API_KEY}','User-Agent':'mq/1.0'})
-        with urllib.request.urlopen(req, timeout=8, context=ctx_ssl) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
-            content = result['choices'][0]['message']['content'].strip()
-            if len(content) > 10:
-                _LLM_CACHE[cache_key] = content
-                _save_llm_cache_entry(cache_key, content)  # 持久化到磁盘
-                return content
-            return None
-    except Exception:
-        return None
+    cache_key = f"zw:{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
+    return llm_call(prompt, cache_key)
 
 
 def _zhi_to_for_monthly(places):
