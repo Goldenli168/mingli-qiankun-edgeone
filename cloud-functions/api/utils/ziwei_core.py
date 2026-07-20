@@ -724,7 +724,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
-    # ③b LLM 流年简评（本年度+当前大运剩余所有年，40s硬超时保护，配合EdgeOne 60s限制）
+    # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
+    # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
     _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 40
     _age = _now - solar_year
@@ -733,37 +734,31 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
             _dy_end = solar_year + dy.get('结束年龄', _age)
             break
-    for ln in _liunian_raw:
-        yr = ln["年份"]
-        if _now <= yr <= _dy_end:
-            if _time.time() > _llm_deadline: break  # 超时停止，保留已有结果
-            ctx = _build_liunian_context(ln, result, _natal_patterns, solar_year)
-            llm = _llm_generate("liunian", ctx)
-            if llm:
-                parts = llm.split("|||", 2)
-                ln["简评"] = parts[0].strip()[:50]
-                ln["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
-                ln["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
 
-    # ③b+c+d LLM 并行批量生成(流年+大运+总结),控总时
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    
-    tasks = []  # [(gen_type, target_ref, ctx), ...]
-    
-    # 流年
+    # 仅标记当前大运内的流年需LLM处理(在并行池里统一做)
+    _liunian_llm_years = set()
     for ln in _liunian_raw:
         yr = ln["年份"]
         if _now <= yr <= _dy_end:
+            _liunian_llm_years.add(yr)
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    tasks = []  # [(gen_type, target_ref, ctx), ...]
+
+    # 流年: 仅当前年+未来3年(避免大运剩余10年全调LLM)
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if yr in _liunian_llm_years and yr <= _now + 3:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
-    
+
     # 大运(全部)
     for dy in result["大运"]:
         tasks.append(("dayun", dy, _build_dayun_context(dy, result, _natal_patterns)))
-    
+
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
-    
-    # 并行执行, 5线程, 50s超时总控
+
+    # 并行执行, 5线程, 40s超时总控
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
