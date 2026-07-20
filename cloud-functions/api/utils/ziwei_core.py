@@ -769,7 +769,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
             try:
-                llm = fut.result(timeout=5)
+                llm = fut.result(timeout=10)  # 留量: DeepSeek慢时也能返回
                 gen_type, target, ctx = t
                 if not llm: continue
                 
