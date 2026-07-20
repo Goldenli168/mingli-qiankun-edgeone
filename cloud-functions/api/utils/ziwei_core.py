@@ -877,7 +877,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         return None
     
     cache_key = f"zw:{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
-    return llm_call(prompt, cache_key)
+    # 大运要7段每段100字,需要更大输出空间
+    max_tok = 2000 if gen_type == "dayun" else 800
+    return llm_call(prompt, cache_key, max_tokens=max_tok)
 
 
 def _zhi_to_for_monthly(places):
