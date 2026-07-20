@@ -1,5 +1,5 @@
 """临时本地预览服务器 — 命理乾坤"""
-import sys, os, hashlib
+import sys, os
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, 'cloud-functions', 'api'))
 

@@ -6,8 +6,6 @@ EdgeOne Pages Cloud Function - Flask 模式
 
 import sys
 import os
-import secrets
-import hashlib
 
 # 将 cloud-functions 目录加入 Python 路径，确保 utils 模块可被正确导入
 sys.path.insert(0, os.path.dirname(__file__))
@@ -33,13 +31,8 @@ app = Flask(__name__)
 #   - 其他所有 API 需要 X-API-Key 头
 
 def _get_api_key():
-    """获取 API Key: 环境变量 > 根据机器信息自动生成 > 默认开发密钥"""
-    key = os.environ.get("ML_API_KEY", "")
-    if key:
-        return key
-    # 本地开发: 基于主机名生成确定性密钥(免配)
-    hostname = os.environ.get("COMPUTERNAME", "localhost")
-    return f"ml-dev-{hashlib.sha256(hostname.encode()).hexdigest()[:12]}"
+    """获取 API Key: 环境变量 > 默认密钥(与前端一致)"""
+    return os.environ.get("ML_API_KEY", "mingli-qiankun-v7")
 
 API_KEY = _get_api_key()
 
