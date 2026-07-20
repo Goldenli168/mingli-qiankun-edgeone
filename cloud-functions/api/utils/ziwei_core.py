@@ -748,20 +748,28 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if yr in _liunian_llm_years and yr <= _now + 3:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
-    # 大运(全部)
+    # 大运(全部) — 主线程直接调用,LLM 2000 token响应需要8-12s
+    # (ThreadPoolExecutor的fut.result超时机制在大运场景不稳定,改主线程)
     for dy in result["大运"]:
-        tasks.append(("dayun", dy, _build_dayun_context(dy, result, _natal_patterns)))
+        if _time.time() > _llm_deadline: break
+        llm = _llm_generate("dayun", _build_dayun_context(dy, result, _natal_patterns))
+        if not llm: continue
+        parts2 = llm.split("|||")
+        dy["综合解读"] = parts2[0].strip() if parts2 else llm
+        for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
+            if i+1 < len(parts2):
+                dy.setdefault("评分",{})[label+"_llm"] = parts2[i+1].strip()[:200]
 
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # 并行执行, 5线程, 40s超时总控
+    # 并行执行, 5线程, 流年+总结LLM(轻量,不会超时)
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
             try:
-                llm = fut.result(timeout=15)  # 大运要2000 tokens,留够API返回时间
+                llm = fut.result(timeout=5)
                 gen_type, target, ctx = t
                 if not llm: continue
                 
@@ -771,13 +779,6 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     target["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
                     target["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
                     
-                elif gen_type == "dayun":
-                    parts = llm.split("|||")
-                    target["综合解读"] = parts[0].strip() if parts else llm
-                    for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
-                        if i+1 < len(parts):
-                            target.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
-                            
                 elif gen_type == "summary":
                     target["命盘总结"] = llm
             except Exception:
