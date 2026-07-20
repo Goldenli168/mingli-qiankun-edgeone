@@ -10,6 +10,18 @@ import datetime
 # 导入共用八字常量 + 紫微专用常量
 from .bazi_data import *
 from .ziwei_data import *
+
+# ---- 庙旺查询工具函数 ----
+def _get_miaowang_label(star, zhi):
+    """返回7级庙旺标签: 庙/旺/得/利/平/不/陷"""
+    return MIAO_WANG_TABLE.get(star, {}).get(zhi, "")
+
+def _get_miaowang_coeff(star_name, zhi_name):
+    """返回星曜在当前地支的7级庙旺系数"""
+    label = _get_miaowang_label(star_name, zhi_name)
+    return _MW_COEFF_7.get(label, 1.0)
+
+# ---- 工具函数 ----
 def _hour_to_time_index(hour):
     """将24小时制转为iztro的时辰索引(0-12)"""
     if hour >= 23 or hour < 1:

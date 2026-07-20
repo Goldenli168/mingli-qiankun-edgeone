@@ -5,12 +5,74 @@
 """
 
 __all__ = [
+    "PALACE_NAMES", "JU_NUM", "JU_NAME",
+    "STAR_EN2CN", "PALACE_EN2CN", "JU_EN2CN", "SIHUA_EN2CN",
     "_STAR_WEALTH", "_STAR_CAREER", "_STAR_MARRIAGE", "_STAR_CHILDREN",
     "_STAR_PARENTS", "_STAR_HEALTH", "MIAO_WANG_TABLE", "_MW_COEFF_7",
     "_AUX_ADJUST", "_AUX_PALACE_MODIFIER",
     "_SIHUA_TABLE", "_SIHUA_LABELS", "_SIHUA_DIM",
     "_PERCENTILE_TABLE",
 ]
+
+# ===== 十二宫名(按固定顺序，从命宫起顺时针) =====
+PALACE_NAMES = ["命宫", "兄弟", "夫妻", "子女", "财帛", "疾厄",
+                "迁移", "交友", "官禄", "田宅", "福德", "父母"]
+
+# ===== 五行局 =====
+JU_NUM = {"水": 2, "木": 3, "金": 4, "土": 5, "火": 6}
+JU_NAME = {2: "水", 3: "木", 4: "金", 5: "土", 6: "火"}
+
+# ===== iztro-py 英文→中文星名映射 =====
+STAR_EN2CN = {
+    "ziweiMaj": "紫微", "tianjiMaj": "天机", "taiyangMaj": "太阳",
+    "wuquMaj": "武曲", "tiantongMaj": "天同", "lianzhenMaj": "廉贞",
+    "tianfuMaj": "天府", "taiyinMaj": "太阴", "tanlangMaj": "贪狼",
+    "jumenMaj": "巨门", "tianxiangMaj": "天相", "tianliangMaj": "天梁",
+    "qishaMaj": "七杀", "pojunMaj": "破军",
+    "zuofuMin": "左辅", "youbiMin": "右弼",
+    "wenchangMin": "文昌", "wenquMin": "文曲",
+    "lucunMin": "禄存", "tianmaMin": "天马",
+    "qingyangMin": "擎羊", "tuoluoMin": "陀罗",
+    "huoxingMin": "火星", "lingxingMin": "铃星",
+    "tiankuiMin": "天魁", "tianyueMin": "天钺",
+    "dikongMin": "地空", "dijieMin": "地劫",
+    "tianxingMin": "天刑", "tianyaoMin": "天姚",
+    "jiejuMin": "解神", "tianwuMin": "天巫",
+    "tianyue2Min": "天月", "tiankui2Min": "天官",
+    "tianfu2Min": "天福", "hongluanMin": "红鸾",
+    "tianxiMin": "天喜", "guchenMin": "孤辰",
+    "guasuMin": "寡宿", "tiankuMin": "天哭",
+    "tianxuMin": "天虚", "longchiMin": "龙池",
+    "fenggeMin": "凤阁", "tianshangMin": "天伤",
+    "tianshiMin": "天使", "feilianMin": "蜚廉",
+    "posuiMin": "破碎", "taifuMin": "台辅",
+    "fenggaoMin": "封诰", "enkouMin": "恩光",
+    "tianguiMin": "天贵", "tiancaiMin": "天才",
+    "tianshouMin": "天寿", "santaiMin": "三台",
+    "bazuoMin": "八座", "tianchuMin": "天厨",
+    "huagaiMin": "华盖", "xianchiMin": "咸池",
+    "tiankongMin": "天空", "xunkongMin": "旬空",
+    "jieluMin": "截路", "dahaoMin": "大耗",
+}
+
+# iztro 宫名英文→中文映射
+PALACE_EN2CN = {
+    "soulPalace": "命宫", "siblingsPalace": "兄弟宫", "spousePalace": "夫妻宫",
+    "childrenPalace": "子女宫", "wealthPalace": "财帛宫", "healthPalace": "疾厄宫",
+    "surfacePalace": "迁移宫", "friendsPalace": "交友宫", "careerPalace": "官禄宫",
+    "propertyPalace": "田宅宫", "spiritPalace": "福德宫", "parentsPalace": "父母宫",
+}
+
+# 五行局英文→中文映射
+JU_EN2CN = {
+    "水二局": "水", "木三局": "木", "金四局": "金", "土五局": "土", "火六局": "火",
+}
+
+# 四化英文→中文映射
+SIHUA_EN2CN = {
+    "禄": "化禄", "权": "化权", "科": "化科", "忌": "化忌",
+    "lu": "化禄", "quan": "化权", "ke": "化科", "ji": "化忌",
+}
 
 _STAR_WEALTH = {
     # 财星系
@@ -72,17 +134,6 @@ MIAO_WANG_TABLE = {
 
 # 7级庙旺系数
 _MW_COEFF_7 = {"庙":1.15,"旺":1.10,"得":1.05,"利":1.00,"平":0.95,"不":0.85,"陷":0.75}
-
-def _get_miaowang_label(star, zhi):
-    """返回7级庙旺标签: 庙/旺/得/利/平/不/陷"""
-    return MIAO_WANG_TABLE.get(star, {}).get(zhi, "")
-
-
-
-def _get_miaowang_coeff(star_name, zhi_name):
-    """返回星曜在当前地支的7级庙旺系数"""
-    label = _get_miaowang_label(star_name, zhi_name)
-    return _MW_COEFF_7.get(label, 1.0)
 
 # 辅星调节分
 _AUX_ADJUST = {
