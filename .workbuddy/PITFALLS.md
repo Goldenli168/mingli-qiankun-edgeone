@@ -4,6 +4,12 @@
 
 ---
 
+## #11 2026-07-21: 大运 LLM max_tokens 装不下 7 段内容
+- **现象**: 紫微大运展开后，"综合解读"和"财富_llm/事业_llm"等仍是模板文本（带"王亭之云"等引用），不是 LLM 输出
+- **根因**: v7.7 prompt 要求 LLM 输出 7 段每段 ≥100 字 + `|||` 分隔 ≈ 800 字，但 `llm_call()` 默认 `max_tokens=800`，DeepSeek 实际可用输出空间更小，LLM 返回被截断或为空
+- **修复**: 大运调用单独传 `max_tokens=2000`，其他 LLM 调用仍用 800
+- **教训**: 修改 prompt 字数要求时必须同步调整 `max_tokens`；LLM 返回空时要检查 token 限制
+
 ## #10 2026-07-21: 八字联合 ImportError — 相对导入失败
 - **现象**: 紫微页面显示「八字暂不可用(ImportError)」
 - **根因**: ziwei_core.py 用 `import bazi_core`（绝对导入），但 bazi_core.py 顶层有 `from .bazi_data import *`（相对导入），当 bazi_core 被当作顶层模块 import 时，相对导入失败
