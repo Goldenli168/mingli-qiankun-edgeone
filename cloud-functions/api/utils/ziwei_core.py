@@ -697,10 +697,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     # ① 八字+紫微联合解读：注入喜用神
     try:
-        import sys, os
-        _utils_dir = os.path.dirname(os.path.abspath(__file__))
-        if _utils_dir not in sys.path: sys.path.insert(0, _utils_dir)
-        import bazi_core
+        from . import bazi_core
         fp = bazi_core.get_four_pillars(solar_year, solar_month, solar_day, hour, birthplace="", minute=0)
         bazi = bazi_core.analyze_bazi(fp, sex)
         result["八字联合"] = {
@@ -924,13 +921,12 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
         prompt = f"""你是资深紫微斗数命理师。请为以下命盘的大运{ctx.get('dayun_age','')}({ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分/{ctx.get('dayun_rating','')})输出7段，用|||分隔：
-第1段：150字白话总体解读。
-第2-7段：财富、事业、婚姻、子女、父母、健康。每段80-120字，列举可能发生的事件场景，给出2-3条具体建议。结合宫位分数，口语化但不敷衍。
-示例：财运稳中有升，可能通过专业技能或副业获得额外收入。但要注意合伙投资的陷阱，建议分散风险、避免跟风。|||事业有贵人相助，适合深耕专业领域或争取管理岗位...
+第1段：不低于100字的综合分析，覆盖此十年整体基调、核心机遇、主要风险点、重点关注领域，给出一条方向性人生建议。必须口语化、有人情味，不要说教。
+第2-7段：财富、事业、婚姻、子女、父母、健康。每段不低于100字，必须结合具体宫位分数和星曜特征，列举至少2个可能发生的事件场景，给出至少2条可操作的具体建议。对评分低于60的领域务必指出风险并给出化解方向。
 维度参考：{sc}
 背景：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，来因宫{ctx.get('laiyin','')}。
 十二宫：{ctx.get('twelve','')}
-严格用|||分隔7段，不要标题/markdown/引号。示例：十年事业财运稳步上升，但感情方面需多加经营|||财运稳中有升，但忌投机|||事业有贵人相助，适合深耕专业|||感情易因工作繁忙而疏远|||子女运平顺|||父母健康需关注|||注意肠胃问题"""
+严格用|||分隔7段，每段不少于100字，不要标题/markdown/引号。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
