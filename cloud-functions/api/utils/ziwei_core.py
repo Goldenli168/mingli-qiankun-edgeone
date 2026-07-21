@@ -901,14 +901,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
     
     if gen_type == "liunian":
-        prompt = f"""你是资深紫微斗数命理师，请为以下命盘的流年{ctx.get('ln_gz','')}输出三段，用|||分隔：
-一：50字punchline（事业/财富/婚姻/子女/健康五维）。
-二：100字白话详细分析。
-三：六个月度关键提醒，格式为 正二月:15字内的提醒, 三四月:..., 五六月:..., 七八月:..., 九十月:..., 十一十二月:...。每月点出最需注意的一件事，一针见血。
-五维：事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}
-命盘：出生{ctx.get('birth','')}，{ctx.get('bazi','')}，格局{ctx.get('patterns','')}，
-命宫{ctx.get('ming','')}身宫{ctx.get('shen','')}，来因宫{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。
-严格用|||分隔三段，不要标题/markdown/引号。"""
+        prompt = f"""你是资深命理分析师。请基于以下流年资料给出分析与建议。
+
+【流年】{ctx.get('ln_gz','')}年。命主生于{ctx.get('birth','')}，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}。
+
+【输出格式】三段，用|||分隔：
+段一：50字年度要点（事业/财富/婚姻/子女/健康五维各一句）|||
+段二：100字逐年分析（结合行业趋势与家庭阶段，给可操作建议）|||
+段三：6个双月提醒（正二月:提醒, 三四月:..., 五六月:..., 七八月:..., 九十月:..., 十一十二月:...）每段15字
+
+【要求】专业而务实，切入点落到具体决策层面（如是否跳槽/是否投资/是否备婚/如何教育/制定怎样的健康计划），避免空泛。口语化但不敷衍。
+直接输出，不要标题。"""
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
@@ -934,12 +937,11 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 直接输出6段内容。"""
     
     elif gen_type == "summary":
-        prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
-出生{ctx.get('birth','')}，{ctx.get('bazi','')}。
-格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin','')}，财富级别：{ctx.get('wealth','')}。
-命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。
-十二宫：{ctx.get('twelve','')}
-口语化概括核心特质、优势领域、注意短板，点睛建议收尾。不要罗列星曜。"""
+        prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
+
+生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。十二宫：{ctx.get('twelve','')}
+
+从三个层面组织：①核心天赋与优势赛道 ②一生主要课题与转折点 ③中晚年生活形态建议。结合时代背景（行业周期/社会老龄化/技术变革）给出务实的人生规划参考。语气专业、有洞察力、有温度，直接输出。"""
     else:
         return None
     
@@ -947,7 +949,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v3"  # v3 确保新prompt不命中旧缓存
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else 800  # dayun 6段需要更大输出空间
@@ -958,7 +960,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         'gen_type': gen_type, 'max_tok': max_tok, 
         'prompt_len': len(prompt), 'prompt_head': prompt[:80],
         'result_len': len(result) if result else 0,
-        'result_head': (result[:100] if result else 'NONE')
+        'sep_count': result.count('|||') if result else 0,
+        'result_head': (result[:120] if result else 'NONE'),
+        'result_tail': (result[-150:] if result else 'NONE')
     })
     if len(_last_llm_debug) > 10:
         _last_llm_debug = _last_llm_debug[-10:]
