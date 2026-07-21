@@ -754,7 +754,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     # ===== 大运LLM: 当前大运+下一个(2个),顺序调避免并发 =====
     _dayun_count = 0
-    _dayun_max = 2
+    _dayun_max = 1  # 只LLM当前大运(保证不超时,首次调用后缓存)
     _found_current = False
     for dy in result["大运"]:
         if _time.time() > _llm_deadline: break

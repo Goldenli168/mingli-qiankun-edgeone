@@ -81,7 +81,7 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800) -> str | N
             headers={'Content-Type': 'application/json',
                      'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
                      'User-Agent': 'mq/1.0'})
-        with urllib.request.urlopen(req, timeout=6, context=ctx_ssl) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx_ssl) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             content = result['choices'][0]['message']['content'].strip()
             if len(content) > 10:
