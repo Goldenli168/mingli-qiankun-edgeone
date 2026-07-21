@@ -856,6 +856,7 @@ def _build_summary_context(result, patterns):
 
 # ===== LLM 调用（委托给共享 llm_client 模块） =====
 from .llm_client import llm_call
+_last_llm_debug = None  # 诊断用
 
 def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
@@ -895,7 +896,16 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1500 if gen_type == "dayun" else 800
-    return llm_call(prompt, ck, max_tokens=max_tok)
+    result = llm_call(prompt, ck, max_tokens=max_tok)
+    # 诊断日志
+    global _last_llm_debug
+    _last_llm_debug = {
+        'gen_type': gen_type, 'ck': ck, 'max_tok': max_tok, 
+        'prompt_len': len(prompt), 'prompt_head': prompt[:100],
+        'result_len': len(result) if result else 0,
+        'result_head': result[:200] if result else None
+    }
+    return result
 
 
 def _zhi_to_for_monthly(places):

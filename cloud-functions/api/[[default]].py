@@ -173,4 +173,5 @@ def liunian_api():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v7.6"})
+    from utils.ziwei_core import _last_llm_debug
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v7.6", "llm_debug": _last_llm_debug})
