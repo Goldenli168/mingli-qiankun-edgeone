@@ -875,7 +875,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         prompt = f"""你是资深紫微斗数命理师，请为以下大运写一段100字综合解读:
 {ctx.get('dayun_age','')}岁,{ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分。
 出生{ctx.get('birth','')}。
-口语化，有趣味性，不要罗列星曜。”""
+口语化，有趣味性，不要罗列星曜。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
