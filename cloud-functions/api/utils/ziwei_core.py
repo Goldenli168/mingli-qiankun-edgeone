@@ -749,40 +749,48 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if yr in _liunian_llm_years and yr <= _now + 3:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
-    # 大运(全部) — 回到并行池，但去掉 fut.result超时(由as_completed总控)
-    for dy in result["大运"]:
-        tasks.append(("dayun", dy, _build_dayun_context(dy, result, _natal_patterns)))
-
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # 并行执行, 5线程, 40s总控(由as_completed统一管控, 不去fut.result里设短超时)
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    # ===== 大运LLM: 顺序调,避免EdgeOne并发连接限制(14并行HTTP会超限) =====
+    # 限制最多4个大运(当前+未来3个),LLM结果在磁盘缓存
+    _dayun_count = 0
+    _dayun_max = 4
+    for dy in result["大运"]:
+        if _time.time() > _llm_deadline: break
+        if _dayun_count >= _dayun_max: break
+        age = _now - solar_year
+        if dy.get('起始年龄', 0) > age + 30:  # 超出当前+30年不调
+            break
+        _dayun_count += 1
+        llm = _llm_generate("dayun", _build_dayun_context(dy, result, _natal_patterns))
+        if not llm: continue
+        parts_d = llm.split("|||")
+        dy["综合解读"] = parts_d[0].strip() if parts_d else llm
+        for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
+            if i+1 < len(parts_d):
+                dy.setdefault("评分",{})[label+"_llm"] = parts_d[i+1].strip()[:300]
+
+    # ===== 并行池: 只跑流年+总结(轻量,不超连接限制) =====
+    with ThreadPoolExecutor(max_workers=2) as pool:  # 2线程降低并发
         futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
             try:
-                llm = fut.result()  # 不设超时 — 已完成的任务立刻返回,未完成的由 as_completed 总时限兜底
+                llm = fut.result()  # 不设超时
                 gen_type, target, ctx = t
                 if not llm: continue
-                
+
                 if gen_type == "liunian":
                     parts = llm.split("|||", 2)
                     target["简评"] = parts[0].strip()[:50]
                     target["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
                     target["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
-                    
-                elif gen_type == "dayun":
-                    parts = llm.split("|||")
-                    target["综合解读"] = parts[0].strip() if parts else llm
-                    for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
-                        if i+1 < len(parts):
-                            target.setdefault("评分",{})[label+"_llm"] = parts[i+1].strip()[:200]
-                    
+
                 elif gen_type == "summary":
                     target["命盘总结"] = llm
             except Exception:
-                pass  # 单个失败不影响整体
+                pass
     
     return result
 
