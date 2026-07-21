@@ -711,13 +711,20 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     except Exception as e:
         result["八字联合"] = {"提示": f"八字暂不可用({type(e).__name__})"}
 
-    # ② 流年逐月简报：当前年+未来2年
+    # ② 流年逐月简报：当前年+到当前大运结束年(覆盖整个当前大运)
     import datetime
     now_year = datetime.datetime.now().year
     _liunian_raw = result["流年"]
+    # 计算当前大运结束年份
+    _age = now_year - solar_year
+    _liunian_end_year = now_year + 2  # 默认+2年
+    for dy in result["大运"]:
+        if dy.get('起始年龄', 0) <= _age <= dy.get('结束年龄', 999):
+            _liunian_end_year = solar_year + dy.get('结束年龄', _age)
+            break
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if now_year <= yr <= now_year + 2:
+        if now_year <= yr <= _liunian_end_year:
             ln["逐月"] = _monthly_brief_compact(yr, places, _zhi_to_for_monthly(places), ming_branch,
                                                    g=GAN[(yr-4)%10], z=ZHI[(yr-4)%12],
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
@@ -743,38 +750,45 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # 流年: 仅当前年+未来3年(避免大运剩余10年全调LLM)
+    # 流年: 当前年+未来5年(覆盖整个当前大运含大运最后一年)
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if yr in _liunian_llm_years and yr <= _now + 3:
+        if yr in _liunian_llm_years and yr <= _now + 5:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # ===== 大运LLM: 当前大运+下一个(2个),顺序调避免并发 =====
-    _dayun_count = 0
-    _dayun_max = 1  # 只LLM当前大运(保证不超时,首次调用后缓存)
-    _found_current = False
+    # ===== 大运LLM: 当前+所有未来大运(无数量上限),但只跳已过的大运 =====
+    # 用并行池,4线程,单次LLM约8s
+    _age_now = _now - solar_year
+    _dayun_pending = []  # 待LLM的大运列表
     for dy in result["大运"]:
         if _time.time() > _llm_deadline: break
-        if _dayun_count >= _dayun_max: break
-        _age_start = dy.get('起始年龄', 0)
-        _age_end = dy.get('结束年龄', 999)
-        # 跳过已过的大运,从当前大运开始
-        if not _found_current:
-            if _age <= _age_end:  # 找到了当前大运
-                _found_current = True
-            else:
-                continue  # 跳过已过的大运
-        _dayun_count += 1
-        llm = _llm_generate("dayun", _build_dayun_context(dy, result, _natal_patterns))
-        if not llm: continue
-        parts_d = llm.split("|||")
-        dy["综合解读"] = parts_d[0].strip() if parts_d else llm
-        for i, label in enumerate(["财富","事业","婚姻","子女","父母","健康"]):
-            if i+1 < len(parts_d):
-                dy.setdefault("评分",{})[label+"_llm"] = parts_d[i+1].strip()[:300]
+        _age_end = dy.get('结束年龄', 0)
+        # 跳过完全已过的大运(结束年龄 < 当前年龄)
+        if _age_end < _age_now: continue
+        # 加入待LLM列表(当前+未来所有)
+        _dayun_pending.append(dy)
+    
+    # 4线程并行跑大运LLM
+    if _dayun_pending:
+        from concurrent.futures import ThreadPoolExecutor, as_completed as _ac
+        with ThreadPoolExecutor(max_workers=4) as _dy_pool:
+            _dy_futures = {_dy_pool.submit(_llm_generate, "dayun", _build_dayun_context(dy, result, _natal_patterns)): dy for dy in _dayun_pending if _time.time() < _llm_deadline}
+            for _f in _ac(_dy_futures, timeout=max(1, _llm_deadline - _time.time())):
+                try:
+                    _llm = _f.result()
+                    _dy = _dy_futures[_f]
+                    if not _llm: continue
+                    _parts = _llm.split("|||")
+                    _dy["综合解读"] = _parts[0].strip() if _parts else _llm
+                    # 5维(财富/事业/婚姻/子女/父母)
+                    for _i, _label in enumerate(["财富","事业","婚姻","子女","父母"]):
+                        if _i+1 < len(_parts):
+                            _dy.setdefault("评分",{})[_label+"_llm"] = _parts[_i+1].strip()[:300]
+                except Exception:
+                    pass
 
     # ===== 并行池: 只跑流年+总结(轻量,不超连接限制) =====
     with ThreadPoolExecutor(max_workers=2) as pool:  # 2线程降低并发
@@ -872,10 +886,18 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 严格用|||分隔三段，不要标题/markdown/引号。"""
     
     elif gen_type == "dayun":
-        prompt = f"""你是资深紫微斗数命理师，请为以下大运写一段100字综合解读:
-{ctx.get('dayun_age','')}岁,{ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分。
-出生{ctx.get('birth','')}。
-口语化，有趣味性，不要罗列星曜。"""
+        sc = ctx.get('scores','')
+        prompt = f"""你是一位执业三十年的玄学命理专家，精通紫微斗数，熟谙世情。请为以下命主的大运{ctx.get('dayun_age','')}岁（{ctx.get('dayun_gong','')}宫，综合{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}）做整体把脉。
+
+要求严格用|||分隔6段，每段55-80字：
+第1段【综合运情】整体基调、十年核心运势走向、需重点关注领域。
+第2段【财富】结合当前经济周期与行业大势分析，给出理财方向。
+第3段【事业】结合职场生态与升迁机制，给出发展策略。
+第4段【婚姻】结合社会婚恋观变化，给出感情经营建议。
+第5段【子女】结合子女教育投入与代际沟通，给出教养方向。
+第6段【父母】结合养老医疗现实，给出孝亲与陪伴建议。
+维度分参考：{sc}。任何维度低于60分，必须明确点出风险并给出化解方向。背景：{ctx.get('birth','')}年{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因{ctx.get('laiyin','')}。
+语气沉稳有威仪，富有同理心，不轻浮、不说教、不堆砌星曜名词，给出可操作的方向性指引。|||分隔6段无标题"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
@@ -923,64 +945,83 @@ def _find_dayun_for_age(dayun_list, age):
 
 
 def _monthly_brief_compact(year, places, zhi_to_p, ming_branch, g="", z="", sihua=None):
-    """流年逐月简报"""
-    MONTHS = [("正二月",0,1), ("三四月",2,3), ("五六月",4,5),
-              ("七八月",6,7), ("九十月",8,9), ("十一十二月",10,11)]
+    """流年逐月简报 — 纯模板(不调LLM,省token)"""
+    MONTHS = [("正月",0), ("二月",1), ("三月",2), ("四月",3), ("五月",4), ("六月",5),
+              ("七月",6), ("八月",7), ("九月",8), ("十月",9), ("十一月",10), ("十二月",11)]
     ZHI_CHARS = list("子丑寅卯辰巳午未申酉戌亥")
-    
+    MONTH_ZHI = ["寅","卯","辰","巳","午","未","申","酉","戌","亥","子","丑"]  # 正月寅
+
     # 太岁在命盘中的位置
     year_zhi_ch = z if z else ""
     year_zhi_i = ZHI_CHARS.index(year_zhi_ch) if year_zhi_ch in ZHI_CHARS else -1
     taisui_palace = zhi_to_p.get(year_zhi_i, {})  # 流年命宫所在的本命宫位
     taisui_pn = taisui_palace.get("宫名", "")
-    
+
     # 构建 流年命宫 → 逐月顺时针映射
-    # 从 流年命宫 开始，按月顺时针遍历十二宫
     PALACE_ORDER = ["命宫","兄弟","夫妻","子女","财帛","疾厄","迁移","交友","官禄","田宅","福德","父母"]
-    # 找到 taisui_pn 在 PALACE_ORDER 中的位置作为起点
     taisui_order_idx = PALACE_ORDER.index(taisui_pn) if taisui_pn in PALACE_ORDER else 0
-    
-    # 宫名 → 宫位数据 (zhi_to_p 按地支索引, 需要反向映射)
+
+    # 宫名 → 宫位数据
     name_to_palace = {p.get("宫名"): p for p in places}
-    
-    TOPICS = {"财帛":"财运抬头","官禄":"事业关键","夫妻":"感情波动","迁移":"出行变动",
-              "疾厄":"健康注意","田宅":"房产家事","子女":"孩子创意","福德":"精神享受",
-              "命宫":"自我主场","兄弟":"人际合作","父母":"长辈事宜","交友":"社交人脉"}
-    
-    # 流年四化用于高亮月份
+
+    # 宫位主题
+    TOPICS = {
+        "命宫":"自我运势","兄弟":"人际合作","夫妻":"感情婚姻","子女":"子女创意",
+        "财帛":"财富进账","疾厄":"健康注意","迁移":"出行变动","交友":"社交人脉",
+        "官禄":"事业关键","田宅":"房产家事","福德":"精神享受","父母":"长辈事宜"
+    }
+    # 6维影响语
+    IMPACT = {
+        "命宫":"自我状态变化，主导全年基调",
+        "兄弟":"合伙协作或人际变动",
+        "夫妻":"感情生活起伏",
+        "子女":"子女或创作相关事件",
+        "财帛":"财务进出的关键期",
+        "疾厄":"健康状况需关注",
+        "迁移":"出行或环境变迁",
+        "交友":"社交圈或人脉变化",
+        "官禄":"事业工作关键节点",
+        "田宅":"家宅或不动产",
+        "福德":"精神世界与心态",
+        "父母":"长辈或家庭事务"
+    }
+
+    # 流年四化
     sihua_stars = sihua or ["","","",""]
     s_lu, s_quan, s_ke, s_ji = sihua_stars
-    
+
     months = []
-    for label, month_idx1, month_idx2 in MONTHS:
-        # 每个月对应的宫位: (taisui_order_idx + month) % 12
-        pn1 = PALACE_ORDER[(taisui_order_idx + month_idx1) % 12]
-        pn2 = PALACE_ORDER[(taisui_order_idx + month_idx2) % 12]
-        
-        p1 = name_to_palace.get(pn1, {})
-        p2 = name_to_palace.get(pn2, {})
-        
-        topic1 = TOPICS.get(pn1, pn1)
-        topic2 = TOPICS.get(pn2, pn2)
-        topic = topic1 if topic1 == topic2 else f"{topic1}｜{topic2}"
-        
+    for label, month_idx in MONTHS:
+        # 该月对应的本命宫位
+        pn = PALACE_ORDER[(taisui_order_idx + month_idx) % 12]
+        p = name_to_palace.get(pn, {})
+
+        topic = TOPICS.get(pn, pn)
+        impact = IMPACT.get(pn, "")
+
         # 星曜
-        stars1 = p1.get("主星", [])
-        stars2 = p2.get("主星", [])
-        all_s = list(dict.fromkeys(stars1 + stars2))  # unique ordered
-        star_str = "、".join(all_s[:2]) if all_s else ""
-        
-        # 四化高亮: 如果流年四化星落在这两个宫位
+        stars = p.get("主星", [])
+        aux = p.get("辅星", [])
+        all_s = list(dict.fromkeys(stars + aux))
+        star_str = "、".join(all_s[:3]) if all_s else ""
+
+        # 四化高亮
         highlights = []
-        for s, label_h in [(s_lu,"禄"), (s_quan,"权"), (s_ke,"科"), (s_ji,"忌")]:
-            if s and (s in stars1 + p1.get("辅星",[]) or s in stars2 + p2.get("辅星",[])):
-                highlights.append(f"{label_h}")
-        
-        note = f"{label}：{topic}"
-        if star_str: note += f" ({star_str})"
-        if highlights: note += f" {'·'.join(highlights)}⚡"
+        for s, hl in [(s_lu,"化禄·吉"), (s_quan,"化权·成"), (s_ke,"化科·名"), (s_ji,"化忌·慎")]:
+            if s and (s in stars or s in aux):
+                highlights.append(hl)
+
+        # 宫位分(若存在)
+        pal_score = p.get("分", "")
+        pal_score_str = f"（{pal_score}分）" if pal_score else ""
+
+        # 组装：正月：命宫(贪狼化忌) 化忌·慎 — 自我状态变化，主导全年基调
+        note = f"{label}：{pn}{pal_score_str}"
+        if star_str: note += f"({star_str})"
+        if highlights: note += " " + " ".join(highlights)
+        note += f" — {impact}"
         months.append(note)
-    
+
     return months
 
 
