@@ -781,12 +781,37 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     _llm = _f.result()
                     _dy = _dy_futures[_f]
                     if not _llm: continue
-                    _parts = _llm.split("|||")
-                    _dy["综合解读"] = _parts[0].strip() if _parts else _llm
-                    # 5维(财富/事业/婚姻/子女/父母)
-                    for _i, _label in enumerate(["财富","事业","婚姻","子女","父母"]):
-                        if _i+1 < len(_parts):
-                            _dy.setdefault("评分",{})[_label+"_llm"] = _parts[_i+1].strip()[:300]
+                    # 解析:按 ||| 切,过滤空段
+                    _parts = [p.strip() for p in _llm.split("|||") if p.strip()]
+                    # 字段映射:按段首字段名匹配,匹配不上再按位置
+                    _field_map = {}
+                    _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
+                    for _p in _parts:
+                        for _f_name in _FIELDS:
+                            # 支持多种前缀格式:[财富] 【财富】 财富: 财富：
+                            if _p.startswith(f"[{_f_name}]") or _p.startswith(f"【{_f_name}】") \
+                               or _p.startswith(f"{_f_name}:") or _p.startswith(f"{_f_name}："):
+                                if _f_name not in _field_map:  # 只取第一次
+                                    _field_map[_f_name] = _p
+                                break
+                    # 字段名匹配 + 位置回退:按预期顺序填
+                    if "综合" not in _field_map and len(_parts) >= 1:
+                        _field_map["综合"] = _parts[0]
+                    for _i, _f_name in enumerate(["财富", "事业", "婚姻", "子女", "父母"]):
+                        if _f_name not in _field_map and _i + 1 < len(_parts):
+                            _field_map[_f_name] = _parts[_i + 1]
+                    # 写入dy字段
+                    if "综合" in _field_map:
+                        _dy["综合解读"] = _field_map["综合"][:300]
+                    for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
+                        if _f_name in _field_map:
+                            # 去掉段首字段名前缀(若仍残留)
+                            _v = _field_map[_f_name]
+                            for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
+                                if _v.startswith(_pfx):
+                                    _v = _v[len(_pfx):].strip()
+                                    break
+                            _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:300]
                 except Exception:
                     pass
 
@@ -887,17 +912,28 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""你是一位执业三十年的玄学命理专家，精通紫微斗数，熟谙世情。请为以下命主的大运{ctx.get('dayun_age','')}岁（{ctx.get('dayun_gong','')}宫，综合{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}）做整体把脉。
+        prompt = f"""你是一位执业三十年的玄学命理专家，浸淫紫微斗数与子平八字，精通世情洞明，老成持重。请为以下命主之大运把脉。
 
-要求严格用|||分隔6段，每段55-80字：
-第1段【综合运情】整体基调、十年核心运势走向、需重点关注领域。
-第2段【财富】结合当前经济周期与行业大势分析，给出理财方向。
-第3段【事业】结合职场生态与升迁机制，给出发展策略。
-第4段【婚姻】结合社会婚恋观变化，给出感情经营建议。
-第5段【子女】结合子女教育投入与代际沟通，给出教养方向。
-第6段【父母】结合养老医疗现实，给出孝亲与陪伴建议。
-维度分参考：{sc}。任何维度低于60分，必须明确点出风险并给出化解方向。背景：{ctx.get('birth','')}年{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因{ctx.get('laiyin','')}。
-语气沉稳有威仪，富有同理心，不轻浮、不说教、不堆砌星曜名词，给出可操作的方向性指引。|||分隔6段无标题"""
+【命盘资料】大运{ctx.get('dayun_age','')}岁，{ctx.get('dayun_gong','')}宫，综合评分{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。生于{ctx.get('birth','')}年，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因宫{ctx.get('laiyin','')}。
+【维度分】{sc}（低于60分者须明确指出风险隐患并给化解方向）
+
+【输出格式】严格按以下6段顺序输出，每段用【字段名】开头作前缀，段间用"|||"（三竖线）分隔：
+【综合】100字内，整体基调、十年走向、重点关注领域。
+【财富】60-80字。
+【事业】60-80字。
+【婚姻】60-80字。
+【子女】60-80字。
+【父母】60-80字。
+
+【内容要求】
+1. 必须以玄学专家身份开口，典雅称谓如"此运大限走入官禄宫，老衲细观星盘..."、"师观命主此运..."、"以鄙人之见..."等
+2. 必须引用至少2个2024-2026年社会时事（AI冲击/老龄化少子化/经济周期/35岁职场危机/学区房/鸡娃/婚育率下降/灵活就业/股市房市/医改养老等），将时事与命理结合论断
+3. 语态沉稳有威仪，富有同理心，不轻浮不说教不堆砌星曜名词
+4. 给出可操作的方向性指引，例如"宜提前布局XX行业""应于春季前完成XX""远离XX类合作"
+5. 维度低于60者必须先点出风险（如"财运低迷易破财"），再给化解方向
+6. 严格6段，每段必须带【字段名】前缀，缺一段视为不完整
+
+请直接输出6段内容，不要前缀说明。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
