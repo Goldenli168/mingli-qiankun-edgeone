@@ -752,16 +752,21 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # ===== 大运LLM: 顺序调,避免EdgeOne并发连接限制(14并行HTTP会超限) =====
-    # 限制最多4个大运(当前+未来3个),LLM结果在磁盘缓存
+    # ===== 大运LLM: 当前大运+下一个(2个),顺序调避免并发 =====
     _dayun_count = 0
     _dayun_max = 2
+    _found_current = False
     for dy in result["大运"]:
         if _time.time() > _llm_deadline: break
         if _dayun_count >= _dayun_max: break
-        age = _now - solar_year
-        if dy.get('起始年龄', 0) > age + 30:  # 超出当前+30年不调
-            break
+        _age_start = dy.get('起始年龄', 0)
+        _age_end = dy.get('结束年龄', 999)
+        # 跳过已过的大运,从当前大运开始
+        if not _found_current:
+            if _age <= _age_end:  # 找到了当前大运
+                _found_current = True
+            else:
+                continue  # 跳过已过的大运
         _dayun_count += 1
         llm = _llm_generate("dayun", _build_dayun_context(dy, result, _natal_patterns))
         if not llm: continue
