@@ -1008,19 +1008,21 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
         }
         html += '</div></td></tr>';
       } else {
-        // 模板 fallback
+        // 模板 fallback(12月单月,横向滚动避免被截断)
         html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
-          '<div class="monthly-panel" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 10px;background:var(--bg-card2);border-radius:0 0 8px 8px;margin:0 1px">';
-        var monthColors = ['#e74c3c','#e67e22','#2ecc71','#3498db','#9b59b6','#1abc9c'];
+          '<div class="monthly-scroll" style="display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:var(--bg-card2);border-radius:0 0 8px 8px;margin:0 1px;scrollbar-width:thin;-webkit-overflow-scrolling:touch">';
+        var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6'];
         for (var mi = 0; mi < ln['逐月'].length; mi++) {
           var m = ln['逐月'][mi];
           var col = monthColors[mi % monthColors.length];
-          var parts = m.split('：');
-          var label = parts[0] || m;
+          // 用"："切分label/detail,防御性空值处理
+          var parts = (m || '').split('：');
+          var label = parts[0] || m || ('月' + (mi + 1));
           var detail = parts[1] || '';
-          html += '<div style="background:var(--bg-card);border-radius:6px;padding:6px 8px;border-left:3px solid ' + col + ';font-size:0.72em;line-height:1.5">' +
-            '<span style="font-weight:bold;color:' + col + '">' + label + '</span>' +
-            '<span style="color:var(--text-dim);margin-left:4px">' + detail + '</span>' +
+          // 提取"月"前数字(支持"正月"和"十一月"两种)
+          html += '<div style="flex:0 0 110px;min-width:110px;background:var(--bg-card);border-radius:6px;padding:6px 8px;border-top:3px solid ' + col + ';font-size:0.72em;line-height:1.4">' +
+            '<div style="font-weight:bold;color:' + col + ';margin-bottom:2px">' + escapeHtml(label) + '</div>' +
+            '<div style="color:var(--text-dim);font-size:0.95em">' + escapeHtml(detail) + '</div>' +
           '</div>';
         }
         html += '</div></td></tr>';
