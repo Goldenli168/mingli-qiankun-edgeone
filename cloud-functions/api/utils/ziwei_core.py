@@ -755,7 +755,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ===== 大运LLM: 顺序调,避免EdgeOne并发连接限制(14并行HTTP会超限) =====
     # 限制最多4个大运(当前+未来3个),LLM结果在磁盘缓存
     _dayun_count = 0
-    _dayun_max = 4
+    _dayun_max = 2
     for dy in result["大运"]:
         if _time.time() > _llm_deadline: break
         if _dayun_count >= _dayun_max: break
