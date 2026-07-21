@@ -872,11 +872,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 严格用|||分隔三段，不要标题/markdown/引号。"""
     
     elif gen_type == "dayun":
-        sc = ctx.get('scores','')
-        prompt = f"""你是资深紫微斗数命理师，请为以下大运写7段分析用|||分隔:
-{ctx.get('dayun_age','')}岁,{ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。
-7段:综合解读(≥100字),财富,事业,婚姻,子女,父母,健康。每段≥100字口语化,低于60分要指风险。维度:{sc}。
-出生{ctx.get('birth','')},八字{ctx.get('bazi','')[:80]},格局{ctx.get('patterns','')[:60]},来因{ctx.get('laiyin','')}。"""
+        prompt = f"""你是资深紫微斗数命理师，请为以下大运写一段100字综合解读:
+{ctx.get('dayun_age','')}岁,{ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分。
+出生{ctx.get('birth','')}。
+口语化，有趣味性，不要罗列星曜。”""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
