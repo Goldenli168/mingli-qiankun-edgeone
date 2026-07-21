@@ -887,10 +887,15 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     else:
         return None
     
-    cache_key = f"zw:{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
-    # 大运要7段每段100字,需要更大输出空间
+    # 缓存key：简洁格式,gen_type+年龄
+    import time as _t
+    try:
+        age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
+        ck = f"zw:{gen_type}:{hash(str(age))}"
+    except:
+        ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1500 if gen_type == "dayun" else 800
-    return llm_call(prompt, cache_key, max_tokens=max_tok)
+    return llm_call(prompt, ck, max_tokens=max_tok)
 
 
 def _zhi_to_for_monthly(places):
