@@ -872,10 +872,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""命盘大运{ctx.get('dayun_age','')}，{ctx.get('dayun_gong','')}宫，{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。输出7段用|||分隔：
-第1段≥100字：此十年整体基调、核心机遇、风险点、方向性建议。口语化有人情味。
-第2-7段各≥100字：财富、事业、婚姻、子女、父母、健康。结合维度分指出得失，低于60分须说风险给化解方向，每条列具体建议。维度：{sc}。
-背景：{ctx.get('birth','')}, {ctx.get('bazi','')}, 格局{ctx.get('patterns','')}, 来因{ctx.get('laiyin','')}，宫位{ctx.get('twelve','')[:300]}|||分隔7段无标题"""
+        prompt = f"""你是资深紫微斗数命理师，请为以下大运写7段分析用|||分隔:
+{ctx.get('dayun_age','')}岁,{ctx.get('dayun_gong','')}宫,{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。
+7段:综合解读(≥100字),财富,事业,婚姻,子女,父母,健康。每段≥100字口语化,低于60分要指风险。维度:{sc}。
+出生{ctx.get('birth','')},八字{ctx.get('bazi','')[:80]},格局{ctx.get('patterns','')[:60]},来因{ctx.get('laiyin','')}。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深紫微斗数命理师，请为以下命盘写一段200字全局总结。
@@ -889,7 +889,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     cache_key = f"zw:{gen_type}:{hash(frozenset({k:str(v)[:30] for k,v in ctx.items() if k!='ln_brief_old'}.items()))}"
     # 大运要7段每段100字,需要更大输出空间
-    max_tok = 2000 if gen_type == "dayun" else 800
+    max_tok = 1500 if gen_type == "dayun" else 800
     return llm_call(prompt, cache_key, max_tokens=max_tok)
 
 
