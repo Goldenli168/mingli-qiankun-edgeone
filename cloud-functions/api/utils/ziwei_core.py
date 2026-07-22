@@ -732,7 +732,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
     # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 40
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 25  # EdgeOne 实际限制~30s
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -756,8 +756,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if yr in _liunian_llm_years and yr <= _now + 2:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
-    # 总结
+    # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    # 流年LLM 暂时跳过(EdgeOne 30s限制下不可行)
 
     # ===== 大运LLM: 串行调用(避免并发连接限制) + 重试2次 =====
     # 7个未来大运 × 6s(含重试) = 42s, +总结8s = 50s < 60s EdgeOne限制
@@ -772,9 +773,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         _dayun_pending.append(dy)
 
     # 串行调用大运LLM(避免并发限速,内置重试2次)
-    # 策略: 当前大运+下一个完整LLM(max_tokens=1200) = 2个×8s=16s
-    #       其他5个未来大运精简LLM(只输出综合,max_tokens=600) = 5个×4s=20s
-    #       总计36s < 60s EdgeOne限制
+    # EdgeOne实际限制~30s: 1完整(8s)+2精简(8s)+总结(6s)=22s✓
     if _dayun_pending:
         import re as _re
         _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
@@ -785,7 +784,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             _dayun_count += 1
             try:
                 # 区分任务:前2个完整,后续精简(只输出综合)
-                _is_priority = (_dayun_count <= 2)
+                _is_priority = (_dayun_count <= 1)  # 仅当前大运完整LLM
                 if _is_priority:
                     _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
                 else:
