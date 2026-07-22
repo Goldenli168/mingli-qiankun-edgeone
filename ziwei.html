@@ -987,10 +987,10 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
     }
     html += '</tr>';
-    // 逐月面板 — LLM优先，模板fallback
-    if (ln['逐月LLM'] || (ln['逐月'] && ln['逐月'].length > 0)) {
-      var monthlyLLM = ln['逐月LLM'] || '';
-      if (monthlyLLM) {
+    // 逐月面板 — 统一渲染 ln['逐月']
+    if (ln['逐月'] && ln['逐月'].length > 0) {
+      var monthlyLLM = ''; // 弃用
+      if (false) {  // LLM分支弃用,统一走模板fallback(LLM已写入ln['逐月'])
         // LLM 格式: "正二月:提醒, 三四月:提醒, ..."
         var monthPairs = monthlyLLM.split(/[,，]/);
         html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
@@ -1007,7 +1007,7 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
           '</div>';
         }
         html += '</div></td></tr>';
-      } else {
+      } else {  // 走模板fallback
         // 模板 fallback(12月单月,横向滚动避免被截断)
         html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
           '<div class="monthly-scroll" style="display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:var(--bg-card2);border-radius:0 0 8px 8px;margin:0 1px;scrollbar-width:thin;-webkit-overflow-scrolling:touch">';

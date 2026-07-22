@@ -837,9 +837,20 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
                 if gen_type == "liunian":
                     parts = llm.split("|||", 2)
-                    target["简评"] = parts[0].strip()[:50]
-                    target["简评详情"] = parts[1].strip() if len(parts) > 1 else ""
-                    target["逐月LLM"] = parts[2].strip() if len(parts) > 2 else ""
+                    # 剥前缀"段一/段二/段三："
+                    def _strip_pfx(s):
+                        return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
+                    target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
+                    target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
+                    # 段三按 ||| 拆 6 个双月,覆盖到 ln['逐月']
+                    seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
+                    if seg3_raw:
+                        months_arr = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
+                        if len(months_arr) >= 6:
+                            target["逐月"] = months_arr[:12]
+                        else:
+                            # LLM 输出少,合并模板数据(不覆盖)
+                            pass
 
                 elif gen_type == "summary":
                     target["命盘总结"] = llm
@@ -915,13 +926,19 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
 【流年】{ctx.get('ln_gz','')}年。命主生于{ctx.get('birth','')}，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}。
 
-【输出格式】三段，用|||分隔：
-段一：50字年度要点（事业/财富/婚姻/子女/健康五维各一句）|||
+【输出格式】严格用|||分隔3段（每段内部不再使用|||）：
+段一：50字punchline（事业/财富/婚姻/子女/健康五维各一句）|||
 段二：100字逐年分析（结合行业趋势与家庭阶段，给可操作建议）|||
-段三：6个双月提醒（正二月:提醒, 三四月:..., 五六月:..., 七八月:..., 九十月:..., 十一十二月:...）每段15字
+段三：6个双月提醒，月份与内容用全角冒号"："分隔，双月之间用|||分隔：
+正二月：15字内提醒|||
+三四月：15字内提醒|||
+五六月：15字内提醒|||
+七八月：15字内提醒|||
+九十月：15字内提醒|||
+十一十二月：15字内提醒
 
-【要求】专业而务实，切入点落到具体决策层面（如是否跳槽/是否投资/是否备婚/如何教育/制定怎样的健康计划），避免空泛。口语化但不敷衍。
-直接输出，不要标题。"""
+【要求】专业而务实，落到具体决策（跳槽/投资/备婚/教育/健康计划），口语化不敷衍。
+直接输出3段内容。"""
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
