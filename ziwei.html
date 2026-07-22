@@ -151,6 +151,31 @@
   .ln-mini-table .ln-now td { background: rgba(201,168,76,0.08); }
   .ln-mini-table tr:hover td { background: rgba(201,168,76,0.04); }
 
+  /* ---- 流年卡片式布局 ---- */
+  .ln-section-title { font-size: 0.76em; color: var(--gold); font-weight: bold; margin-top: 10px; padding: 8px 0; border-top: 1px dashed var(--border); letter-spacing: 1px; }
+  .ln-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 6px; }
+  .ln-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: all 0.2s; }
+  .ln-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px rgba(201,168,76,0.1); }
+  .ln-now-card { border-color: var(--gold); border-width: 2px; background: rgba(201,168,76,0.04); }
+  .ln-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .ln-card-year { font-size: 0.85em; font-weight: bold; color: var(--gold); }
+  .ln-card-gz { font-size: 0.72em; color: var(--text-dim); }
+  .ln-card-score { margin-left: auto; font-size: 0.95em; font-weight: bold; }
+  .ln-card-dims { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-bottom: 6px; }
+  .ln-dim-item { display: flex; align-items: center; gap: 3px; font-size: 0.62em; }
+  .ln-dim-label { color: var(--text-dim); min-width: 24px; }
+  .ln-dim-bar { flex: 1; min-width: 40px; height: 4px; background: rgba(42,53,80,0.3); border-radius: 2px; overflow: hidden; }
+  .ln-dim-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .ln-dim-val { color: var(--text-dim); font-weight: bold; min-width: 16px; text-align: right; }
+  .ln-card-brief { font-size: 0.68em; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
+  .ln-card-detail { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .ln-detail-text { font-size: 0.68em; color: var(--text-dim); line-height: 1.65; margin-bottom: 8px; }
+  .ln-monthly-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .ln-month-card { background: var(--bg-card2); border-radius: 5px; padding: 5px 7px; border-top: 3px solid; }
+  .ln-month-label { font-size: 0.65em; font-weight: bold; margin-bottom: 2px; }
+  .ln-month-detail { font-size: 0.68em; color: var(--text); line-height: 1.4; }
+  .ln-expand-hint { font-size: 0.6em; color: var(--text-dim); text-align: center; margin-top: 4px; opacity: 0.7; }
+
   /* ---- 流年总表 ---- */
   .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .liunian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
@@ -938,7 +963,6 @@ document.addEventListener('keydown', function(e) {
 });
 
 function buildDayunLiunian(birthYear, startAge, endAge) {
-  // 从全局流年数据中筛选该大运区间内的年份
   var liunianList = (currentResult && currentResult['流年']) || [];
   if (liunianList.length === 0) return '';
   var startYear = birthYear + startAge;
@@ -951,86 +975,110 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
   }
   if (filtered.length === 0) return '';
   var nowYear = new Date().getFullYear();
-  var starMap = {5:'★★★★★',4:'★★★★☆',3:'★★★☆☆',2:'★★☆☆☆',1:'★☆☆☆☆'};
   var dimCfg = [
-    {key:'事业', color:'#3498db', label:'事业'},
-    {key:'财富', color:'#2ecc71', label:'财富'},
-    {key:'婚姻', color:'#e74c3c', label:'婚姻'},
-    {key:'子女', color:'#9b59b6', label:'子女'},
-    {key:'健康', color:'#f39c12', label:'健康'}
+    {key:'事业', color:'#3498db'},{key:'财富', color:'#2ecc71'},
+    {key:'婚姻', color:'#e74c3c'},{key:'子女', color:'#9b59b6'},
+    {key:'健康', color:'#f39c12'}
   ];
-  var html = '<div class="ln-mini-title">📅 此运流年（' + startYear + '—' + endYear + '）</div>';
-  html += '<div class="ln-mini-scroll"><table class="ln-mini-table">';
-  html += '<thead><tr><th>年份</th><th>干支</th><th>十神</th><th>评</th><th>简评</th>';
-  for (var di = 0; di < dimCfg.length; di++) {
-    html += '<th style="color:' + dimCfg[di].color + ';letter-spacing:0">' + dimCfg[di].label + '</th>';
-  }
-  html += '</tr></thead><tbody>';
+  var html = '<div class="ln-section-title">此运流年（' + startYear + '—' + endYear + '）</div>';
+  html += '<div class="ln-card-grid">';
+  
   for (var i = 0; i < filtered.length; i++) {
     var ln = filtered[i];
     var isNow = (ln['年份'] === nowYear);
     var sc = ln['评分']||50;
-    var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? 'var(--gold)' : 'var(--red-light)';
-    var detailId = 'ln-detail-' + ln['年份'];
-    var hasDetail = (ln['简评详情'] && ln['简评详情'].length > 5);
-    html += '<tr' + (isNow ? ' class="ln-now"' : '') + '>' +
-      '<td class="ln-yr">' + ln['年份'] + (isNow?' ▸':'') + '</td>' +
-      '<td>' + (ln['流年干支']||'') + '</td>' +
-      '<td class="ln-ss">' + (ln['十神']||'') + '</td>' +
-      '<td style="color:' + scColor + ';font-weight:bold">' + sc + '</td>' +
-      '<td class="ln-brief' + (hasDetail ? ' ln-tip' : '') + '"' + (hasDetail ? ' data-tip="' + escapeHtml(ln['简评详情']||'') + '"' : '') + '>' +
-        (ln['简评']||'') +
-      '</td>';
+    var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? '#d4a844' : '#e74c3c';
+    var hasDetail = (ln['简评详情'] && ln['简评详情'].length > 5) || (ln['逐月'] && ln['逐月'].length > 0);
+    var cardId = 'ln-card-' + ln['年份'];
+    
+    // 卡片头：年份 + 干支 + 评分
+    html += '<div class="ln-card' + (isNow ? ' ln-now-card' : '') + '" onclick="toggleLnDetail('' + cardId + '')">';
+    html += '<div class="ln-card-header">';
+    html += '<span class="ln-card-year">' + ln['年份'] + (isNow ? ' ▸' : '') + '</span>';
+    html += '<span class="ln-card-gz">' + (ln['流年干支']||'') + '</span>';
+    html += '<span class="ln-card-score" style="color:' + scColor + '">' + sc + '</span>';
+    html += '</div>';
+    
+    // 5 维 mini bar
+    html += '<div class="ln-card-dims">';
     for (var di = 0; di < dimCfg.length; di++) {
-      var dimScore = ln[dimCfg[di].key + '分'] || '';
-      var dimStars = starMap[ln[dimCfg[di].key]] || '—';
-      html += '<td class="ln-star" style="color:' + dimCfg[di].color + '">' + dimStars + ' <span style="font-size:0.85em;opacity:0.7">' + dimScore + '</span></td>';
+      var dv = ln[dimCfg[di].key + '分'] || ln[dimCfg[di].key] || 50;
+      if (typeof dv === 'string') dv = parseInt(dv) || 50;
+      if (dv > 100) dv = 100;
+      var w = dv;
+      var barClr = dv >= 65 ? 'rgba(46,204,113,0.9)' : dv >= 45 ? 'rgba(212,168,68,0.9)' : 'rgba(231,76,60,0.9)';
+      html += '<div class="ln-dim-item">' +
+        '<span class="ln-dim-label">' + dimCfg[di].key + '</span>' +
+        '<span class="ln-dim-bar"><span class="ln-dim-fill" style="width:' + w + '%;background:' + barClr + '"></span></span>' +
+        '<span class="ln-dim-val">' + dv + '</span>' +
+      '</div>';
     }
-    html += '</tr>';
-    // 逐月面板 — 统一渲染 ln['逐月']
-    if (ln['逐月'] && ln['逐月'].length > 0) {
-      var monthlyLLM = ''; // 弃用
-      if (false) {  // LLM分支弃用,统一走模板fallback(LLM已写入ln['逐月'])
-        // LLM 格式: "正二月:提醒, 三四月:提醒, ..."
-        var monthPairs = monthlyLLM.split(/[,，]/);
-        html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
-          '<div class="monthly-scroll" style="display:flex;gap:8px;overflow-x:auto;padding:10px 12px;background:var(--bg-card2);border-radius:0 0 8px 8px;scrollbar-width:thin;-webkit-overflow-scrolling:touch">';
-        var mColors = ['#e74c3c','#e67e22','#2ecc71','#3498db','#9b59b6','#1abc9c'];
-        for (var mi = 0; mi < monthPairs.length; mi++) {
-          var mp = monthPairs[mi].trim();
-          if (!mp) continue;
-          var col = mp.indexOf(':') > -1 ? mp.split(':')[1] : '';
-          var lbl = mp.indexOf(':') > -1 ? mp.split(':')[0].trim() : '月';
-          html += '<div style="flex:0 0 auto;min-width:110px;background:var(--bg-card);border-radius:8px;padding:8px 10px;border-top:3px solid ' + mColors[mi%6] + ';font-size:0.72em;line-height:1.5">' +
-            '<div style="font-weight:bold;color:' + mColors[mi%6] + ';margin-bottom:3px;font-size:0.95em">' + lbl + '</div>' +
-            '<div style="color:var(--text-dim)">' + col + '</div>' +
-          '</div>';
-        }
-        html += '</div></td></tr>';
-      } else {  // 走模板fallback
-        // 模板 fallback(12月单月,横向滚动避免被截断)
-        html += '<tr class="ln-monthly-row"><td colspan="' + (5 + dimCfg.length) + '" style="padding:0;border:none">' +
-          '<div class="monthly-scroll" style="display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:var(--bg-card2);border-radius:0 0 8px 8px;margin:0 1px;scrollbar-width:thin;-webkit-overflow-scrolling:touch">';
-        var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6'];
-        for (var mi = 0; mi < ln['逐月'].length; mi++) {
-          var m = ln['逐月'][mi];
-          var col = monthColors[mi % monthColors.length];
-          // 用"："切分label/detail,防御性空值处理
-          var parts = (m || '').split('：');
-          var label = parts[0] || m || ('月' + (mi + 1));
-          var detail = parts[1] || '';
-          // 提取"月"前数字(支持"正月"和"十一月"两种)
-          html += '<div style="flex:0 0 110px;min-width:110px;background:var(--bg-card);border-radius:6px;padding:6px 8px;border-top:3px solid ' + col + ';font-size:0.72em;line-height:1.4">' +
-            '<div style="font-weight:bold;color:' + col + ';margin-bottom:2px">' + escapeHtml(label) + '</div>' +
-            '<div style="color:var(--text-dim);font-size:0.95em">' + escapeHtml(detail) + '</div>' +
-          '</div>';
-        }
-        html += '</div></td></tr>';
+    html += '</div>';
+    
+    // 简评
+    var brief = ln['简评'] || '';
+    if (brief) {
+      html += '<div class="ln-card-brief">' + escapeHtml(brief) + '</div>';
+    }
+    
+    // 可折叠详情区
+    if (hasDetail) {
+      html += '<div class="ln-card-detail" id="' + cardId + '" style="display:none">';
+      
+      // 简评详情
+      var detail = ln['简评详情'] || '';
+      if (detail) {
+        html += '<div class="ln-detail-text">' + escapeHtml(detail) + '</div>';
       }
+      
+      // 逐月面板
+      var months = ln['逐月'] || [];
+      if (months.length > 0) {
+        var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6',
+                          '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#1abc9c'];
+        html += '<div class="ln-monthly-grid">';
+        for (var mi = 0; mi < months.length; mi++) {
+          var m = months[mi];
+          if (!m || !(m.trim())) continue;
+          var col = monthColors[mi % monthColors.length];
+          var sep = m.indexOf('：') > -1 ? '：' : (m.indexOf(':') > -1 ? ':' : null);
+          var parts = sep ? m.split(sep) : [m];
+          var label = (parts[0] || ('月' + (mi + 1))).trim();
+          var mdetail = (parts.slice(1).join(sep || '')).trim();
+          html += '<div class="ln-month-card" style="border-top-color:' + col + '">' +
+            '<div class="ln-month-label" style="color:' + col + '">' + escapeHtml(label) + '</div>' +
+            '<div class="ln-month-detail">' + escapeHtml(mdetail) + '</div>' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+      
+      html += '<div class="ln-expand-hint">▲ 点击收起</div>';
+      html += '</div>'; // end detail
+      
+      html += '<div class="ln-expand-hint">▼ 点击展开详情与流月</div>';
     }
+    
+    html += '</div>'; // end card
   }
-  html += '</tbody></table></div>';
+  
+  html += '</div>'; // end grid
   return html;
+}
+
+// 折叠切换
+function toggleLnDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var card = el.parentElement;  // .ln-card
+  var isOpen = el.style.display === 'block';
+  el.style.display = isOpen ? 'none' : 'block';
+  // 更新展开/收起提示
+  var hints = card.querySelectorAll('.ln-expand-hint');
+  if (hints.length >= 2) {
+    hints[0].style.display = isOpen ? 'block' : 'none';   // "点击展开"
+    hints[1].style.display = isOpen ? 'none' : 'block';  // (inside detail) "点击收起"
+  }
 }
 
 function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
