@@ -60,34 +60,42 @@ def _save_entry(key: str, content: str):
 _LLM_CACHE = _load_cache()
 
 
-def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800) -> str | None:
-    """通用 LLM 调用: 发 prompt 到 DeepSeek, 带缓存, 失败返回 None"""
+def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: int = 2) -> str | None:
+    """通用 LLM 调用: 发 prompt 到 DeepSeek, 带缓存, 失败重试, 重试用尽返回 None"""
     import json, urllib.request, ssl
-    
+
     # 缓存
     ck = cache_key or f"generic:{hash(prompt)}"
     if ck in _LLM_CACHE:
         return _LLM_CACHE[ck]
-    
+
     if not DEEPSEEK_API_KEY:
         return None
-    
-    try:
-        ctx_ssl = ssl.create_default_context()
-        ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
-        data = json.dumps({"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens, "temperature": 0.7, "stream": False}).encode('utf-8')
-        req = urllib.request.Request(DEEPSEEK_URL, data=data,
-            headers={'Content-Type': 'application/json',
-                     'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                     'User-Agent': 'mq/1.0'})
-        with urllib.request.urlopen(req, timeout=10, context=ctx_ssl) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
-            content = result['choices'][0]['message']['content'].strip()
-            if len(content) > 10:
-                _LLM_CACHE[ck] = content
-                _save_entry(ck, content)
-                return content
+
+    ctx_ssl = ssl.create_default_context()
+    ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
+    data = json.dumps({"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens, "temperature": 0.7, "stream": False}).encode('utf-8')
+
+    # 重试 2 次 (共 3 次机会)
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(DEEPSEEK_URL, data=data,
+                headers={'Content-Type': 'application/json',
+                         'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                         'User-Agent': 'mq/1.0'})
+            with urllib.request.urlopen(req, timeout=8, context=ctx_ssl) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+                content = result['choices'][0]['message']['content'].strip()
+                if len(content) > 10:
+                    _LLM_CACHE[ck] = content
+                    _save_entry(ck, content)
+                    return content
+                return None
+        except Exception as e:
+            if attempt < retries:
+                _time.sleep(0.3 * (attempt + 1))  # 指数退避: 0.3s, 0.6s
+                continue
+            # 最后一次失败,记录但不抛
             return None
-    except Exception:
-        return None
+    return None
