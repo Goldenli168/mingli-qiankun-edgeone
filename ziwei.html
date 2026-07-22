@@ -419,6 +419,10 @@
 // ============================================================
 
 // ---- 全局状态 ----
+var _syncedBirth = null;
+var currentSex = '男';
+var currentResult = null;
+var activeDetailIdx = -1;
 
 // 页面加载时检查是否有八字页同步的生辰信息
 (function initSync() {
@@ -992,7 +996,7 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
     var cardId = 'ln-card-' + ln['年份'];
     
     // 卡片头：年份 + 干支 + 评分
-    html += '<div class="ln-card' + (isNow ? ' ln-now-card' : '') + '" onclick="toggleLnDetail('' + cardId + '')">';
+    html += '<div class="ln-card' + (isNow ? ' ln-now-card' : '') + '" onclick="toggleLnDetail(\'' + cardId + '\')">';
     html += '<div class="ln-card-header">';
     html += '<span class="ln-card-year">' + ln['年份'] + (isNow ? ' ▸' : '') + '</span>';
     html += '<span class="ln-card-gz">' + (ln['流年干支']||'') + '</span>';
