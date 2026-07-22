@@ -774,6 +774,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # 4线程并行跑大运LLM
     if _dayun_pending:
         from concurrent.futures import ThreadPoolExecutor, as_completed as _ac
+        import re as _re
         with ThreadPoolExecutor(max_workers=4) as _dy_pool:
             _dy_futures = {_dy_pool.submit(_llm_generate, "dayun", _build_dayun_context(dy, result, _natal_patterns)): dy for dy in _dayun_pending if _time.time() < _llm_deadline}
             for _f in _ac(_dy_futures, timeout=max(1, _llm_deadline - _time.time())):
@@ -781,42 +782,51 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     _llm = _f.result()
                     _dy = _dy_futures[_f]
                     if not _llm: continue
-                    # 解析:按 ||| 切,过滤空段
-                    _parts = [p.strip() for p in _llm.split("|||") if p.strip()]
-                    # 字段映射:按段首字段名匹配,匹配不上再按位置
-                    _field_map = {}
+                    # 主解析:按【字段名】标识符切分(适配LLM不输出|||的情况)
                     _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
-                    for _p in _parts:
-                        for _f_name in _FIELDS:
-                            # 支持多种前缀格式:[财富] 【财富】 财富: 财富：
-                            if _p.startswith(f"[{_f_name}]") or _p.startswith(f"【{_f_name}】") \
-                               or _p.startswith(f"{_f_name}:") or _p.startswith(f"{_f_name}："):
-                                if _f_name not in _field_map:  # 只取第一次
-                                    _field_map[_f_name] = _p
-                                break
-                    # 字段名匹配 + 位置回退:按预期顺序填
-                    if "综合" not in _field_map and len(_parts) >= 1:
-                        _field_map["综合"] = _parts[0]
-                    for _i, _f_name in enumerate(["财富", "事业", "婚姻", "子女", "父母"]):
-                        if _f_name not in _field_map and _i + 1 < len(_parts):
-                            _field_map[_f_name] = _parts[_i + 1]
+                    _field_map = {}
+                    # 用正则按【字段名】切分(支持【】和[]两种)
+                    _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
+                    # 先把 LLM 输出按字段标识符切成多段
+                    _pieces = _re.split(_pat, _llm)
+                    # _pieces 格式: ['', '综合', '...内容...', '财富', '...内容...', ...]
+                    if len(_pieces) >= 3:
+                        for _i in range(1, len(_pieces) - 1, 2):
+                            _f_name = _pieces[_i]
+                            _content = _pieces[_i + 1].strip() if _i + 1 < len(_pieces) else ''
+                            if _f_name in _FIELDS and _f_name not in _field_map:
+                                _field_map[_f_name] = _content
+                    # 备用解析:按 ||| 切
+                    if not _field_map:
+                        _parts = [p.strip() for p in _llm.split("|||") if p.strip()]
+                        for _p in _parts:
+                            for _f_name in _FIELDS:
+                                if _p.startswith(f"[{_f_name}]") or _p.startswith(f"【{_f_name}】") \
+                                   or _p.startswith(f"{_f_name}:") or _p.startswith(f"{_f_name}："):
+                                    if _f_name not in _field_map:
+                                        _field_map[_f_name] = _p
+                                    break
+                        if "综合" not in _field_map and len(_parts) >= 1:
+                            _field_map["综合"] = _parts[0]
+                        for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
+                            if _f_name not in _field_map and _i+1 < len(_parts):
+                                _field_map[_f_name] = _parts[_i+1]
                     # 写入dy字段
                     if "综合" in _field_map:
-                        _dy["综合解读"] = _field_map["综合"][:300]
+                        _dy["综合解读"] = _field_map["综合"][:400]
                     for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
                         if _f_name in _field_map:
-                            # 去掉段首字段名前缀(若仍残留)
                             _v = _field_map[_f_name]
                             for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
                                 if _v.startswith(_pfx):
                                     _v = _v[len(_pfx):].strip()
                                     break
-                            _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:300]
+                            _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
                 except Exception:
                     pass
 
-    # ===== 并行池: 只跑流年+总结(轻量,不超连接限制) =====
-    with ThreadPoolExecutor(max_workers=2) as pool:  # 2线程降低并发
+    # ===== 并行池: 流年+总结(2线程,避免与上面的4线程大运池冲突) =====
+    with ThreadPoolExecutor(max_workers=3) as pool:  # 3线程
         futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
         for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
             t = futures[fut]
@@ -915,23 +925,23 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""请基于以下命主大运资料，给出专业而克制的命理分析。
+        prompt = f"""你是资深命理分析师，融合传统紫微斗数与现代世情观察。请为以下命主大运给出专业且落地的分析。
 
 【命盘】大运{ctx.get('dayun_age','')}岁，{ctx.get('dayun_gong','')}宫，综合评分{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。生于{ctx.get('birth','')}年，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因宫{ctx.get('laiyin','')}。
 【维度分】{sc}（低于60分须指出风险并给方向）
 
-【输出格式】严格按以下6段顺序，每段用【字段名】前缀，段间用"|||"分隔：
-【综合】80-100字，整体走向与重点关注领域。
-【财富】50-65字。
-【事业】50-65字。
-【婚姻】50-65字。
-【子女】50-65字。
-【父母】50-65字。
+【输出格式】严格用【字段名】开头标识每段，段与段之间用换行分隔（不需要用|||），每段字段名必须存在：
+【综合】约200字（整体走向、核心课题、十年基调）
+【财富】60-80字（结合行业大势，给可操作理财方向）
+【事业】60-80字（结合职场生态，给发展策略）
+【婚姻】60-80字（结合当下婚恋观，给感情经营建议）
+【子女】60-80字（结合教育趋势，给教养方向）
+【父母】60-80字（结合养老医疗，给孝亲陪伴建议）
 
 【要求】
-1. 结合当下时代背景（经济结构、婚育观念、养老医疗、就业市场等）与命盘格局对应分析，无需生硬列举时事
-2. 维度低于60者先点风险（如"财运低迷易破财"）再给化解方向
-3. 给出可操作的方向性建议
+1. 结合时代背景（经济结构、婚育观念、养老医疗、就业市场等）自然融入分析，不要生硬列举
+2. 维度低于60者先点风险再给化解方向
+3. 给出可操作方向：建议"何时做""做什么""避开什么"
 4. 语气专业、务实、有温度，避免矫揉造作
 
 直接输出6段内容。"""
