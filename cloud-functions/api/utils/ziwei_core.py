@@ -771,15 +771,25 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         # 加入待LLM列表(当前+未来所有)
         _dayun_pending.append(dy)
 
-    # 串行调用大运LLM(避免并发限速,内置重试2次由llm_call提供)
+    # 串行调用大运LLM(避免并发限速,内置重试2次)
+    # 策略: 当前大运+下一个完整LLM(max_tokens=1200) = 2个×8s=16s
+    #       其他5个未来大运精简LLM(只输出综合,max_tokens=600) = 5个×4s=20s
+    #       总计36s < 60s EdgeOne限制
     if _dayun_pending:
         import re as _re
         _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
         _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
+        _dayun_count = 0
         for _dy in _dayun_pending:
             if _time.time() > _llm_deadline: break
+            _dayun_count += 1
             try:
-                _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
+                # 区分任务:前2个完整,后续精简(只输出综合)
+                _is_priority = (_dayun_count <= 2)
+                if _is_priority:
+                    _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
+                else:
+                    _llm = _llm_generate("dayun_brief", _build_dayun_context(_dy, result, _natal_patterns))
                 if not _llm: continue
                 _field_map = {}
                 # 主解析:按【字段名】切分
@@ -952,9 +962,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 1. 结合时代背景（经济结构、婚育观念、养老医疗、就业市场等）自然融入分析，不要生硬列举
 2. 维度低于60者先点风险再给化解方向
 3. 给出可操作方向：建议"何时做""做什么""避开什么"
-4. 语气专业、务实、有温度，避免矫揉造作
+4. 语气沉稳有威仪，富有同理心，不轻浮不说教
+5. 严格6段，每段必须带【字段名】前缀，缺一段视为不完整
 
 直接输出6段内容。"""
+
+    elif gen_type == "dayun_brief":
+        # 精简版:只输出【综合】段,200字内,用于未来非优先大运(避免超时)
+        sc = ctx.get('scores','')
+        prompt = f"""你是命理分析师。请用150-200字概括以下大运的整体走向和重点关注领域:
+大运{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫,综合{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年,{ctx.get('bazi','')[:60]},格局{ctx.get('patterns','')[:40]}。维度:{sc}。
+用【综合】前缀开头,1段文字不需分段,结合时代背景,口语化务实。直接输出。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
@@ -972,7 +990,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v4"  # v4 让旧缓存失效
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 1200 if gen_type == "dayun" else 800  # dayun 6段需要更大输出空间
+    max_tok = 1200 if gen_type == "dayun" else (600 if gen_type == "dayun_brief" else 800)
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
