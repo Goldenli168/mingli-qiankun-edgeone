@@ -750,18 +750,46 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # 流年: 当前年+未来2年(控制LLM数量避免超时)
+    # 流年: 当前大运内所有剩余年份(从今年到大运结束)
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if yr in _liunian_llm_years and yr <= _now + 2:
+        if yr in _liunian_llm_years:  # _liunian_llm_years 已正确过滤: _now~_dy_end
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
     # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
-    # 流年LLM 暂时跳过(EdgeOne 30s限制下不可行)
 
-    # ===== 大运LLM: 串行调用(避免并发连接限制) + 重试2次 =====
-    # 7个未来大运 × 6s(含重试) = 42s, +总结8s = 50s < 60s EdgeOne限制
+    # ===== 流年+总结池: 先跑(10s硬上限,剩余时间留给大运) =====
+    _pool_deadline = min(_llm_deadline, _time.time() + 10)  # 最多10s
+    if tasks and _time.time() < _pool_deadline:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _pool_deadline}
+            for fut in as_completed(futures, timeout=max(1, _pool_deadline - _time.time())):
+                t = futures[fut]
+                try:
+                    llm = fut.result()
+                    gen_type, target, ctx = t
+                    if not llm: continue
+
+                    if gen_type == "liunian":
+                        parts = llm.split("|||", 2)
+                        def _strip_pfx(s):
+                            return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
+                        target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
+                        target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
+                        seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
+                        if seg3_raw:
+                            months_arr = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
+                            if len(months_arr) >= 6:
+                                target["逐月"] = months_arr[:12]
+
+                    elif gen_type == "summary":
+                        target["命盘总结"] = llm
+                except Exception:
+                    pass
+
+    # ===== 大运LLM: 串行调用(流年池已跑10s,剩余~12-15s给大运) =====
+    # 1完整(8s) + 2精简(6s) = 14s < 15s ✓
     _age_now = _now - solar_year
     _dayun_pending = []  # 待LLM的大运列表
     for dy in result["大运"]:
@@ -827,38 +855,6 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             except Exception:
                 pass
 
-    # ===== 并行池: 流年+总结(2线程,避免与上面的4线程大运池冲突) =====
-    with ThreadPoolExecutor(max_workers=3) as pool:  # 3线程
-        futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _llm_deadline}
-        for fut in as_completed(futures, timeout=max(1, _llm_deadline - _time.time())):
-            t = futures[fut]
-            try:
-                llm = fut.result()  # 不设超时
-                gen_type, target, ctx = t
-                if not llm: continue
-
-                if gen_type == "liunian":
-                    parts = llm.split("|||", 2)
-                    # 剥前缀"段一/段二/段三："
-                    def _strip_pfx(s):
-                        return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
-                    target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
-                    target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
-                    # 段三按 ||| 拆 6 个双月,覆盖到 ln['逐月']
-                    seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
-                    if seg3_raw:
-                        months_arr = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
-                        if len(months_arr) >= 6:
-                            target["逐月"] = months_arr[:12]
-                        else:
-                            # LLM 输出少,合并模板数据(不覆盖)
-                            pass
-
-                elif gen_type == "summary":
-                    target["命盘总结"] = llm
-            except Exception:
-                pass
-    
     return result
 
 
