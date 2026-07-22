@@ -779,9 +779,18 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                         target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
                         seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
                         if seg3_raw:
-                            months_arr = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
-                            if len(months_arr) >= 6:
-                                target["逐月"] = months_arr[:12]
+                            raw_items = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
+                            # 只保留月份标签项(丢弃混入的简评性质长文本)
+                            import re as _re_m
+                            _MONTH_RE = _re_m.compile(r"^[正一二三四五六七八九十]{1,3}月$|^正二月$|^十一十二月$|^\d{1,2}月$")
+                            months_filtered = []
+                            for _it in raw_items:
+                                _first = (_it.split("：")[0] if "：" in _it else (_it.split(":")[0] if ":" in _it else _it)).strip()
+                                if _MONTH_RE.match(_first) and len(_it) <= 80:
+                                    months_filtered.append(_it)
+                            # 必须≥6个有效月份才覆盖(否则保留模板数据)
+                            if len(months_filtered) >= 6:
+                                target["逐月"] = months_filtered[:12]
 
                     elif gen_type == "summary":
                         target["命盘总结"] = llm
