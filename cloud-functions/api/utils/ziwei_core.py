@@ -732,7 +732,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
     # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 40
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 25  # EdgeOne 实际限制~30s
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -756,8 +756,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if yr in _liunian_llm_years and yr <= _now + 2:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
-    # 总结
+    # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    # 流年LLM 暂时跳过(EdgeOne 30s限制下不可行)
 
     # ===== 大运LLM: 串行调用(避免并发连接限制) + 重试2次 =====
     # 7个未来大运 × 6s(含重试) = 42s, +总结8s = 50s < 60s EdgeOne限制
@@ -772,9 +773,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         _dayun_pending.append(dy)
 
     # 串行调用大运LLM(避免并发限速,内置重试2次)
-    # 策略: 当前大运+下一个完整LLM(max_tokens=1200) = 2个×8s=16s
-    #       其他5个未来大运精简LLM(只输出综合,max_tokens=600) = 5个×4s=20s
-    #       总计36s < 60s EdgeOne限制
+    # EdgeOne实际限制~30s: 1完整(8s)+2精简(8s)+总结(6s)=22s✓
     if _dayun_pending:
         import re as _re
         _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
@@ -785,7 +784,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             _dayun_count += 1
             try:
                 # 区分任务:前2个完整,后续精简(只输出综合)
-                _is_priority = (_dayun_count <= 2)
+                _is_priority = (_dayun_count <= 1)  # 仅当前大运完整LLM
                 if _is_priority:
                     _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
                 else:
@@ -945,27 +944,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深命理分析师，融合传统紫微斗数与现代世情观察。请为以下命主大运给出专业且落地的分析。
-
-【命盘】大运{ctx.get('dayun_age','')}岁，{ctx.get('dayun_gong','')}宫，综合评分{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。生于{ctx.get('birth','')}年，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因宫{ctx.get('laiyin','')}。
-【维度分】{sc}（低于60分须指出风险并给方向）
-
-【输出格式】严格用【字段名】开头标识每段，段与段之间用换行分隔（不需要用|||），每段字段名必须存在：
-【综合】约200字（整体走向、核心课题、十年基调）
-【财富】60-80字（结合行业大势，给可操作理财方向）
-【事业】60-80字（结合职场生态，给发展策略）
-【婚姻】60-80字（结合当下婚恋观，给感情经营建议）
-【子女】60-80字（结合教育趋势，给教养方向）
-【父母】60-80字（结合养老医疗，给孝亲陪伴建议）
-
-【要求】
-1. 结合时代背景（经济结构、婚育观念、养老医疗、就业市场等）自然融入分析，不要生硬列举
-2. 维度低于60者先点风险再给化解方向
-3. 给出可操作方向：建议"何时做""做什么""避开什么"
-4. 语气沉稳有威仪，富有同理心，不轻浮不说教
-5. 严格6段，每段必须带【字段名】前缀，缺一段视为不完整
-
-直接输出6段内容。"""
+        prompt = f"""你是资深命理分析师。请用200字概括以下大运的整体走向与5维分析。
+大运{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫,综合{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。生于{ctx.get('birth','')}年,{ctx.get('bazi','')[:60]},格局{ctx.get('patterns','')[:40]},来因{ctx.get('laiyin','')}。维度:{sc}。
+严格用【字段名】前缀分6段(综合100字+5维各50字),结合时代背景,口语化务实。直接输出。"""
 
     elif gen_type == "dayun_brief":
         # 精简版:只输出【综合】段,200字内,用于未来非优先大运(避免超时)
@@ -990,7 +971,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v4"  # v4 让旧缓存失效
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 1200 if gen_type == "dayun" else (600 if gen_type == "dayun_brief" else 800)
+    max_tok = 800  # 统一 max_tokens(800对summary已验证可用,1200不稳定)
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
