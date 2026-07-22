@@ -954,11 +954,20 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 严格用【字段名】前缀分6段(综合100字+5维各50字),结合时代背景,口语化务实。直接输出。"""
 
     elif gen_type == "dayun_brief":
-        # 精简版:只输出【综合】段,200字内,用于未来非优先大运(避免超时)
+        # 精简版:输出【综合+5维精简】6段,每段30-40字,用于未来非优先大运
         sc = ctx.get('scores','')
-        prompt = f"""你是命理分析师。请用150-200字概括以下大运的整体走向和重点关注领域:
+        prompt = f"""你是命理分析师。请为以下大运给出综合+5维精简分析(各30-40字):
 大运{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫,综合{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年,{ctx.get('bazi','')[:60]},格局{ctx.get('patterns','')[:40]}。维度:{sc}。
-用【综合】前缀开头,1段文字不需分段,结合时代背景,口语化务实。直接输出。"""
+
+严格按【字段名】前缀输出6段,段间用换行:
+【综合】30-40字(整体走向)
+【财富】30-40字(结合理财方向)
+【事业】30-40字(结合发展策略)
+【婚姻】30-40字(结合感情经营)
+【子女】30-40字(结合教育方向)
+【父母】30-40字(结合孝亲陪伴)
+
+结合时代背景自然融入,口语化务实。直接输出。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
@@ -976,7 +985,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v4"  # v4 让旧缓存失效
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 800  # 统一 max_tokens(800对summary已验证可用,1200不稳定)
+    max_tok = 600 if gen_type == "dayun_brief" else 800  # dayun_brief 5维精简用600,其他用800
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
