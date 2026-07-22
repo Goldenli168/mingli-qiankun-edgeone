@@ -750,17 +750,17 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # 流年: 当前年+未来5年(覆盖整个当前大运含大运最后一年)
+    # 流年: 当前年+未来2年(控制LLM数量避免超时)
     for ln in _liunian_raw:
         yr = ln["年份"]
-        if yr in _liunian_llm_years and yr <= _now + 5:
+        if yr in _liunian_llm_years and yr <= _now + 2:
             tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
     # 总结
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # ===== 大运LLM: 当前+所有未来大运(无数量上限),但只跳已过的大运 =====
-    # 用并行池,4线程,单次LLM约8s
+    # ===== 大运LLM: 串行调用(避免并发连接限制) + 重试2次 =====
+    # 7个未来大运 × 6s(含重试) = 42s, +总结8s = 50s < 60s EdgeOne限制
     _age_now = _now - solar_year
     _dayun_pending = []  # 待LLM的大运列表
     for dy in result["大运"]:
@@ -770,60 +770,53 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if _age_end < _age_now: continue
         # 加入待LLM列表(当前+未来所有)
         _dayun_pending.append(dy)
-    
-    # 4线程并行跑大运LLM
+
+    # 串行调用大运LLM(避免并发限速,内置重试2次由llm_call提供)
     if _dayun_pending:
-        from concurrent.futures import ThreadPoolExecutor, as_completed as _ac
         import re as _re
-        with ThreadPoolExecutor(max_workers=4) as _dy_pool:
-            _dy_futures = {_dy_pool.submit(_llm_generate, "dayun", _build_dayun_context(dy, result, _natal_patterns)): dy for dy in _dayun_pending if _time.time() < _llm_deadline}
-            for _f in _ac(_dy_futures, timeout=max(1, _llm_deadline - _time.time())):
-                try:
-                    _llm = _f.result()
-                    _dy = _dy_futures[_f]
-                    if not _llm: continue
-                    # 主解析:按【字段名】标识符切分(适配LLM不输出|||的情况)
-                    _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
-                    _field_map = {}
-                    # 用正则按【字段名】切分(支持【】和[]两种)
-                    _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
-                    # 先把 LLM 输出按字段标识符切成多段
-                    _pieces = _re.split(_pat, _llm)
-                    # _pieces 格式: ['', '综合', '...内容...', '财富', '...内容...', ...]
-                    if len(_pieces) >= 3:
-                        for _i in range(1, len(_pieces) - 1, 2):
-                            _f_name = _pieces[_i]
-                            _content = _pieces[_i + 1].strip() if _i + 1 < len(_pieces) else ''
-                            if _f_name in _FIELDS and _f_name not in _field_map:
-                                _field_map[_f_name] = _content
-                    # 备用解析:按 ||| 切
-                    if not _field_map:
-                        _parts = [p.strip() for p in _llm.split("|||") if p.strip()]
-                        for _p in _parts:
-                            for _f_name in _FIELDS:
-                                if _p.startswith(f"[{_f_name}]") or _p.startswith(f"【{_f_name}】") \
-                                   or _p.startswith(f"{_f_name}:") or _p.startswith(f"{_f_name}："):
-                                    if _f_name not in _field_map:
-                                        _field_map[_f_name] = _p
-                                    break
-                        if "综合" not in _field_map and len(_parts) >= 1:
-                            _field_map["综合"] = _parts[0]
-                        for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
-                            if _f_name not in _field_map and _i+1 < len(_parts):
-                                _field_map[_f_name] = _parts[_i+1]
-                    # 写入dy字段
-                    if "综合" in _field_map:
-                        _dy["综合解读"] = _field_map["综合"][:400]
-                    for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
-                        if _f_name in _field_map:
-                            _v = _field_map[_f_name]
-                            for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
-                                if _v.startswith(_pfx):
-                                    _v = _v[len(_pfx):].strip()
-                                    break
-                            _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
-                except Exception:
-                    pass
+        _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
+        _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
+        for _dy in _dayun_pending:
+            if _time.time() > _llm_deadline: break
+            try:
+                _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
+                if not _llm: continue
+                _field_map = {}
+                # 主解析:按【字段名】切分
+                _pieces = _re.split(_pat, _llm)
+                if len(_pieces) >= 3:
+                    for _i in range(1, len(_pieces) - 1, 2):
+                        _f_name = _pieces[_i]
+                        _content = _pieces[_i + 1].strip() if _i + 1 < len(_pieces) else ''
+                        if _f_name in _FIELDS and _f_name not in _field_map:
+                            _field_map[_f_name] = _content
+                # 备用:按 ||| 切
+                if not _field_map:
+                    _parts = [p.strip() for p in _llm.split("|||") if p.strip()]
+                    for _p in _parts:
+                        for _f_name in _FIELDS:
+                            if _p.startswith(f"[{_f_name}]") or _p.startswith(f"【{_f_name}】") or _p.startswith(f"{_f_name}:") or _p.startswith(f"{_f_name}："):
+                                if _f_name not in _field_map:
+                                    _field_map[_f_name] = _p
+                                break
+                    if "综合" not in _field_map and len(_parts) >= 1:
+                        _field_map["综合"] = _parts[0]
+                    for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
+                        if _f_name not in _field_map and _i+1 < len(_parts):
+                            _field_map[_f_name] = _parts[_i+1]
+                # 写入字段
+                if "综合" in _field_map:
+                    _dy["综合解读"] = _field_map["综合"][:400]
+                for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
+                    if _f_name in _field_map:
+                        _v = _field_map[_f_name]
+                        for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
+                            if _v.startswith(_pfx):
+                                _v = _v[len(_pfx):].strip()
+                                break
+                        _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
+            except Exception:
+                pass
 
     # ===== 并行池: 流年+总结(2线程,避免与上面的4线程大运池冲突) =====
     with ThreadPoolExecutor(max_workers=3) as pool:  # 3线程
@@ -976,7 +969,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v3"  # v3 确保新prompt不命中旧缓存
+        ck = f"zw:{gen_type}:{hash(str(age))}:v4"  # v4 让旧缓存失效
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else 800  # dayun 6段需要更大输出空间
