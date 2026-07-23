@@ -991,7 +991,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v5"  # v5 让v4旧缓存失效
+        ck = f"zw:{gen_type}:{hash(str(age))}:v6"  # v6 让旧缓存失效(dayun max_tok=1200 fix)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
