@@ -850,6 +850,15 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
                         if _f_name not in _field_map and _i+1 < len(_parts):
                             _field_map[_f_name] = _parts[_i+1]
+                # 备用3: 单段文本内按"财富/事业/婚姻/子女/父母："关键字切分
+                if len(_field_map) < 3:
+                    import re as _re3
+                    for _f_name in ["财富","事业","婚姻","子女","父母"]:
+                        if _f_name in _field_map: continue
+                        # 匹配 "财富：...内容..." 到下一个"事业：/婚姻：/子女：/父母：/结束"
+                        m = _re3.search(rf"{_f_name}[:：](.{{20,200}}?)(?=(?:财富|事业|婚姻|子女|父母)[:：]|$)", _llm, _re3.DOTALL)
+                        if m:
+                            _field_map[_f_name] = m.group(1).strip()
                 # 写入字段
                 if "综合" in _field_map:
                     _dy["综合解读"] = _field_map["综合"][:400]
@@ -949,17 +958,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深命理分析师。请为这大运输出6段分析,用|||分隔每段:
+        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含5维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-格式:综合180字|||财富80字|||事业80字|||婚姻80字|||子女80字|||父母80字
-结合时代背景,口语化务实。直接输出。"""
+内容要包含:财富、事业、婚姻、子女、父母5维,各维度60-80字。
+口语务实,结合时代背景,直接输出。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深命理分析师。请为这大运输出6段精简分析,用|||分隔:
+        prompt = f"""资深命理师。请分析这大运,输出1段约300字综合点评(包含5维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-格式:综合80字|||财富50字|||事业50字|||婚姻50字|||子女50字|||父母50字
-结合时代背景,口语化务实。直接输出。"""
+5维(财富/事业/婚姻/子女/父母)各50-60字。
+口语务实,直接输出。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
@@ -974,7 +983,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v8"  # v8 简洁prompt(和liunian同长度)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v9"  # v9 单段+关键字切分(和liunian同长度)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
