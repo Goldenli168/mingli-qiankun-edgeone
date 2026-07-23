@@ -183,4 +183,5 @@ def liunian_api():
 @app.route("/health", methods=["GET"])
 def health():
     from utils.ziwei_core import _last_llm_debug
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.0.13", "llm_debug": _last_llm_debug})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.0.19", "llm_debug": _last_llm_debug})
+# REBUILD_FORCE: 2026-07-23 21:23 CST — 强制EdgeOne云函数重建触发行
