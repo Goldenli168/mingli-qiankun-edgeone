@@ -994,7 +994,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v5"  # v5 让v4旧缓存失效
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 700 if gen_type == "dayun_brief" else 800  # dayun_brief 5维精简用700,其他用800
+    max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
