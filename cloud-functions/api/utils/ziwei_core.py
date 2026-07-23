@@ -850,15 +850,18 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
                         if _f_name not in _field_map and _i+1 < len(_parts):
                             _field_map[_f_name] = _parts[_i+1]
-                # 备用3: 单段文本内按"财富/事业/婚姻/子女/父母："关键字切分
+                # 备用3: 单段文本内按"财富/事业/婚姻/子女/父母"切分(支持**XX(分)**)
                 if len(_field_map) < 3:
                     import re as _re3
-                    for _f_name in ["财富","事业","婚姻","子女","父母"]:
-                        if _f_name in _field_map: continue
-                        # 匹配 "财富：...内容..." 到下一个"事业：/婚姻：/子女：/父母：/结束"
-                        m = _re3.search(rf"{_f_name}[:：](.{{20,200}}?)(?=(?:财富|事业|婚姻|子女|父母)[:：]|$)", _llm, _re3.DOTALL)
-                        if m:
-                            _field_map[_f_name] = m.group(1).strip()
+                    _split_parts = _re3.split(r'\*\*([^\*]+)\*\*', _llm)
+                    for _i in range(1, len(_split_parts) - 1, 2):
+                        _lbl = _split_parts[_i].strip()
+                        _cnt = _split_parts[_i+1].strip() if _i+1 < len(_split_parts) else ''
+                        for _f_name in ["财富","事业","婚姻","子女","父母"]:
+                            if _f_name in _field_map: continue
+                            if _lbl.startswith(_f_name) and len(_cnt) > 10:
+                                _field_map[_f_name] = _cnt
+                                break
                 # 写入字段
                 if "综合" in _field_map:
                     _dy["综合解读"] = _field_map["综合"][:400]
@@ -983,7 +986,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v9"  # v9 单段+关键字切分(和liunian同长度)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v10"  # v10 split-by-asterisk-parser(和liunian同长度)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
