@@ -115,7 +115,16 @@ def ziwei_api():
     if not (1 <= day <= 31):
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
-    result = full_ziwei_analysis(year, month, day, hour, sex)
+    try:
+        result = full_ziwei_analysis(year, month, day, hour, sex)
+    except Exception as e:
+        import traceback
+        err_msg = "分析异常: %s" % str(e)[:200]
+        try:
+            sys.stderr.write("[ziwei] %s | %s\n" % (err_msg, traceback.format_exc()[:500]))
+        except: pass
+        return jsonify({"error": err_msg, "trace": traceback.format_exc()[:1000]}), 500
+
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response
