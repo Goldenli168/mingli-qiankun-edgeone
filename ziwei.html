@@ -41,16 +41,16 @@
   .palace-main-stars { font-size: 0.78em; color: var(--gold-light); margin-bottom: 3px; line-height: 1.4; }
   .palace-aux-stars { font-size: 0.68em; color: var(--text-dim); margin-bottom: 3px; line-height: 1.3; }
   .mw-tag { font-size: 0.7em; vertical-align: super; margin-left: 1px; border-radius: 2px; padding: 0 2px; }
-  .mw-good { color: #2ecc71; }
+  .mw-good { color: var(--green); }
   .mw-mid { color: var(--gold); }
   .mw-bad { color: var(--red-light); }
-  .p-good .fh-star { color: #2ecc71; }
+  .p-good .fh-star { color: var(--green); }
   .p-warn .fh-star { color: var(--gold); }
   .p-info .fh-star { color: var(--text); }
   .palace-sihua { font-size: 0.65em; display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 3px; }
   .sihua-tag { padding: 1px 5px; border-radius: 4px; font-size: 0.95em; }
-  .sihua-lu { background: rgba(39,174,96,0.15); color: #2ecc71; }
-  .sihua-quan { background: rgba(41,128,185,0.15); color: #3498db; }
+  .sihua-lu { background: rgba(39,174,96,0.15); color: var(--green); }
+  .sihua-quan { background: rgba(41,128,185,0.15); color: var(--blue); }
   .sihua-ke { background: rgba(201,168,76,0.15); color: var(--gold); }
   .sihua-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
   .palace-daxian { font-size: 0.62em; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 4px; margin-top: 3px; }
@@ -95,11 +95,11 @@
   .dayun-card .stars-line .star-label { color: var(--text-dim); margin-right: 4px; }
 
   .dayun-badge { display: inline-block; padding: 2px 10px; border-radius: 5px; font-size: 0.78em; font-weight: bold; letter-spacing: 1px; }
-  .badge-shangji { background: rgba(39,174,96,0.18); color: #2ecc71; }
-  .badge-zhongji { background: rgba(52,152,219,0.18); color: #3498db; }
+  .badge-shangji { background: rgba(39,174,96,0.18); color: var(--green); }
+  .badge-zhongji { background: rgba(52,152,219,0.18); color: var(--blue); }
   .badge-pingyun { background: rgba(201,168,76,0.18); color: var(--gold); }
   .badge-pianxiong { background: rgba(231,76,60,0.14); color: var(--red-light); }
-  .badge-daxiong { background: rgba(192,57,43,0.2); color: #e74c3c; }
+  .badge-daxiong { background: rgba(192,57,43,0.2); color: var(--red-light); }
 
   /* ---- 大运五维评分条 ---- */
   .score-bars { margin: 6px 0; }
@@ -109,13 +109,13 @@
   .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; min-width: 4px; }
   .score-bar-val { width: 26px; text-align: right; flex-shrink: 0; font-weight: bold; margin-left: 4px; }
   .bar-wealth .score-bar-fill { background: linear-gradient(90deg, #27ae60, #2ecc71); }
-  .bar-wealth .score-bar-val { color: #2ecc71; }
+  .bar-wealth .score-bar-val { color: var(--green); }
   .bar-career .score-bar-fill { background: linear-gradient(90deg, #2980b9, #3498db); }
-  .bar-career .score-bar-val { color: #3498db; }
+  .bar-career .score-bar-val { color: var(--blue); }
   .bar-marriage .score-bar-fill { background: linear-gradient(90deg, #c0392b, #e74c3c); }
-  .bar-marriage .score-bar-val { color: #e74c3c; }
+  .bar-marriage .score-bar-val { color: var(--red-light); }
   .bar-children .score-bar-fill { background: linear-gradient(90deg, #8e44ad, #9b59b6); }
-  .bar-children .score-bar-val { color: #9b59b6; }
+  .bar-children .score-bar-val { color: var(--purple); }
   .bar-parents .score-bar-fill { background: linear-gradient(90deg, #c9a84c, #e8d48b); }
   .bar-parents .score-bar-val { color: var(--gold-light); }
 
@@ -126,16 +126,16 @@
   .dayun-card.past { opacity: 0.55; }
   .dayun-card.past:hover { opacity: 1; }
   .dayun-card.future { border-color: rgba(201,168,76,0.15); background: rgba(17,24,39,0.6); }
-  .dayun-deep .deep-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
-  .dayun-deep .deep-text { font-size: 0.7em; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
+  .dayun-deep .deep-title { font-size: 0.85em; color: var(--gold); font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
+  .dayun-deep .deep-text { font-size: 0.82em; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
   .dayun-deep .dim-section { margin-bottom: 6px; }
   .dayun-deep .dim-label { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68em; font-weight: bold; margin-right: 4px; }
-  .dim-wealth { background: rgba(39,174,96,0.15); color: #2ecc71; }
-  .dim-career { background: rgba(41,128,185,0.15); color: #3498db; }
-  .dim-marriage { background: rgba(231,76,60,0.12); color: #e74c3c; }
-  .dim-children { background: rgba(155,89,182,0.12); color: #9b59b6; }
+  .dim-wealth { background: rgba(39,174,96,0.15); color: var(--green); }
+  .dim-career { background: rgba(41,128,185,0.15); color: var(--blue); }
+  .dim-marriage { background: rgba(231,76,60,0.12); color: var(--red-light); }
+  .dim-children { background: rgba(155,89,182,0.12); color: var(--purple); }
   .dim-parents { background: rgba(201,168,76,0.15); color: var(--gold); }
-  .dayun-deep .dim-desc { font-size: 0.68em; color: var(--text-dim); line-height: 1.6; margin-left: 4px; }
+  .dayun-deep .dim-desc { font-size: 0.78em; color: var(--text-dim); line-height: 1.6; margin-left: 4px; }
   .dayun-card .expand-hint { font-size: 0.58em; color: var(--text-dim); text-align: center; margin-top: 6px; opacity: 0.7; }
 
   /* ---- 大运内嵌流年迷你表 ---- */
@@ -162,19 +162,19 @@
   .ln-card-gz { font-size: 0.72em; color: var(--text-dim); }
   .ln-card-score { margin-left: auto; font-size: 0.95em; font-weight: bold; }
   .ln-card-dims { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-bottom: 6px; }
-  .ln-dim-item { display: flex; align-items: center; gap: 3px; font-size: 0.62em; }
+  .ln-dim-item { display: flex; align-items: center; gap: 3px; font-size: 0.7em; }
   .ln-dim-label { color: var(--text-dim); min-width: 24px; }
   .ln-dim-bar { flex: 1; min-width: 40px; height: 4px; background: rgba(42,53,80,0.3); border-radius: 2px; overflow: hidden; }
   .ln-dim-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
   .ln-dim-val { color: var(--text-dim); font-weight: bold; min-width: 16px; text-align: right; }
-  .ln-card-brief { font-size: 0.68em; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
+  .ln-card-brief { font-size: 0.78em; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
   .ln-card-detail { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
-  .ln-detail-text { font-size: 0.68em; color: var(--text-dim); line-height: 1.65; margin-bottom: 8px; }
+  .ln-detail-text { font-size: 0.78em; color: var(--text-dim); line-height: 1.65; margin-bottom: 8px; }
   .ln-monthly-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
   .ln-month-card { background: var(--bg-card2); border-radius: 5px; padding: 5px 7px; border-top: 3px solid; }
-  .ln-month-label { font-size: 0.65em; font-weight: bold; margin-bottom: 2px; }
-  .ln-month-detail { font-size: 0.68em; color: var(--text); line-height: 1.4; }
-  .ln-expand-hint { font-size: 0.6em; color: var(--text-dim); text-align: center; margin-top: 4px; opacity: 0.7; }
+  .ln-month-label { font-size: 0.72em; font-weight: bold; margin-bottom: 2px; }
+  .ln-month-detail { font-size: 0.75em; color: var(--text); line-height: 1.4; }
+  .ln-expand-hint { font-size: 0.7em; color: var(--text-dim); text-align: center; margin-top: 4px; opacity: 0.7; }
 
   /* ---- 流年总表 ---- */
   .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
@@ -188,12 +188,12 @@
   .liunian-table .gan-zhi { color: var(--gold-light); }
   .liunian-table .shensha-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.88em; }
   .liunian-table .ss-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
-  .liunian-table .ss-jixiang { background: rgba(39,174,96,0.12); color: #2ecc71; }
+  .liunian-table .ss-jixiang { background: rgba(39,174,96,0.12); color: var(--green); }
   .liunian-table .ss-neutral { background: rgba(136,146,164,0.1); color: var(--text-dim); }
-  .liunian-table .score-good { color: #2ecc71; font-weight: bold; }
+  .liunian-table .score-good { color: var(--green); font-weight: bold; }
   .liunian-table .score-mid { color: var(--gold); font-weight: bold; }
   .liunian-table .score-low { color: var(--red-light); font-weight: bold; }
-  .liunian-table .star-col { font-size: 0.65em; letter-spacing: -1px; white-space: nowrap; }
+  .liunian-table .star-col { font-size: 0.72em; letter-spacing: -1px; white-space: nowrap; }
   .liunian-filter { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
   .liunian-filter input { padding: 6px 10px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 0.85em; width: 80px; }
   .liunian-filter label { color: var(--text-dim); font-size: 0.82em; letter-spacing: 1px; }
@@ -215,8 +215,8 @@
   .feihua-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(201,168,76,0.12); }
   .feihua-card .fh-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .feihua-card .fh-type { font-size: 1.05em; font-weight: bold; padding: 3px 10px; border-radius: 5px; display: inline-block; letter-spacing: 2px; }
-  .fh-type.fh-lu { background: rgba(39,174,96,0.15); color: #2ecc71; }
-  .fh-type.fh-quan { background: rgba(41,128,185,0.15); color: #3498db; }
+  .fh-type.fh-lu { background: rgba(39,174,96,0.15); color: var(--green); }
+  .fh-type.fh-quan { background: rgba(41,128,185,0.15); color: var(--blue); }
   .fh-type.fh-ke { background: rgba(201,168,76,0.15); color: var(--gold); }
   .fh-type.fh-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
   .feihua-card .fh-star { font-size: 1.2em; font-weight: bold; color: var(--gold-light); margin-bottom: 8px; letter-spacing: 2px; }
@@ -230,7 +230,7 @@
   .sync-card.show { display: flex; }
   .sync-card .sync-icon { font-size: 1.6em; flex-shrink: 0; }
   .sync-card .sync-info { flex: 1; min-width: 200px; }
-  .sync-card .sync-title { color: #2ecc71; font-size: 0.95em; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
+  .sync-card .sync-title { color: var(--green); font-size: 0.95em; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
   .sync-card .sync-detail { color: var(--text-dim); font-size: 0.82em; line-height: 1.5; }
   .sync-card .sync-detail strong { color: var(--gold); }
   .sync-card .sync-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -535,6 +535,18 @@ function _loadCache(y,m,d,h,s) {
   try { return JSON.parse(localStorage.getItem(_cacheKey(y,m,d,h,s))||'null'); } catch(e) { return null; }
 }
 function _saveCache(y,m,d,h,s, data) {
+  // localStorage 总量检查 — 超过 2MB 清理旧缓存(保留最近5条)
+  try {
+    var total = 0, keys = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('ziwei_llm_') === 0) { total += localStorage.getItem(k).length; keys.push(k); }
+    }
+    if (total > 2 * 1024 * 1024 && keys.length > 5) {
+      keys.sort(); // 按key名排序(ziwei_llm_v2_1987_...)，先删旧
+      for (var j = 0; j < keys.length - 5; j++) localStorage.removeItem(keys[j]);
+    }
+  } catch(e) {}
   // 只保存LLM相关字段
   var slim = {};
   if (data['命盘总结']) slim.summary = data['命盘总结'];
@@ -869,7 +881,7 @@ function renderResult(data) {
     if (isCurrent) stateCls = ' current';
     else if (dy['结束年龄'] < nowAge) stateCls = ' past';
     else stateCls = ' future';
-    dayunHtml += '<div class="dayun-card' + stateCls + '" onclick="this.classList.toggle(\'expanded\')">' +
+    dayunHtml += '<div class="dayun-card' + stateCls + '" onclick="toggleDayunCard(this)">' +
       '<div class="dayun-header">' +
         '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info" style="color:var(--gold)">' + (dy['大运宫名']||(dy['天干']||'')+(dy['地支']||'')+'宫') + '</span></div>' +
         '<span class="dayun-badge ' + ratingCls + '">' + totalScore + ' ' + rating + '</span>' +
@@ -1086,6 +1098,15 @@ function toggleLnDetail(id) {
 }
 
 function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// 大运卡片展开互斥 — 同时只能展开一张
+function toggleDayunCard(card) {
+  var wasExpanded = card.classList.contains('expanded');
+  // 先收起所有
+  document.querySelectorAll('.dayun-card.expanded').forEach(function(c) { c.classList.remove('expanded'); });
+  // 再展开当前(如原来没展开)
+  if (!wasExpanded) card.classList.add('expanded');
+}
 
 // 简评浮窗：hover/click 展示详情
 (function() {
