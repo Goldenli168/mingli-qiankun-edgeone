@@ -10,13 +10,13 @@ from utils.bazi_core import full_analysis
 
 # ========== API 鉴权（与 EdgeOne 云函数一致） ==========
 _API_KEY = os.environ.get("ML_API_KEY", "mingli-qiankun-v7")  # 本地开发用固定密钥
-_AUTH_WHITELIST = {"/health", "/"}
+_AUTH_WHITELIST = {"/health", "/", "/favicon.ico"}
 
 @app.before_request
 def require_api_key():
     if request.method == "OPTIONS":
         return None
-    if request.path in _AUTH_WHITELIST:
+    if request.path in _AUTH_WHITELIST or request.path.endswith(('.html','.css','.js','.png','.svg','.ico','.json')):
         return None
     client_key = request.headers.get("X-API-Key", "")
     if not client_key or client_key != _API_KEY:
