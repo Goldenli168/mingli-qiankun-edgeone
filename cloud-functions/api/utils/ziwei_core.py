@@ -949,19 +949,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深命理分析师。请为以下大运给出6段分析,严格用|||分隔,每段必须含字段名前缀:
-大运{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫,综合{ctx.get('dayun_score','')}分{ctx.get('dayun_rating','')}。生于{ctx.get('birth','')}年,{ctx.get('bazi','')[:60]},格局{ctx.get('patterns','')[:40]},来因{ctx.get('laiyin','')}。维度:{sc}。
-输出格式:
-综合：180-200字（整体基调、十年走向、关键转折、需重点布局领域）|||财富：80-100字（结合经济周期与行业趋势，给理财与资产方向）|||事业：80-100字（结合职场生态与升迁规律，给发展策略）|||婚姻：80-100字（结合婚恋观与家庭阶段，给感情经营建议）|||子女：80-100字（结合教育趋势与代际特征，给教养方向）|||父母：80-100字（结合养老医疗，给孝亲陪伴建议）
-结合时代背景,语气专业务实。直接输出6段,段间用|||分隔。"""
+        prompt = f"""你是资深命理分析师。请为这大运输出6段分析,用|||分隔每段:
+{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
+格式:综合180字|||财富80字|||事业80字|||婚姻80字|||子女80字|||父母80字
+结合时代背景,口语化务实。直接输出。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
-        prompt = f"""你是资深命理分析师。请为以下大运给出6段精简分析,严格用|||分隔,每段含字段名:
-大运{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫,综合{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年,{ctx.get('bazi','')[:60]},格局{ctx.get('patterns','')[:40]}。维度:{sc}。
-输出格式:
-综合：80-100字|||财富：50-60字|||事业：50-60字|||婚姻：50-60字|||子女：50-60字|||父母：50-60字
-结合时代背景,语气专业务实。直接输出6段。"""
+        prompt = f"""你是资深命理分析师。请为这大运输出6段精简分析,用|||分隔:
+{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
+格式:综合80字|||财富50字|||事业50字|||婚姻50字|||子女50字|||父母50字
+结合时代背景,口语化务实。直接输出。"""
     
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
@@ -976,7 +974,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v7"  # v7 |||格式(dayun用|||分隔)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v8"  # v8 简洁prompt(和liunian同长度)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
