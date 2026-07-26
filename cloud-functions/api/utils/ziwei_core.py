@@ -961,16 +961,27 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含5维):
+        prompt = f"""资深命理师。请分析这大运,输出约500字。统一用 **财富(NN分)**/**事业(NN分)**/**婚姻(NN分)**/**子女(NN分)**/**父母(NN分)** 标签。
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-内容要包含:财富、事业、婚姻、子女、父母5维,各维度60-80字。
+格式示例:
+综合: <80字整体基调>
+**财富(NN分)**: <80字内容>
+**事业(NN分)**: <80字内容>
+**婚姻(NN分)**: <60字内容>
+**子女(NN分)**: <60字内容>
+**父母(NN分)**: <60字内容>
 口语务实,结合时代背景,直接输出。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出1段约300字综合点评(包含5维):
+        prompt = f"""资深命理师。请分析这大运,约400字。统一用 **财富(NN分)** 标签,5维各独立一段,不要用"财富维度"格式。
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-5维(财富/事业/婚姻/子女/父母)各50-60字。
+格式:综合概述后,逐段:
+**财富(NN分)**: <60字
+**事业(NN分)**: <60字
+**婚姻(NN分)**: <60字
+**子女(NN分)**: <60字
+**父母(NN分)**: <60字
 口语务实,直接输出。"""
     
     elif gen_type == "summary":
@@ -989,7 +1000,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v10"  # v10 split-by-asterisk-parser(和liunian同长度)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
+    max_tok = 1200 if gen_type in ("dayun","dayun_brief") else 800  # 大运类统一1200(装5维)
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
