@@ -772,23 +772,42 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     if not llm: continue
 
                     if gen_type == "liunian":
-                        parts = llm.split("|||", 2)
-                        def _strip_pfx(s):
-                            return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
-                        target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
-                        target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
-                        seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
+                        # v8.32: LLM 实际用 markdown 加粗(**机会**/**风险**...)替代段间 |||
+                        # 兼容两种格式: 老 ||| 三段式 + 新 markdown 加粗式
+                        import re as _re_ln
+                        _MONTH_RE = _re_ln.compile(r"^[正一二三四五六七八九十]{1,3}月$|^正二月$|^十一十二月$|^\d{1,2}月$")
+
+                        # 1) 找月份段起点(正二月/十一十二月)
+                        _m_start = _re_ln.search(r'正二月|十一十二月|正一月', llm)
+                        if _m_start:
+                            _pre_months = llm[:_m_start.start()].rstrip('| \n\r\t-—')
+                            _months_text = llm[_m_start.start():]
+                        else:
+                            # 老格式: ||| 分3段
+                            _pre_months = llm.split('|||')[0] if '|||' in llm else llm
+                            _months_text = '|||'.join(llm.split('|||')[1:]) if '|||' in llm else ""
+
+                        # 2) 段1: 化忌简评(第一句话, ≤50字)
+                        _first_line = _pre_months.split('\n', 1)[0].strip()
+                        target["简评"] = _first_line[:50]
+
+                        # 3) 段2: 剩余 markdown 加粗内容
+                        _rest = _pre_months[len(_first_line):].strip()
+                        # 兼容老 ||| 格式: 段2 在 parts[1]
+                        if not _rest and '|||' in llm and not _m_start:
+                            _parts_old = llm.split('|||', 2)
+                            _rest = _parts_old[1].strip() if len(_parts_old) > 1 else ""
+                        target["简评详情"] = _rest.replace("段二：", "").replace("段三：", "").strip()
+
+                        # 4) 段3: 双月 ||| 分隔
+                        seg3_raw = _months_text
                         if seg3_raw:
                             raw_items = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
-                            # 只保留月份标签项(丢弃混入的简评性质长文本)
-                            import re as _re_m
-                            _MONTH_RE = _re_m.compile(r"^[正一二三四五六七八九十]{1,3}月$|^正二月$|^十一十二月$|^\d{1,2}月$")
                             months_filtered = []
                             for _it in raw_items:
                                 _first = (_it.split("：")[0] if "：" in _it else (_it.split(":")[0] if ":" in _it else _it)).strip()
                                 if _MONTH_RE.match(_first) and len(_it) <= 80:
                                     months_filtered.append(_it)
-                            # 必须≥6个有效月份才覆盖(否则保留模板数据)
                             if len(months_filtered) >= 6:
                                 target["逐月"] = months_filtered[:12]
 
@@ -1023,7 +1042,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v16"  # v15 force recalc (化曜准确+去标签+1200max)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v17"  # v17: 流年解析修复(markdown 加粗 vs |||)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200  # unified for all types

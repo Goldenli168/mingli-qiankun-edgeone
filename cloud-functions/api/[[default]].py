@@ -181,8 +181,8 @@ def liunian_api():
 # ========== 健康检查 ==========
 
 @app.route("/health", methods=["GET"])
-# REBUILD_MARKER_v8.23_20260723 — 此注释变更必须触发云函数重建
+# REBUILD_MARKER_v8.32_20260727 — 流年解析修复(markdown 加粗 vs |||)
 def health():
     from utils.ziwei_core import _last_llm_debug
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.31-palace-sihua", "has_split_parser": True, "has_palace_sihua": True, "cache_v16": True, "llm_debug": _last_llm_debug})
-# REBUILD_FORCE: 2026-07-23 21:23 CST — 强制EdgeOne云函数重建触发行
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.32-liunian-md-parser", "has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "cache_v17": True, "llm_debug": _last_llm_debug})
+# REBUILD_FORCE: 2026-07-27 01:55 CST — v8.32 流年 markdown 解析修复
