@@ -773,22 +773,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
                     if gen_type == "liunian":
                         parts = llm.split("|||", 2)
-                        # LLM可能不在段前加前缀,也可能输出 "|||段一..." → parts[0]为空
-                        # 处理: 过滤空段, 自动跳过前导|||
-                        clean_parts = [p.strip() for p in parts if p.strip()]
                         def _strip_pfx(s):
                             return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
-                        if len(clean_parts) >= 1:
-                            punch = _strip_pfx(clean_parts[0])
-                            target["简评"] = punch[:50] if punch else ""
-                            if len(clean_parts) >= 2:
-                                target["简评详情"] = _strip_pfx(clean_parts[1])[:200]
-                            if len(clean_parts) >= 3:
-                                seg3_raw = _strip_pfx(clean_parts[2])
-                        else:
-                            # LLM未用|||分隔,整段作为简评详情
-                            target["简评详情"] = _strip_pfx(llm)[:200]
-                            seg3_raw = ""
+                        target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
+                        target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
+                        seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
                         if seg3_raw:
                             raw_items = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
                             # 只保留月份标签项(丢弃混入的简评性质长文本)
@@ -861,7 +850,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
                         if _f_name not in _field_map and _i+1 < len(_parts):
                             _field_map[_f_name] = _parts[_i+1]
-                # 备用3: 单段文本内按**财富(分)**/ **财富维度分** 切分
+                # 备用3: 单段文本内按"财富/事业/婚姻/子女/父母"切分(支持**XX(分)**)
                 if len(_field_map) < 3:
                     import re as _re3
                     _split_parts = _re3.split(r'\*\*([^\*]+)\*\*', _llm)
@@ -870,9 +859,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                         _cnt = _split_parts[_i+1].strip() if _i+1 < len(_split_parts) else ''
                         for _f_name in ["财富","事业","婚姻","子女","父母"]:
                             if _f_name in _field_map: continue
-                            # 支持: **财富（95分）** 或 **财富维度95分** 或 **财富: content**
-                            _ok = _lbl.startswith(_f_name) or _lbl.startswith(f"{_f_name}维度") or _lbl.startswith(f"{_f_name}：") or _lbl.startswith(f"{_f_name}:")
-                            if _ok and len(_cnt) > 10:
+                            if _lbl.startswith(_f_name) and len(_cnt) > 10:
                                 _field_map[_f_name] = _cnt
                                 break
                 # 写入字段
@@ -893,8 +880,30 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
 
 def _build_liunian_context(ln, result, patterns, solar_year):
-    _now = __import__('datetime').datetime.now().year
+    _now = __import__("datetime").datetime.now().year
     dayun_now = _find_dayun_for_age(result["大运"], ln["年份"] - solar_year)
+    yr_gan = ln.get("流年干支","甲")[0]
+    yr_sihua = _SIHUA_TABLE.get(yr_gan, ["","","",""])
+    sihua_str = f"化禄:{yr_sihua[0]} 化权:{yr_sihua[1]} 化科:{yr_sihua[2]} 化忌:{yr_sihua[3]}" if yr_sihua[0] else "无四化"
+    yr_zhi = ln.get("流年干支","子")[1]
+    ZHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
+    yr_zhi_idx = ZHI.index(yr_zhi) if yr_zhi in ZHI else 0
+    taisui_palace = "未知宫"
+    for p in result.get("十二宫",[]):
+        if p.get("宫位") == yr_zhi_idx:
+            stars = "、".join(p.get("主星",[])) or "空宫"
+            taisui_palace = f"{p.get('宫名','?')}宫({stars})"
+            break
+    yr = ln["年份"]
+    era_tags = {
+        2026: "AI Agent元年/银发经济起步/35+副业潮",
+        2027: "延迟退休落地/AI替代中级岗位/Z世代主导消费",
+        2028: "生育率冰点/灵活就业主流化/AI伦理立法",
+        2029: "人口拐点/新能源转型/个人IP经济",
+        2030: "全民基本收入试点/太空经济/远程办公常态化",
+        2031: "AI通用智能突破/碳交易全球/长寿经济"
+    }
+    era_info = era_tags.get(yr, f"{yr}年时代背景")
     return {
         "birth": result["基本信息"]["公历"],
         "bazi": result.get("八字联合",{}).get("提示",""),
@@ -903,12 +912,13 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "laiyin": result["来因宫"]["宫名"],
         "dayun": dayun_now,
         "ln_gz": ln["流年干支"],
+        "ln_sihua": sihua_str,
+        "ln_taisui": taisui_palace,
+        "era_info": era_info,
         "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
         "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
         "health": ln.get("健康分","?"),
-        "ln_brief_old": ln["简评"],
     }
-
 def _build_dayun_context(dy, result, patterns):
     twelves = []
     for p in result["十二宫"]:
@@ -954,39 +964,38 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
     
     if gen_type == "liunian":
-        prompt = f"""你是资深命理分析师。请基于当前社会情况与流年干支玄机,给出今年度具体建议。
+        prompt = f"""你是资深命理师。请根据流年干支、四化、太岁,给今年的具体差异化分析。
 
-【流年】{ctx.get('ln_gz','')}年生肖{ctx.get('ln_zodiac','')}。命主生于{ctx.get('birth','')}，{ctx.get('bazi','')[:60]}，来因{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}。
+{ctx.get("ln_gz","")}年生肖 生于{ctx.get("birth","")}, 大运{ctx.get("dayun","")}。
+- 流年四化：{ctx.get("ln_sihua","")}
+- 太岁落宫：{ctx.get("ln_taisui","")}
+- 当年特征：{ctx.get("era_info","")}
+- 五维：事业{ctx.get("career","?")} 财富{ctx.get("wealth","?")} 婚姻{ctx.get("marriage","?")}
 
-【要求】
-1. 第一段50字punchline: 用该年干支与命盘五行的生克关系点出全年核心课题
-2. 第二段100字: 结合2020s时代背景(经济周期/行业AI化/灵活就业/延迟退休/少子化等)与命盘格局,给可操作建议
-3. 第三段6个双月提醒: 每段15字内,点名最需注意的具体事件
-4. 每段用|||分隔,直接输出内容不带前缀标签。不使用markdown。"""
-    
+【强制规则】
+1. 绝不提"2020s""时代背景""经济周期"泛词
+2. 针对该年干支+四化+太岁,写出3个该年独有的差异化表现
+3. 三段用|||分隔,各段内不可再用|||:
+
+第一段50字: [{ctx.get("ln_gz","")}]名称+四化+太岁,总结核心课题
+第二段100字: 结合{ctx.get("era_info","")},给出落地决策(换工作/创业/购房/结婚时机)
+第三段150字: 6个双月,点名具体月份大事件,月份用全角冒号分隔:
+正二月：xxx|||三四月：xxx|||五六月：xxx|||七八月：xxx|||九十月：xxx|||十一十二月：xxx
+
+输出纯文本不加前缀。"""
+
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出约500字。统一用 **财富(NN分)**/**事业(NN分)**/**婚姻(NN分)**/**子女(NN分)**/**父母(NN分)** 标签。
+        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含5维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-格式示例:
-综合: <80字整体基调>
-**财富(NN分)**: <80字内容>
-**事业(NN分)**: <80字内容>
-**婚姻(NN分)**: <60字内容>
-**子女(NN分)**: <60字内容>
-**父母(NN分)**: <60字内容>
+内容要包含:财富、事业、婚姻、子女、父母5维,各维度60-80字。
 口语务实,结合时代背景,直接输出。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,约400字。统一用 **财富(NN分)** 标签,5维各独立一段,不要用"财富维度"格式。
+        prompt = f"""资深命理师。请分析这大运,输出1段约300字综合点评(包含5维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-格式:综合概述后,逐段:
-**财富(NN分)**: <60字
-**事业(NN分)**: <60字
-**婚姻(NN分)**: <60字
-**子女(NN分)**: <60字
-**父母(NN分)**: <60字
+5维(财富/事业/婚姻/子女/父母)各50-60字。
 口语务实,直接输出。"""
     
     elif gen_type == "summary":
@@ -1002,10 +1011,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v11"  # v11 P0修复:流年简评+解析器增强+支态/太岁
+        ck = f"zw:{gen_type}:{hash(str(age))}:v12"  # v12 流年差异化(四化+太岁+年代标签)(和liunian同长度)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 1200 if gen_type in ("dayun","dayun_brief") else 800  # 大运类统一1200(装5维)
+    max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
