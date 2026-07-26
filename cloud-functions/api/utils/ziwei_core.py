@@ -991,7 +991,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v10"  # v10 split-by-asterisk-parser(和liunian同长度)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v15"  # v15 force recalc (化曜准确+去标签+1200max)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200  # unified for all types
