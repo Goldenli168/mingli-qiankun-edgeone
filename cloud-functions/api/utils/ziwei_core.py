@@ -789,6 +789,10 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
                         # 2) 段1: 化忌简评(第一句话, ≤50字)
                         _first_line = _pre_months.split('\n', 1)[0].strip()
+                        # 清理"段1：" "段一："等前缀残留
+                        for _pfx in ["段1：", "段1:", "段一：", "段一:"]:
+                            if _first_line.startswith(_pfx):
+                                _first_line = _first_line[len(_pfx):]
                         target["简评"] = _first_line[:50]
 
                         # 3) 段2: 剩余 markdown 加粗内容
@@ -797,7 +801,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                         if not _rest and '|||' in llm and not _m_start:
                             _parts_old = llm.split('|||', 2)
                             _rest = _parts_old[1].strip() if len(_parts_old) > 1 else ""
-                        target["简评详情"] = _rest.replace("段二：", "").replace("段三：", "").strip()
+                        target["简评详情"] = _rest.replace("段二：", "").replace("段三：", "").replace("段2：", "").replace("段3：", "").strip()
 
                         # 4) 段3: 双月 ||| 分隔
                         seg3_raw = _months_text
