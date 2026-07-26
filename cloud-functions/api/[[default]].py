@@ -184,5 +184,5 @@ def liunian_api():
 # REBUILD_MARKER_v8.23_20260723 — 此注释变更必须触发云函数重建
 def health():
     from utils.ziwei_core import _last_llm_debug
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.26-p0-fix", "has_split_parser": True, "cache_v11": True, "llm_debug": _last_llm_debug})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.27-liunian-diff", "has_split_parser": True, "has_sihua_parser": True, "llm_debug": _last_llm_debug})
 # REBUILD_FORCE: 2026-07-23 21:23 CST — 强制EdgeOne云函数重建触发行
