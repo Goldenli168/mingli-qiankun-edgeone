@@ -773,11 +773,22 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
                     if gen_type == "liunian":
                         parts = llm.split("|||", 2)
+                        # LLM可能不在段前加前缀,也可能输出 "|||段一..." → parts[0]为空
+                        # 处理: 过滤空段, 自动跳过前导|||
+                        clean_parts = [p.strip() for p in parts if p.strip()]
                         def _strip_pfx(s):
                             return s.replace("段三：", "").replace("段二：", "").replace("段一：", "").strip()
-                        target["简评"] = _strip_pfx(parts[0])[:50] if parts else ""
-                        target["简评详情"] = _strip_pfx(parts[1]) if len(parts) > 1 else ""
-                        seg3_raw = _strip_pfx(parts[2]) if len(parts) > 2 else ""
+                        if len(clean_parts) >= 1:
+                            punch = _strip_pfx(clean_parts[0])
+                            target["简评"] = punch[:50] if punch else ""
+                            if len(clean_parts) >= 2:
+                                target["简评详情"] = _strip_pfx(clean_parts[1])[:200]
+                            if len(clean_parts) >= 3:
+                                seg3_raw = _strip_pfx(clean_parts[2])
+                        else:
+                            # LLM未用|||分隔,整段作为简评详情
+                            target["简评详情"] = _strip_pfx(llm)[:200]
+                            seg3_raw = ""
                         if seg3_raw:
                             raw_items = [m.strip() for m in seg3_raw.split("|||") if m.strip()]
                             # 只保留月份标签项(丢弃混入的简评性质长文本)
@@ -850,7 +861,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     for _i, _f_name in enumerate(["财富","事业","婚姻","子女","父母"]):
                         if _f_name not in _field_map and _i+1 < len(_parts):
                             _field_map[_f_name] = _parts[_i+1]
-                # 备用3: 单段文本内按"财富/事业/婚姻/子女/父母"切分(支持**XX(分)**)
+                # 备用3: 单段文本内按**财富(分)**/ **财富维度分** 切分
                 if len(_field_map) < 3:
                     import re as _re3
                     _split_parts = _re3.split(r'\*\*([^\*]+)\*\*', _llm)
@@ -859,7 +870,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                         _cnt = _split_parts[_i+1].strip() if _i+1 < len(_split_parts) else ''
                         for _f_name in ["财富","事业","婚姻","子女","父母"]:
                             if _f_name in _field_map: continue
-                            if _lbl.startswith(_f_name) and len(_cnt) > 10:
+                            # 支持: **财富（95分）** 或 **财富维度95分** 或 **财富: content**
+                            _ok = _lbl.startswith(_f_name) or _lbl.startswith(f"{_f_name}维度") or _lbl.startswith(f"{_f_name}：") or _lbl.startswith(f"{_f_name}:")
+                            if _ok and len(_cnt) > 10:
                                 _field_map[_f_name] = _cnt
                                 break
                 # 写入字段
@@ -941,23 +954,15 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
     
     if gen_type == "liunian":
-        prompt = f"""你是资深命理分析师。请基于以下流年资料给出分析与建议。
+        prompt = f"""你是资深命理分析师。请基于当前社会情况与流年干支玄机,给出今年度具体建议。
 
-【流年】{ctx.get('ln_gz','')}年。命主生于{ctx.get('birth','')}，{ctx.get('bazi','')[:60]}，格局{ctx.get('patterns','')[:40]}，来因{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}。
+【流年】{ctx.get('ln_gz','')}年生肖{ctx.get('ln_zodiac','')}。命主生于{ctx.get('birth','')}，{ctx.get('bazi','')[:60]}，来因{ctx.get('laiyin','')}，大运{ctx.get('dayun','')}。事业{ctx.get('career','?')} 财富{ctx.get('wealth','?')} 婚姻{ctx.get('marriage','?')} 子女{ctx.get('children','?')} 健康{ctx.get('health','?')}。
 
-【输出格式】严格用|||分隔3段（每段内部不再使用|||）：
-段一：50字punchline（事业/财富/婚姻/子女/健康五维各一句）|||
-段二：100字逐年分析（结合行业趋势与家庭阶段，给可操作建议）|||
-段三：6个双月提醒，月份与内容用全角冒号"："分隔，双月之间用|||分隔：
-正二月：15字内提醒|||
-三四月：15字内提醒|||
-五六月：15字内提醒|||
-七八月：15字内提醒|||
-九十月：15字内提醒|||
-十一十二月：15字内提醒
-
-【要求】专业而务实，落到具体决策（跳槽/投资/备婚/教育/健康计划），口语化不敷衍。
-直接输出3段内容。"""
+【要求】
+1. 第一段50字punchline: 用该年干支与命盘五行的生克关系点出全年核心课题
+2. 第二段100字: 结合2020s时代背景(经济周期/行业AI化/灵活就业/延迟退休/少子化等)与命盘格局,给可操作建议
+3. 第三段6个双月提醒: 每段15字内,点名最需注意的具体事件
+4. 每段用|||分隔,直接输出内容不带前缀标签。不使用markdown。"""
     
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
@@ -997,7 +1002,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v10"  # v10 split-by-asterisk-parser(和liunian同长度)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v11"  # v11 P0修复:流年简评+解析器增强+支态/太岁
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type in ("dayun","dayun_brief") else 800  # 大运类统一1200(装5维)
