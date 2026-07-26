@@ -883,8 +883,8 @@ def _build_liunian_context(ln, result, patterns, solar_year):
     _now = __import__("datetime").datetime.now().year
     dayun_now = _find_dayun_for_age(result["大运"], ln["年份"] - solar_year)
     yr_gan = ln.get("流年干支","甲")[0]
-    yr_sihua = _SIHUA_TABLE.get(yr_gan, ["","","",""])
-    sihua_str = f"化禄:{yr_sihua[0]} 化权:{yr_sihua[1]} 化科:{yr_sihua[2]} 化忌:{yr_sihua[3]}" if yr_sihua[0] else "无四化"
+    yr_sihua_list = _SIHUA_TABLE.get(yr_gan, ["","","",""])
+    sihua_str = f"化禄:{yr_sihua_list[0]} 化权:{yr_sihua_list[1]} 化科:{yr_sihua_list[2]} 化忌:{yr_sihua_list[3]}" if yr_sihua_list[0] else "无四化"
     yr_zhi = ln.get("流年干支","子")[1]
     ZHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
     yr_zhi_idx = ZHI.index(yr_zhi) if yr_zhi in ZHI else 0
@@ -904,6 +904,18 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         2031: "AI通用智能突破/碳交易全球/长寿经济"
     }
     era_info = era_tags.get(yr, f"{yr}年时代背景")
+    # 新增: 逐宫四化分析 - 列出化禄/权/科/忌落入的具体本命宫位
+    palace_sihua = {"化禄": "", "化权": "", "化科": "", "化忌": ""}
+    types_label = {"化禄":"禄","化权":"权","化科":"科","化忌":"忌"}
+    for idx, star in enumerate(sihua_list := yr_sihua_list):
+        if not star: continue
+        t = ["化禄","化权","化科","化忌"][idx]
+        for p in result.get("十二宫",[]):
+            p_stars = p.get("主星",[]) + p.get("辅星",[])
+            if star in p_stars:
+                palace_sihua[t] = p.get("宫名","?") + "宫(" + star + ")"
+                break
+    ln_palace_sihua = " | ".join([f"{types_label[k]}:{v}" for k,v in palace_sihua.items() if v])
     return {
         "birth": result["基本信息"]["公历"],
         "bazi": result.get("八字联合",{}).get("提示",""),
@@ -913,6 +925,7 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "dayun": dayun_now,
         "ln_gz": ln["流年干支"],
         "ln_sihua": sihua_str,
+        "ln_palace_sihua": ln_palace_sihua,
         "ln_taisui": taisui_palace,
         "era_info": era_info,
         "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
@@ -964,26 +977,36 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
     
     if gen_type == "liunian":
-        prompt = f"""你是资深命理师。请根据流年干支、四化、太岁,给今年的具体差异化分析。
+        prompt = f"""你是资深紫微斗数命理师。请按宫位维度差异化分析{ctx.get("ln_gz","")}年。
 
-{ctx.get("ln_gz","")}年生肖 生于{ctx.get("birth","")}, 大运{ctx.get("dayun","")}。
-- 流年四化：{ctx.get("ln_sihua","")}
-- 太岁落宫：{ctx.get("ln_taisui","")}
-- 当年特征：{ctx.get("era_info","")}
-- 五维：事业{ctx.get("career","?")} 财富{ctx.get("wealth","?")} 婚姻{ctx.get("marriage","?")}
+【流年资料】
+- 流年干支: {ctx.get("ln_gz","")}
+- 流年四化: {ctx.get("ln_sihua","")}
+- 化曜落宫: {ctx.get("ln_palace_sihua","")}
+- 太岁宫: {ctx.get("ln_taisui","")}
+- 当年特征: {ctx.get("era_info","")}
+- 五维: 事业{ctx.get("career","?")} 财富{ctx.get("wealth","?")} 婚姻{ctx.get("marriage","?")} 健康{ctx.get("health","?")}
+- 大运: {ctx.get("dayun","")}
 
-【强制规则】
-1. 绝不提"2020s""时代背景""经济周期"泛词
-2. 针对该年干支+四化+太岁,写出3个该年独有的差异化表现
-3. 三段用|||分隔,各段内不可再用|||:
+【分析维度 - 必须按下面3段输出,用|||分隔】
 
-第一段50字: [{ctx.get("ln_gz","")}]名称+四化+太岁,总结核心课题
-第二段100字: 结合{ctx.get("era_info","")},给出落地决策(换工作/创业/购房/结婚时机)
-第三段150字: 6个双月,点名具体月份大事件,月份用全角冒号分隔:
+第一段(50字 punchline): [{ctx.get("ln_gz","")}]化忌落入【XX宫】,点名今年最大问题点。
+
+第二段(150字 宫位维度详析) - 必须包含:
+1. 【机会宫】化禄/权/科落入【XX宫】(是命/财帛/官禄/迁移哪个),如何把握机会、加把劲发挥到极致
+2. 【风险宫】化忌落入【XX宫】,具体可能触发的事件(健康/财务/人际/感情哪类)
+3. 【联动】化忌冲/会哪个宫,产生什么连环影响
+
+第三段(150字 6双月) 6个双月,每月一个具体事件或风险点,月份用全角冒号分隔:
 正二月：xxx|||三四月：xxx|||五六月：xxx|||七八月：xxx|||九十月：xxx|||十一十二月：xxx
 
-输出纯文本不加前缀。"""
+【强制规则】
+1. 绝不提"2020s""时代背景""经济周期"等泛词
+2. 第二段必须出现具体宫位名(如"财帛宫""疾厄宫")
+3. 必须基于流年四化+太岁落宫给出针对性建议,不要泛泛而谈
+4. 化忌宫位必须给至少1个具体警示事件
 
+直接输出,纯文本不加前缀。"""
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
         prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含5维):
@@ -1011,7 +1034,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v12"  # v12 流年差异化(四化+太岁+年代标签)(和liunian同长度)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v13"  # v13 宫位维度分析(化忌入宫/机会宫把握/风险宫警示)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200 if gen_type == "dayun" else (700 if gen_type == "dayun_brief" else 800)
