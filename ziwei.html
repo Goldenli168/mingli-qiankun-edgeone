@@ -157,7 +157,10 @@
   .ln-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: all 0.2s; }
   .ln-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px rgba(201,168,76,0.1); }
   .ln-now-card { border-color: var(--gold); border-width: 2px; background: rgba(201,168,76,0.04); }
-  .ln-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .ln-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  /* 四化标签行 P2 */
+  .ln-sihua-row { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+  .ln-sihua-badge { padding: 1px 5px; border-radius: 3px; font-size: 0.55em; font-weight: bold; letter-spacing: 0.5px; }
   .ln-card-year { font-size: 0.85em; font-weight: bold; color: var(--gold); }
   .ln-card-gz { font-size: 0.72em; color: var(--text-dim); }
   .ln-card-score { margin-left: auto; font-size: 0.95em; font-weight: bold; }
@@ -1015,6 +1018,20 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
     html += '<span class="ln-card-score" style="color:' + scColor + '">' + sc + '</span>';
     html += '</div>';
     
+    // 四化标签 (P2新增)
+    var sihuaTags = ln['四化'] || null;
+    if (sihuaTags) {
+      var sihuaHtml = '<div class="ln-sihua-row">';
+      var sihuaMap = {'化禄':'#2ecc71','化权':'#3498db','化科':'#c9a84c','化忌':'#e74c3c'};
+      for (var sk in sihuaMap) {
+        if (sihuaTags[sk]) {
+          sihuaHtml += '<span class="ln-sihua-badge" style="background:' + sihuaMap[sk] + '1a;color:' + sihuaMap[sk] + '">' + sk[1] + ' ' + sihuaTags[sk] + '</span>';
+        }
+      }
+      sihuaHtml += '</div>';
+      html += sihuaHtml;
+    }
+    
     // 5 维 mini bar
     html += '<div class="ln-card-dims">';
     for (var di = 0; di < dimCfg.length; di++) {
@@ -1044,7 +1061,8 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
       // 简评详情
       var detail = ln['简评详情'] || '';
       if (detail) {
-        html += '<div class="ln-detail-text">' + escapeHtml(detail) + '</div>';
+        html += '<div class=\"ln-detail-section-title\">📖 年度详析</div>';
+        html += '<div class=\"ln-detail-text\">' + escapeHtml(detail) + '</div>';
       }
       
       // 逐月面板
