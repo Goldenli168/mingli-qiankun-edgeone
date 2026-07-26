@@ -882,6 +882,36 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 def _build_liunian_context(ln, result, patterns, solar_year):
     _now = __import__('datetime').datetime.now().year
     dayun_now = _find_dayun_for_age(result["大运"], ln["年份"] - solar_year)
+    yr_gan = ln.get("流年干支","甲")[0]
+    yr_sihua_list = _SIHUA_TABLE.get(yr_gan, ["","","",""])
+    sihua_str = f"化禄:{yr_sihua_list[0]} 化权:{yr_sihua_list[1]} 化科:{yr_sihua_list[2]} 化忌:{yr_sihua_list[3]}" if yr_sihua_list[0] else "无四化"
+    yr_zhi = ln.get("流年干支","子")[1]
+    ZHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
+    yr_zhi_idx = ZHI.index(yr_zhi) if yr_zhi in ZHI else 0
+    taisui_palace = "未知宫"
+    for p in result.get("十二宫",[]):
+        if p.get("宫位") == yr_zhi_idx:
+            stars = "、".join(p.get("主星",[])) or "空宫"
+            taisui_palace = f"{p.get('宫名','?')}宫({stars})"
+            break
+    yr = ln["年份"]
+    era_tags = {2026:"AI Agent元年/银发经济起步/35+副业潮",2027:"延迟退休落地/AI替代中级岗位/Z世代主导消费",
+                2028:"生育率冰点/灵活就业主流化/AI伦理立法",2029:"人口拐点/新能源转型/个人IP经济",
+                2030:"全民基本收入试点/太空经济/远程办公常态化",2031:"AI通用智能突破/碳交易全球/长寿经济"}
+    era_info = era_tags.get(yr, f"{yr}年时代背景")
+    # 流年四化入本命具体宫位计算
+    types_label = {"化禄":"禄","化权":"权","化科":"科","化忌":"忌"}
+    palace_sihua = {"化禄":"","化权":"","化科":"","化忌":""}
+    PALACE_NAMES = ["命宫","兄弟","夫妻","子女","财帛","疾厄","迁移","交友","官禄","田宅","福德","父母"]
+    for idx, star in enumerate(yr_sihua_list):
+        if not star: continue
+        t = ["化禄","化权","化科","化忌"][idx]
+        for pi, p in enumerate(result.get("十二宫",[])):
+            p_stars = p.get("主星",[]) + p.get("辅星",[])
+            if star in p_stars:
+                palace_sihua[t] = f"{PALACE_NAMES[pi]}({star})"
+                break
+    ln_palace_sihua = " ".join([f"{types_label[k]}:{v}" for k,v in palace_sihua.items() if v])
     return {
         "birth": result["基本信息"]["公历"],
         "bazi": result.get("八字联合",{}).get("提示",""),
@@ -890,10 +920,13 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "laiyin": result["来因宫"]["宫名"],
         "dayun": dayun_now,
         "ln_gz": ln["流年干支"],
+        "ln_sihua": sihua_str,
+        "ln_palace_sihua": ln_palace_sihua,
+        "ln_taisui": taisui_palace,
+        "era_info": era_info,
         "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
         "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
         "health": ln.get("健康分","?"),
-        "ln_brief_old": ln["简评"],
     }
 
 def _build_dayun_context(dy, result, patterns):
@@ -949,20 +982,19 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
 |||分隔3段,禁止输出"A""B""C"等标题:
 
-段1(40字): 仅用一句话总结:化忌在【XX宫】(必须从上方化曜数据中提取),点出全年最大问题
+段1(40字): 仅一句话,化忌在【XX宫】(必须从上方化曜数据提取),点出全年最大问题
 
 段2(>130字,5项,每项基于上方化曜数据):
-①机会:化禄/权/科各落入哪个宫(必须从上方数据提取) — 怎么加把劲发挥极致
-②风险:化忌落入哪个宫(从上方数据提取) — 哪些具体事件(健康/财务/感情)会触发
-③联动:化忌冲对宫产生什么连锁影响
-④应期:该宫位问题最可能哪个农历月爆发
-⑤避灾:一句化解建议
+1机会:化禄/权/科各落入哪个宫(从上方数据提取) - 怎么加把劲发挥极致
+2风险:化忌落入哪个宫(从上方数据提取) - 哪些具体事件(健康/财务/感情)会触发
+3联动:化忌冲对宫产生什么连锁影响
+4应期:该宫位问题最可能哪个农历月爆发
+5避灾:一句化解建议
 
 段3(>120字): 6双月每双月15字具体应事:
 正二月-事件|||三四月-事件|||五六月-事件|||七八月-事件|||九十月-事件|||十一十二月-事件
 
 禁止输出"2020s""经济周期""时代背景""第一段"等标签。"""
-
 
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
@@ -991,7 +1023,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v15"  # v15 force recalc (化曜准确+去标签+1200max)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v16"  # v15 force recalc (化曜准确+去标签+1200max)
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200  # unified for all types
