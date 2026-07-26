@@ -1,1 +1,1 @@
-{"framework":"python","branch":"main","auto_deploy":true,"deploy_trigger":"1784790733"}
+{"framework": "python", "deploy_trigger": "v8.26-p0-fix-20260726"}
