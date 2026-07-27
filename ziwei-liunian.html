@@ -411,6 +411,16 @@
 <div class="disclaimer">
   本系统仅供传统文化学习与娱乐参考，命理分析不能替代专业建议。人生际遇由己，切勿迷信。
 </div>
+
+<!-- P9: 流年详批弹窗 -->
+<div id="lnModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px)" onclick="closeLnModal()">
+  <div style="background:var(--bg-card);border:2px solid var(--gold);border-radius:14px;max-width:640px;width:90%;max-height:85vh;overflow-y:auto;padding:24px;position:relative" onclick="event.stopPropagation()">
+    <div id="lnModalTitle" style="font-size:1.2em;color:var(--gold);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)"></div>
+    <div id="lnModalBody"></div>
+    <button onclick="closeLnModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-dim);font-size:1.4em;cursor:pointer;padding:4px 8px">×</button>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
@@ -783,6 +793,34 @@ function renderResult(data) {
     var deepHtml = '';
     var overallDesc = dy['综合解读'] || '';
     if (overallDesc) deepHtml += '<div class="deep-title">综合解读</div><div class="deep-text">' + overallDesc + '</div>';
+
+    // P8: 大运四化展示
+    var dySihua = dy['大运四化'] || {};
+    if (dySihua && Object.keys(dySihua).length > 0) {
+      var sihuaHtml = '<div class="deep-title">大运四化</div><div class="deep-text" style="display:flex;gap:8px;flex-wrap:wrap">';
+      var sihuaColors = {'化禄':'#2ecc71','化权':'#3498db','化科':'#c9a84c','化忌':'#e74c3c'};
+      for (var sk in dySihua) {
+        var clr = sihuaColors[sk] || '#888';
+        sihuaHtml += '<span style="padding:2px 8px;border-radius:4px;background:' + clr + '1a;color:' + clr + ';font-size:0.72em;font-weight:bold">' + sk + '·' + dySihua[sk] + '</span>';
+      }
+      sihuaHtml += '</div>';
+      deepHtml += sihuaHtml;
+    }
+
+    // P8: 格局激活展示
+    var acts = dy['格局激活'] || [];
+    if (acts.length > 0) {
+      var actHtml = '<div class="deep-title">格局激活</div><div class="deep-text" style="display:flex;gap:6px;flex-wrap:wrap">';
+      for (var ai = 0; ai < acts.length; ai++) {
+        var act = acts[ai];
+        var actColor = act['level'] === 'good' ? '#2ecc71' : act['level'] === 'warn' ? '#e74c3c' : '#c9a84c';
+        var actIcon = act['level'] === 'good' ? '🌟' : act['level'] === 'warn' ? '⚠️' : '💡';
+        actHtml += '<span style="padding:2px 8px;border-radius:4px;background:' + actColor + '1a;color:' + actColor + ';font-size:0.72em" title="' + (act['degree']||'') + '">' + actIcon + ' ' + (act['name']||'') + '</span>';
+      }
+      actHtml += '</div>';
+      deepHtml += actHtml;
+    }
+
     var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
     var llmScore = dy['评分'] || {};
     for (var k in llmDims) {
@@ -983,7 +1021,12 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
     if (brief) {
       html += '<div class="ln-card-brief">' + escapeHtml(brief) + '</div>';
     }
-    
+
+    // P9: 详批按钮
+    if (hasDetail) {
+      html += '<div style="text-align:center;margin-top:6px"><button class="liunian-filter-btn" style="font-size:0.72em;padding:4px 14px" onclick="event.stopPropagation();openLnModal(' + ln['年份'] + ')">📖 详批</button></div>';
+    }
+
     // 可折叠详情区
     if (hasDetail) {
       html += '<div class="ln-card-detail" id="' + cardId + '" style="display:none">';
@@ -1127,6 +1170,73 @@ function toggleDayunCard(card) {
     setTimeout(function() { tip.style.pointerEvents = 'none'; }, 2000);
   });
 })();
+
+// P9: 流年详批弹窗
+function openLnModal(year) {
+  var ln = null;
+  var liunians = (currentResult && currentResult['流年']) || [];
+  for (var i = 0; i < liunians.length; i++) {
+    if (liunians[i]['年份'] === year) { ln = liunians[i]; break; }
+  }
+  if (!ln) return;
+
+  var modal = document.getElementById('lnModal');
+  var body = document.getElementById('lnModalBody');
+  var title = document.getElementById('lnModalTitle');
+
+  var sc = ln['评分'] || 50;
+  var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? '#d4a844' : '#e74c3c';
+  title.innerHTML = ln['年份'] + '年 ' + (ln['流年干支']||'') + ' <span style="color:' + scColor + ';font-size:0.8em">' + sc + '分</span>';
+
+  var html = '';
+  // 四化
+  var sihua = ln['四化'] || {};
+  if (Object.keys(sihua).length > 0) {
+    html += '<div style="margin-bottom:12px"><div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">四化</div>';
+    var sihuaMap = {'化禄':'#2ecc71','化权':'#3498db','化科':'#c9a84c','化忌':'#e74c3c'};
+    for (var sk in sihua) {
+      html += '<span style="display:inline-block;padding:3px 10px;margin:2px;border-radius:4px;background:' + sihuaMap[sk] + '1a;color:' + sihuaMap[sk] + ';font-size:0.78em">' + sk + '·' + sihua[sk] + '</span>';
+    }
+    html += '</div>';
+  }
+  // 5维
+  var dims = {'事业':'#3498db','财富':'#2ecc71','婚姻':'#e74c3c','子女':'#9b59b6','健康':'#f39c12'};
+  html += '<div style="margin-bottom:12px"><div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">五维评分</div>';
+  for (var dk in dims) {
+    var dv = ln[dk+'分'] || ln[dk] || 50;
+    html += '<div style="display:flex;align-items:center;margin-bottom:4px;font-size:0.78em"><span style="min-width:36px;color:var(--text-dim)">' + dk + '</span><div style="flex:1;height:6px;background:rgba(42,53,80,0.3);border-radius:3px;margin:0 8px"><div style="height:100%;width:' + dv + '%;background:' + dims[dk] + ';border-radius:3px"></div></div><span style="min-width:24px;text-align:right;color:' + dims[dk] + '">' + dv + '</span></div>';
+  }
+  html += '</div>';
+  // 简评
+  if (ln['简评']) {
+    html += '<div style="margin-bottom:12px"><div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">简评</div><div style="font-size:0.85em;line-height:1.7;color:var(--text)">' + escapeHtml(ln['简评']) + '</div></div>';
+  }
+  // 年度详析
+  if (ln['简评详情']) {
+    html += '<div style="margin-bottom:12px"><div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">年度详析</div><div style="font-size:0.82em;line-height:1.75;color:var(--text-dim);white-space:pre-wrap">' + escapeHtml(ln['简评详情']) + '</div></div>';
+  }
+  // 流月
+  var months = ln['逐月'] || [];
+  if (months.length > 0) {
+    html += '<div><div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">流月</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">';
+    var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#1abc9c'];
+    for (var mi = 0; mi < months.length; mi++) {
+      var m = months[mi];
+      if (!m || !m.trim()) continue;
+      var col = monthColors[mi % monthColors.length];
+      var sep = m.indexOf('：') > -1 ? '：' : (m.indexOf(':') > -1 ? ':' : null);
+      var parts = sep ? m.split(sep) : [m];
+      html += '<div style="background:var(--bg-card2);border-radius:5px;padding:5px 7px;border-top:3px solid ' + col + '"><div style="font-size:0.68em;font-weight:bold;color:' + col + '">' + escapeHtml((parts[0]||'').trim()) + '</div><div style="font-size:0.72em;color:var(--text);line-height:1.4">' + escapeHtml((parts.slice(1).join(sep||'')).trim()) + '</div></div>';
+    }
+    html += '</div></div>';
+  }
+  body.innerHTML = html;
+  modal.style.display = 'flex';
+}
+
+function closeLnModal() {
+  document.getElementById('lnModal').style.display = 'none';
+}
 </script>
 </body>
 </html>

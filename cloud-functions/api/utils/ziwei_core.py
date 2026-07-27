@@ -711,6 +711,17 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             "长生十二宫": bazi.get("长生十二宫", {}),
             "提示": f"日主{bazi['日主五行']}{bazi['日主状态']}，喜{'、'.join(bazi['喜用神'])}，行事宜{'、'.join(bazi['喜用神'])}方位/行业",
         }
+        # P12: 八字专项分析（财富/事业/婚姻/子女/健康）
+        try:
+            result["八字专项"] = {
+                "财富": bazi_core.ana_wealth(bazi),
+                "事业": bazi_core.ana_career(bazi),
+                "婚姻": bazi_core.ana_marriage(bazi, sex),
+                "子女": bazi_core.ana_children(bazi, sex),
+                "健康": bazi_core.ana_health(bazi["五行统计"]),
+            }
+        except Exception:
+            pass
     except Exception as e:
         result["八字联合"] = {"提示": f"八字暂不可用({type(e).__name__})"}
 
@@ -1722,6 +1733,15 @@ def _dayun_deep_analysis(dayun_list, places, year_gan, natal_patterns=None):
         # 注入大运宫位主题到综合解读开头
         if dy_palace_name and dy_palace_name in PALACE_THEME:
             overall_desc = f"行{dy_palace_name}大运——{PALACE_THEME[dy_palace_name]}。" + overall_desc
+
+        # 大运天干四化（P8: 供前端展示）
+        dy_gan = dy.get("天干", "")
+        if dy_gan:
+            dy_sihua_stars = _SIHUA_TABLE.get(dy_gan, ["","","",""])
+            dy["大运四化"] = {}
+            for hi, star_name in enumerate(dy_sihua_stars):
+                if star_name:
+                    dy["大运四化"][_SIHUA_LABELS[hi]] = star_name
 
         dy["评分"] = scores
         dy["综合评分"] = total_score

@@ -763,6 +763,45 @@ function renderResult(data) {
     document.getElementById('summaryGrid').innerHTML = summaryHtml;
   }
 
+  // P12: 八字专项分析（财富/事业/婚姻/子女/健康）
+  var baziSpecial = data['八字专项'] || {};
+  if (baziSpecial['财富'] || baziSpecial['事业']) {
+    var specSection = document.getElementById('baziSpecialSection');
+    if (!specSection) {
+      specSection = document.createElement('div');
+      specSection.id = 'baziSpecialSection';
+      specSection.className = 'feihua-section';
+      specSection.style.marginBottom = '20px';
+      var summarySec = document.getElementById('summarySection');
+      if (summarySec && summarySec.parentNode) {
+        summarySec.parentNode.insertBefore(specSection, summarySec.nextSibling);
+      }
+    }
+    var specHtml = '<h3>📋 八字专项分析</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">';
+    var specIcons = {'财富':'💰','事业':'💼','婚姻':'💑','子女':'👶','健康':'🏥'};
+    var specColors = {'财富':'#2ecc71','事业':'#3498db','婚姻':'#e74c3c','子女':'#9b59b6','健康':'#f39c12'};
+    for (var sk in baziSpecial) {
+      var sv = baziSpecial[sk] || {};
+      var icon = specIcons[sk] || '📋';
+      var clr = specColors[sk] || '#888';
+      var level = sv['级别'] || sv['level'] || '';
+      var detail = sv['detail_head'] || sv['detail'] || '';
+      var income = sv['income_level'] || sv['现代解读'] || '';
+      specHtml += '<div class="feihua-card" style="border-left:4px solid ' + clr + '">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<span style="font-size:1.3em">' + icon + '</span>' +
+          '<span style="font-size:0.9em;font-weight:bold;color:' + clr + '">' + sk + '</span>' +
+          (level ? '<span style="font-size:0.72em;padding:2px 8px;border-radius:4px;background:' + clr + '1a;color:' + clr + '">' + level + '</span>' : '') +
+        '</div>' +
+        (detail ? '<div style="font-size:0.78em;color:var(--text);line-height:1.6;margin-bottom:6px">' + detail + '</div>' : '') +
+        (income ? '<div style="font-size:0.72em;color:var(--text-dim);line-height:1.5">' + income + '</div>' : '') +
+      '</div>';
+    }
+    specHtml += '</div>';
+    specSection.innerHTML = specHtml;
+    specSection.style.display = 'block';
+  }
+
   // Stage 4: 全局命盘总结
   var summaryText = data['命盘总结'] || '';
   var stSec = document.getElementById('summaryTextSection');
