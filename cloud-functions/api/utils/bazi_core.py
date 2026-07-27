@@ -687,6 +687,40 @@ def analyze_bazi(fp, sex="男"):
     if cs_month and cs_month not in ("平", ""):
         rst = f"{rst}({cs_month})"
 
+    # 长生状态对命主的影响描述（依据《三命通会》《滴天髓》）
+    CS_IMPACT = {
+        "长生": "生机勃发，命主性格积极进取，有开创精神，一生多机遇",
+        "沐浴": "如婴儿洗浴，命主需呵护成长，早年多变动，中年后渐稳",
+        "冠带": "如少年冠带，命主渐成气候，青年时期即可崭露头角",
+        "临官": "如壮年得志，命主能力鼎盛，事业易获成功，社会地位高",
+        "帝旺": "如帝王当权，命主气势最盛，领导力强，但需防盛极而衰",
+        "衰": "如盛极而衰，命主宜守成不宜冒进，中年后需防精力不济",
+        "病": "如人患病，命主精力不济，需特别注意健康管理和情绪调节",
+        "死": "如气数将尽，命主宜蛰伏待机，不宜重大决策，待时而发",
+        "墓": "如收藏入库，命主潜力待发，大器晚成，晚年运势渐佳",
+        "绝": "如绝地逢生，命主需外力救助，一生多波折，但绝处可逢生",
+        "胎": "如怀胎孕育，命主潜力待发，需耐心培养，不宜急于求成",
+        "养": "如幼童成长，命主需耐心培养，早年宜学习积累，晚年收获",
+    }
+    # 柱位含义
+    CS_PALACE_MEANING = {
+        "月令": "出生月份环境对命主性格的塑造",
+        "日支": "配偶宫及命主自身内在状态",
+        "年支": "祖上根基与早年家庭环境",
+        "时支": "晚年运势与子女缘分",
+    }
+    def _cs_detail(palace, state):
+        if not state:
+            return {"状态": "", "吉凶": "平", "描述": "", "对命主影响": "", "柱位含义": CS_PALACE_MEANING.get(palace, "")}
+        level, desc = changsheng_level(state)
+        return {
+            "状态": state,
+            "吉凶": level,
+            "描述": desc,
+            "对命主影响": CS_IMPACT.get(state, ""),
+            "柱位含义": CS_PALACE_MEANING.get(palace, ""),
+        }
+
     # ---- 盲派测象：五行取象 ----
     # 依据段建业《命理真诀导读》"算命三步曲：排演→测象→断事"
     # 测象层：用五行对应现实事物，让分析有"画面感"
@@ -729,10 +763,10 @@ def analyze_bazi(fp, sex="男"):
         "盲派测象": cexiang,           # 五行取象描述
         "盲派用神取象": cexiang_xy,     # 用神对应现实事物
         "长生十二宫": {
-            "月令": {"状态": cs_month, "吉凶": cs_month_level, "描述": cs_month_desc},
-            "日支": {"状态": cs_day, "吉凶": changsheng_level(cs_day)[0] if cs_day else "平"},
-            "年支": {"状态": cs_year, "吉凶": changsheng_level(cs_year)[0] if cs_year else "平"},
-            "时支": {"状态": cs_hour, "吉凶": changsheng_level(cs_hour)[0] if cs_hour else "平"},
+            "月令": _cs_detail("月令", cs_month),
+            "日支": _cs_detail("日支", cs_day),
+            "年支": _cs_detail("年支", cs_year),
+            "时支": _cs_detail("时支", cs_hour),
         },
     }
 

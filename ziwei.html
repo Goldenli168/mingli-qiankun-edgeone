@@ -738,7 +738,7 @@ function renderResult(data) {
       '</div>';
     }
 
-    // 长生十二宫卡（新增）
+    // 长生十二宫卡（新增：状态+含义解读）
     var cs = baziJoint['长生十二宫'] || {};
     if (cs['月令'] && cs['月令']['状态']) {
       var csColor = {'大吉':'#2ecc71','吉':'#27ae60','平':'#c9a84c','凶':'#e74c3c','大凶':'#c0392b'};
@@ -747,11 +747,22 @@ function renderResult(data) {
         var item = cs[k];
         if (item && item['状态']) {
           var clr = csColor[item['吉凶']] || '#888';
-          csItems.push('<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:0.75em"><span style="color:var(--text-dim)">' + k + '</span><span style="color:' + clr + ';font-weight:bold">' + item['状态'] + '</span></div>');
+          var impact = item['对命主影响'] || '';
+          var palaceMeaning = item['柱位含义'] || '';
+          csItems.push(
+            '<div style="padding:4px 0;border-bottom:1px dashed rgba(155,89,182,0.15)">' +
+              '<div style="display:flex;justify-content:space-between;font-size:0.75em">' +
+                '<span style="color:var(--gold)">' + k + '</span>' +
+                '<span style="color:' + clr + ';font-weight:bold">' + item['状态'] + '</span>' +
+              '</div>' +
+              (palaceMeaning ? '<div style="font-size:0.62em;color:var(--text-dim);margin-top:1px">' + palaceMeaning + '</div>' : '') +
+              (impact ? '<div style="font-size:0.65em;color:var(--text);margin-top:2px;line-height:1.4">' + impact + '</div>' : '') +
+            '</div>'
+          );
         }
       }
-      summaryHtml += '<div class="feihua-card" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--bg-card2),rgba(155,89,182,0.08));border-color:rgba(155,89,182,0.2)">' +
-        '<div style="text-align:center;font-size:0.82em;color:#9b59b6">长生十二宫</div>' +
+      summaryHtml += '<div class="feihua-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(155,89,182,0.08));border-color:rgba(155,89,182,0.2)">' +
+        '<div style="text-align:center;font-size:0.82em;color:#9b59b6">长生十二宫 · 日主状态</div>' +
         '<div style="margin:8px 0">' + csItems.join('') + '</div>' +
       '</div>';
     }
