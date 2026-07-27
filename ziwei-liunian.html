@@ -179,6 +179,23 @@
   .ln-month-detail { font-size: 0.75em; color: var(--text); line-height: 1.4; }
   .ln-expand-hint { font-size: 0.7em; color: var(--text-dim); text-align: center; margin-top: 4px; opacity: 0.7; }
 
+  /* ---- 大运卡片展开滚动优化 (P4) ---- */
+  .dayun-card.expanded .dayun-deep { max-height: 560px; overflow-y: auto; padding-right: 4px; }
+  .dayun-card.expanded .dayun-deep::-webkit-scrollbar { width: 4px; }
+  .dayun-card.expanded .dayun-deep::-webkit-scrollbar-track { background: var(--bg-card2); border-radius: 2px; }
+  .dayun-card.expanded .dayun-deep::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+
+  /* ---- 流年筛选器 (P5) ---- */
+  .liunian-filter { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .liunian-filter-btn { padding: 6px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-dim); font-size: 0.82em; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+  .liunian-filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .liunian-filter-btn.active { background: rgba(201,168,76,0.12); border-color: var(--gold); color: var(--gold); }
+
+  /* ---- 流月展开/收起 (P6) ---- */
+  .ln-month-hidden { display: none !important; }
+  .ln-month-toggle { font-size: 0.72em; color: var(--gold); text-align: center; padding: 4px; cursor: pointer; border-top: 1px dashed var(--border); margin-top: 4px; }
+  .ln-month-toggle:hover { color: var(--gold-light); }
+
   /* ---- 流年总表 ---- */
   .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
   .liunian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
@@ -381,6 +398,13 @@
 
   <div class="dayun-section" id="dayunSection">
     <h3>☰ 大运分析（十年一运）</h3>
+    <!-- P5: 流年筛选器 -->
+    <div class="liunian-filter" id="liunianFilter" style="display:none;">
+      <span style="font-size:0.78em;color:var(--text-dim)">筛选:</span>
+      <button class="liunian-filter-btn active" onclick="filterLiunian('all', this)">全部</button>
+      <button class="liunian-filter-btn" onclick="filterLiunian('future10', this)">未来10年</button>
+      <button class="liunian-filter-btn" onclick="filterLiunian('current', this)">当前大运</button>
+    </div>
     <div class="dayun-timeline" id="dayunTimeline"></div>
   </div>
 </div>
@@ -793,6 +817,9 @@ function renderResult(data) {
   if (dayunTimeline) {
     dayunTimeline.innerHTML = dayunHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无大运数据</p>';
   }
+  // P5: 显示筛选器
+  var filterEl = document.getElementById('liunianFilter');
+  if (filterEl) filterEl.style.display = 'flex';
   setTimeout(function() {
     var cur = document.querySelector('.dayun-card.current');
     if (cur) cur.classList.add('expanded');
@@ -802,6 +829,35 @@ function renderResult(data) {
   setTimeout(function() {
     document.getElementById('result').scrollIntoView({behavior:'smooth', block:'start'});
   }, 100);
+}
+
+// P5: 流年筛选器
+function filterLiunian(mode, btn) {
+  var cards = document.querySelectorAll('.dayun-card');
+  var nowYear = new Date().getFullYear();
+  var nowAge = nowYear - currentBirthYear;
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    var ageText = card.querySelector('.age-range').textContent;
+    var parts = ageText.split('-');
+    var startAge = parseInt(parts[0]);
+    var endAge = parseInt(parts[1]);
+    var startYear = currentBirthYear + startAge;
+    var endYear = currentBirthYear + endAge;
+    var show = true;
+    if (mode === 'future10') {
+      show = (endYear >= nowYear && startYear <= nowYear + 10);
+    } else if (mode === 'current') {
+      show = (nowAge >= startAge && nowAge <= endAge);
+    }
+    card.style.display = show ? '' : 'none';
+  }
+  // 更新按钮状态
+  var btns = document.querySelectorAll('.liunian-filter-btn');
+  for (var j = 0; j < btns.length; j++) {
+    btns[j].classList.remove('active');
+  }
+  btn.classList.add('active');
 }
 
 function togglePalaceDetail(zhiIdx) {
@@ -939,12 +995,14 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
         html += '<div class=\"ln-detail-text\">' + escapeHtml(detail) + '</div>';
       }
       
-      // 逐月面板
+      // 逐月面板 (P6: 默认显示6个月，点击展开12个月)
       var months = ln['逐月'] || [];
       if (months.length > 0) {
         var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6',
                           '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#1abc9c'];
-        html += '<div class="ln-monthly-grid">';
+        var showCount = 6;
+        var monthId = 'months-' + ln['年份'];
+        html += '<div class="ln-monthly-grid" id="' + monthId + '">';
         for (var mi = 0; mi < months.length; mi++) {
           var m = months[mi];
           if (!m || !(m.trim())) continue;
@@ -953,12 +1011,16 @@ function buildDayunLiunian(birthYear, startAge, endAge) {
           var parts = sep ? m.split(sep) : [m];
           var label = (parts[0] || ('月' + (mi + 1))).trim();
           var mdetail = (parts.slice(1).join(sep || '')).trim();
-          html += '<div class="ln-month-card" style="border-top-color:' + col + '">' +
+          var hideCls = mi >= showCount ? ' ln-month-hidden' : '';
+          html += '<div class="ln-month-card' + hideCls + '" style="border-top-color:' + col + '">' +
             '<div class="ln-month-label" style="color:' + col + '">' + escapeHtml(label) + '</div>' +
             '<div class="ln-month-detail">' + escapeHtml(mdetail) + '</div>' +
           '</div>';
         }
         html += '</div>';
+        if (months.length > showCount) {
+          html += '<div class="ln-month-toggle" onclick="toggleMonths(\'' + monthId + '\', this)">▼ 展开' + months.length + '个月</div>';
+        }
       }
       
       html += '<div class="ln-expand-hint">▲ 点击收起</div>';
@@ -990,6 +1052,28 @@ function toggleLnDetail(id) {
 }
 
 function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// P6: 流月展开/收起
+function toggleMonths(id, btn) {
+  var grid = document.getElementById(id);
+  if (!grid) return;
+  var hidden = grid.querySelectorAll('.ln-month-hidden');
+  var isOpen = hidden.length === 0;
+  if (isOpen) {
+    // 收起: 隐藏后6个月
+    var cards = grid.querySelectorAll('.ln-month-card');
+    for (var i = 6; i < cards.length; i++) {
+      cards[i].classList.add('ln-month-hidden');
+    }
+    btn.textContent = '▼ 展开12个月';
+  } else {
+    // 展开: 显示全部
+    for (var i = 0; i < hidden.length; i++) {
+      hidden[i].classList.remove('ln-month-hidden');
+    }
+    btn.textContent = '▲ 收起';
+  }
+}
 
 // 大运卡片展开互斥 — 同时只能展开一张
 function toggleDayunCard(card) {
