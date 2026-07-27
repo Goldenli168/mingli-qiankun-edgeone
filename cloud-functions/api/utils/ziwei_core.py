@@ -706,6 +706,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             "身强身弱": bazi["日主状态"],
             "喜用神": bazi["喜用神"],
             "忌神": bazi.get("忌神", []),
+            "盲派测象": bazi.get("盲派测象", ""),
+            "盲派用神取象": bazi.get("盲派用神取象", ""),
+            "长生十二宫": bazi.get("长生十二宫", {}),
             "提示": f"日主{bazi['日主五行']}{bazi['日主状态']}，喜{'、'.join(bazi['喜用神'])}，行事宜{'、'.join(bazi['喜用神'])}方位/行业",
         }
     except Exception as e:

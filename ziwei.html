@@ -728,7 +728,34 @@ function renderResult(data) {
         '<div style="font-size:0.75em;color:var(--text);text-align:center;margin-top:6px">' + (baziJoint['提示']||'') + '</div>' +
       '</div>';
     }
-    
+
+    // 盲派测象卡（新增）
+    if (baziJoint['盲派测象']) {
+      summaryHtml += '<div class="feihua-card" style="flex:1;min-width:200px;background:linear-gradient(135deg,var(--bg-card2),rgba(46,204,113,0.08));border-color:rgba(46,204,113,0.2)">' +
+        '<div style="text-align:center;font-size:0.82em;color:var(--green)">盲派测象 · 五行取象</div>' +
+        '<div style="font-size:0.78em;color:var(--text);text-align:center;margin:8px 0;line-height:1.6">' + (baziJoint['盲派测象']||'') + '</div>' +
+        (baziJoint['盲派用神取象'] ? '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + baziJoint['盲派用神取象'] + '</div>' : '') +
+      '</div>';
+    }
+
+    // 长生十二宫卡（新增）
+    var cs = baziJoint['长生十二宫'] || {};
+    if (cs['月令'] && cs['月令']['状态']) {
+      var csColor = {'大吉':'#2ecc71','吉':'#27ae60','平':'#c9a84c','凶':'#e74c3c','大凶':'#c0392b'};
+      var csItems = [];
+      for (var k in cs) {
+        var item = cs[k];
+        if (item && item['状态']) {
+          var clr = csColor[item['吉凶']] || '#888';
+          csItems.push('<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:0.75em"><span style="color:var(--text-dim)">' + k + '</span><span style="color:' + clr + ';font-weight:bold">' + item['状态'] + '</span></div>');
+        }
+      }
+      summaryHtml += '<div class="feihua-card" style="flex:1;min-width:160px;background:linear-gradient(135deg,var(--bg-card2),rgba(155,89,182,0.08));border-color:rgba(155,89,182,0.2)">' +
+        '<div style="text-align:center;font-size:0.82em;color:#9b59b6">长生十二宫</div>' +
+        '<div style="margin:8px 0">' + csItems.join('') + '</div>' +
+      '</div>';
+    }
+
     summaryHtml += '</div>';
     document.getElementById('summaryGrid').innerHTML = summaryHtml;
   }
