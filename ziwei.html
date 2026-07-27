@@ -892,12 +892,6 @@ function renderResult(data) {
   var feihuaChains = feihuaData['串联'] || [];
   var feihuaHtml = '';
   var fhTypeMap = {'化禄':'fh-lu','化权':'fh-quan','化科':'fh-ke','化忌':'fh-ji'};
-  var fhDescMap = {
-    '化禄': '禄主财缘，该星化禄飞入此宫，利于财运与人际关系，处事顺遂.',
-    '化权': '权主权势，该星化权飞入此宫，利于事业与权威，掌握主导权.',
-    '化科': '科主名声，该星化科飞入此宫，利于学业与名誉，贵人暗助.',
-    '化忌': '忌主阻滞，该星化忌飞入此宫，需防波折与是非，宜谨慎行事.'
-  };
   for (var fi = 0; fi < feihuaList.length; fi++) {
     var fh = feihuaList[fi];
     var fhCls = fhTypeMap[fh['四化']] || '';
@@ -905,8 +899,12 @@ function renderResult(data) {
       '<div class="fh-header"><span class="fh-type ' + fhCls + '">' + (fh['四化']||'') + '</span>' +
       '<span style="font-size:0.7em;color:var(--text-dim)">#' + (fi+1) + '</span></div>' +
       '<div class="fh-star">' + (fh['星曜']||'') + '</div>' +
-      '<div class="fh-source">来源宫位：<span class="src-palace">' + (fh['来源宫']||'') + '</span></div>' +
-      '<div class="fh-desc">' + (fh['解读']||'') + '<br><br>' + (fhDescMap[fh['四化']]||'') + '</div>' +
+      '<div class="fh-source">来源宫位：<span class="src-palace">' + (fh['来源宫']||'') + '</span>' +
+      (fh['宫位含义'] ? '<div style="font-size:0.68em;color:var(--text-dim);margin-top:2px">' + fh['宫位含义'] + '</div>' : '') +
+      '</div>' +
+      '<div class="fh-desc">' + (fh['解读']||'') + '</div>' +
+      (fh['星曜特质'] ? '<div style="font-size:0.72em;color:var(--text-dim);margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)">💫 ' + fh['星曜特质'] + '</div>' : '') +
+      (fh['建议'] ? '<div style="font-size:0.75em;color:var(--gold);margin-top:6px;padding:6px 8px;background:rgba(201,168,76,0.06);border-radius:5px;line-height:1.5">💡 ' + fh['建议'] + '</div>' : '') +
     '</div>';
   }
   // 飞化串联卡片
@@ -918,6 +916,7 @@ function renderResult(data) {
       feihuaHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(201,168,76,0.08),var(--bg-card2));border-color:rgba(201,168,76,0.25)">' +
         '<div style="font-size:0.82em;color:var(--gold);margin-bottom:6px;letter-spacing:1px">' + (chain['链']||'') + '</div>' +
         '<div style="font-size:0.78em;color:var(--text);line-height:1.7">' + (chain['解读']||'') + '</div>' +
+        (chain['建议'] ? '<div style="font-size:0.75em;color:var(--gold);margin-top:6px;padding:6px 8px;background:rgba(201,168,76,0.06);border-radius:5px;line-height:1.5">💡 ' + chain['建议'] + '</div>' : '') +
       '</div>';
     }
     feihuaHtml += '</div>';

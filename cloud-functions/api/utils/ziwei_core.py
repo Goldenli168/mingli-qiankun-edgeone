@@ -2514,7 +2514,7 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
 # ===== 各宫位飞化分析 =====
 def _calc_feihua(year_gan, places):
-    """各宫位飞化分析——按年干四化，分析化曜飞入何宫 + 飞化串联"""
+    """各宫位飞化分析——按年干四化，分析化曜飞入何宫 + 飞化串联 + 组合解读"""
     GAN  = list("甲乙丙丁戊己庚辛壬癸")
     ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
 
@@ -2523,6 +2523,106 @@ def _calc_feihua(year_gan, places):
 
     # 宫位名→宫位数据映射
     name_to_palace = {p["宫名"]: p for p in places}
+
+    # 宫位含义映射（依据《紫微斗数全书》十二宫详解）
+    PALACE_MEANING = {
+        "命宫": "自我核心、性格本质、一生格局",
+        "兄弟": "手足同僚、合作关系、人脉资源",
+        "夫妻": "婚姻感情、配偶关系、亲密关系",
+        "子女": "子女缘分、创作才华、投资项目",
+        "财帛": "财富收入、资产配置、理财能力",
+        "疾厄": "健康状况、身体素质、情绪管理",
+        "迁移": "外出发展、环境变迁、社交形象",
+        "交友": "朋友人脉、社交圈层、团队协作",
+        "官禄": "事业职场、社会地位、权力名望",
+        "田宅": "房产不动产、家庭根基、居住环境",
+        "福德": "精神享受、兴趣爱好、贵人暗助",
+        "父母": "长辈缘分、文书契约、传统权威",
+    }
+
+    # 星曜核心特质（依据《紫微斗数全书·星垣论》）
+    STAR_TRAIT = {
+        "紫微": "尊贵领导力，有贵人提携，宜掌权柄",
+        "天机": "智慧谋略，善变多思，宜策划研究",
+        "太阳": "光明正大，热情外向，利公职外务",
+        "武曲": "刚毅果决，利金融武职，财运佳",
+        "天同": "温和随缘，福泽深厚，宜合作享受",
+        "廉贞": "能文能武，性格刚烈，宜法律公职",
+        "天府": "稳重保守，善理财储蓄，有财库",
+        "太阴": "温柔细腻，利房产女性，财富内敛",
+        "贪狼": "多才多艺，桃花旺盛，宜演艺交际",
+        "巨门": "口才思辨，暗曜是非，宜研究法律",
+        "天相": "辅佐协调，印星贵人，宜服务中介",
+        "天梁": "荫庇长辈，逢凶化吉，宜监察医药",
+        "七杀": "开创冲劲，武职权威，风险与机遇并存",
+        "破军": "变动破坏，先破后成，宜改革创新",
+        "文昌": "文书才华，科名贵人，利考试学术",
+        "文曲": "口才艺术，异路功名，利文艺表达",
+        "左辅": "贵人助力，随和包容，利团队合作",
+        "右弼": "贵人暗助，机智灵活，利策划协调",
+        "禄存": "正财稳固，积蓄丰厚，不宜投机",
+        "天马": "奔波变动，外出发展，利远方求财",
+    }
+
+    # 四化+宫位组合解读（有指导性）
+    def _combo_reading(hua, palace, star):
+        """四化+宫位+星曜 组合解读"""
+        pm = PALACE_MEANING.get(palace, palace)
+        st = STAR_TRAIT.get(star, star)
+        if hua == "化禄":
+            return f"{star}化禄入{palace}宫（{pm}），{st}。此年{palace}宫领域有意外收获，宜主动把握机遇，尤其利于与{star}相关的活动。"
+        elif hua == "化权":
+            return f"{star}化权入{palace}宫（{pm}），{st}。此年{palace}宫领域有主导权，宜积极争取表现，但需防过于强势引发反弹。"
+        elif hua == "化科":
+            return f"{star}化科入{palace}宫（{pm}），{st}。此年{palace}宫领域有贵人暗助，宜展现才华积累名声，利考试学习或公众形象。"
+        elif hua == "化忌":
+            return f"{star}化忌入{palace}宫（{pm}），{st}。此年{palace}宫领域需防波折，宜守不宜攻，凡事留有余地，尤其注意与{star}相关的隐患。"
+        return f"{star}{hua}入{palace}宫，{st}。"
+
+    # 四化具体建议（有针对性）
+    def _advice(hua, palace, star):
+        """四化+宫位+星曜 具体建议"""
+        if hua == "化禄":
+            if palace == "财帛":
+                return f"建议：今年{star}化禄入财帛，是投资理财的黄金期，可适度加大投入，但需分散风险，不宜孤注一掷。"
+            elif palace == "官禄":
+                return f"建议：今年{star}化禄入官禄，事业有突破机遇，宜主动承担重要项目，展现领导才能，可获晋升加薪。"
+            elif palace == "福德":
+                return f"建议：今年{star}化禄入福德，精神投资有回报，宜发展兴趣爱好，参加文化活动，易遇贵人赏识。"
+            elif palace == "夫妻":
+                return f"建议：今年{star}化禄入夫妻，感情升温好时机，宜主动经营关系，单身者易遇正缘，已婚者宜共同规划未来。"
+            elif palace == "田宅":
+                return f"建议：今年{star}化禄入田宅，房产运佳，宜考虑购房装修或不动产投资，家庭关系和谐。"
+            else:
+                return f"建议：今年{star}化禄入{palace}，该领域有意外收获，宜主动把握，但需见好就收，不宜贪多。"
+        elif hua == "化权":
+            if palace == "官禄":
+                return f"建议：今年{star}化权入官禄，是展现领导力的关键年，宜争取管理职责，但需防过于强势，宜刚柔并济。"
+            elif palace == "命宫":
+                return f"建议：今年{star}化权入命宫，自我主导力强，宜设定明确目标，但需防刚愎自用，宜多听他人意见。"
+            else:
+                return f"建议：今年{star}化权入{palace}，该领域有主导权，宜积极争取，但需防权力欲过盛，宜以理服人。"
+        elif hua == "化科":
+            if palace == "命宫":
+                return f"建议：今年{star}化科入命宫，名声贵人运佳，宜展现才华，利考试面试，公众形象良好。"
+            elif palace == "官禄":
+                return f"建议：今年{star}化科入官禄，事业有贵人提携，宜多参加行业活动，积累人脉资源，利名声传播。"
+            else:
+                return f"建议：今年{star}化科入{palace}，该领域有贵人暗助，宜展现才华，利学习考试或名声积累。"
+        elif hua == "化忌":
+            if palace == "疾厄":
+                return f"建议：今年{star}化忌入疾厄，健康是重点，宜定期体检，注意作息规律，避免过度劳累，尤其防{star}相关旧疾。"
+            elif palace == "父母":
+                return f"建议：今年{star}化忌入父母，需注意长辈健康与文书契约，宜多陪伴长辈，重要合同需仔细审核，防法律纠纷。"
+            elif palace == "夫妻":
+                return f"建议：今年{star}化忌入夫妻，感情易生波折，宜多沟通包容，防第三者介入或误会加深，单身者不宜急于确定关系。"
+            elif palace == "财帛":
+                return f"建议：今年{star}化忌入财帛，财务需谨慎，宜保守理财，防投资陷阱或意外支出，不宜借贷担保。"
+            elif palace == "迁移":
+                return f"建议：今年{star}化忌入迁移，外出需防意外，宜注意交通安全，重要行程宜提前规划，防行程变动。"
+            else:
+                return f"建议：今年{star}化忌入{palace}，该领域需防波折，宜守不宜攻，凡事留有余地，重要决策宜缓行。"
+        return ""
 
     # 第一步：本命年干四化落宫
     hua_palaces = {}  # {化禄: 宫名, 化权: 宫名, 化科: 宫名, 化忌: 宫名}
@@ -2543,7 +2643,10 @@ def _calc_feihua(year_gan, places):
             "四化":   label,
             "星曜":   star_name,
             "来源宫": from_palace,
-            "解读":   "%s：%s%s，由%s飞出，影响该宫运势。" % (label, star_name, label[1:], from_palace)
+            "宫位含义": PALACE_MEANING.get(from_palace, ""),
+            "星曜特质": STAR_TRAIT.get(star_name, ""),
+            "解读":   _combo_reading(label, from_palace, star_name),
+            "建议":   _advice(label, from_palace, star_name),
         })
 
     # 第二步：飞化串联——化禄入A宫→A宫宫干化忌到B宫→B宫宫干化科到C宫
@@ -2577,9 +2680,17 @@ def _calc_feihua(year_gan, places):
                                     palace_c = p["宫名"]
                                     break
                             if palace_c:
+                                # 有深度的串联解读
+                                pm_a = PALACE_MEANING.get(palace_a, palace_a)
+                                pm_b = PALACE_MEANING.get(palace_b, palace_b)
+                                pm_c = PALACE_MEANING.get(palace_c, palace_c)
+                                st_a = STAR_TRAIT.get(hua_list[0], hua_list[0])
+                                st_ji = STAR_TRAIT.get(star_ji, star_ji)
+                                st_ke = STAR_TRAIT.get(star_ke, star_ke)
                                 chains.append({
                                     "链": f"化禄({palace_a}) → 化忌({palace_b}) → 化科({palace_c})",
-                                    "解读": f"{palace_a}宫化禄带来机遇，但{palace_a}宫化忌到{palace_b}宫引发问题，{palace_b}宫化科到{palace_c}提供化解之道。",
+                                    "解读": f"{palace_a}宫{pm_a.split('、')[0]}化禄带来机遇（{st_a}），但{palace_a}宫化忌到{palace_b}宫{pm_b.split('、')[0]}引发问题（{st_ji}），{palace_b}宫化科到{palace_c}{pm_c.split('、')[0]}提供化解之道（{st_ke}）。",
+                                    "建议": f"今年宜在{palace_a}宫领域主动把握机遇，同时警惕{palace_b}宫领域的潜在风险，可通过{palace_c}领域的努力来化解危机，形成良性循环。",
                                     "宫位": [palace_a, palace_b, palace_c],
                                 })
     # 化忌串联
@@ -2596,9 +2707,14 @@ def _calc_feihua(year_gan, places):
                         palace_b = p["宫名"]
                         break
                 if palace_b:
+                    pm_a = PALACE_MEANING.get(palace_a, palace_a)
+                    pm_b = PALACE_MEANING.get(palace_b, palace_b)
+                    st_ji = STAR_TRAIT.get(hua_list[3], hua_list[3])
+                    st_lu = STAR_TRAIT.get(star_lu, star_lu)
                     chains.append({
                         "链": f"化忌({palace_a}) → 化禄({palace_b})",
-                        "解读": f"{palace_a}宫化忌带来挑战，但{palace_a}宫化禄到{palace_b}宫提供转机，宜主动求变。",
+                        "解读": f"{palace_a}宫{pm_a.split('、')[0]}化忌带来挑战（{st_ji}），但{palace_a}宫化禄到{palace_b}宫{pm_b.split('、')[0]}提供转机（{st_lu}）。",
+                        "建议": f"今年{palace_a}宫领域需谨慎守成，同时在{palace_b}宫领域主动求变，可化危机为转机。",
                         "宫位": [palace_a, palace_b],
                     })
 
