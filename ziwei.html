@@ -273,12 +273,13 @@
   <div class="brand">命 理 乾 坤</div>
   <div class="nav-tabs">
     <a href="/index.html" class="nav-tab">八字命理</a>
-    <a href="/ziwei.html" class="nav-tab active">紫微斗数</a>
+    <a href="/ziwei.html" class="nav-tab active">命盘总览</a>
+    <a href="/ziwei-liunian.html" class="nav-tab">大运流年</a>
   </div>
 </nav>
 
 <div class="header">
-  <h1>紫 微 斗 数</h1>
+  <h1>命 盘 总 览</h1>
   <div class="subtitle">星曜布天盘 · 命数定乾坤</div>
 </div>
 
@@ -395,15 +396,6 @@
     <div id="summaryGrid"></div>
   </div>
 
-  <div class="daxian-section" id="daxianSection">
-    <h3>☰ 大限信息</h3>
-    <div class="daxian-details" id="daxianDetails"></div>
-  </div>
-
-  <div class="dayun-section" id="dayunSection">
-    <h3>☰ 大运分析（十年一运）</h3>
-    <div class="dayun-timeline" id="dayunTimeline"></div>
-  </div>
 
   <div class="feihua-section" id="feihuaSection">
     <h3>☰ 四化飞化分析</h3>
@@ -786,15 +778,6 @@ function renderResult(data) {
     stSec.style.display = 'none';
   }
 
-  var daxian = data['大限信息'];
-  var daxianDetails = document.getElementById('daxianDetails');
-  daxianDetails.innerHTML = [
-    {label: '起运年龄', value: daxian['起运年龄'] + '岁'},
-    {label: '运行方向', value: daxian['顺逆']}
-  ].map(function(d) {
-    return '<div class="daxian-detail-item"><div class="label">' + d.label + '</div><div class="value">' + d.value + '</div></div>';
-  }).join('');
-
   var zhiToPlace = {};
   var places = data['十二宫'];
   for (var pi = 0; pi < places.length; pi++) {
@@ -864,81 +847,6 @@ function renderResult(data) {
   }
   palaceGrid.innerHTML = gridHtml;
   document.getElementById('palaceDetails').innerHTML = '';
-
-  var dayunList = data['大运'] || [];
-  var dayunHtml = '';
-  var birthYear = parseInt(((data['基本信息']||{})['公历']||'0').replace(/[^0-9]/g, '').substring(0,4)) || 0;
-  var nowYear = new Date().getFullYear();
-  var nowAge = birthYear > 0 ? nowYear - birthYear : 0;
-
-  var badgeMap = {'上吉':'badge-shangji','中吉':'badge-zhongji','平运':'badge-pingyun','偏凶':'badge-pianxiong','大凶':'badge-daxiong'};
-  var dimClsMap = {'财富':'dim-wealth','事业':'dim-career','婚姻':'dim-marriage','子女':'dim-children','父母':'dim-parents'};
-  var barClsMap = {'财富':'bar-wealth','事业':'bar-career','婚姻':'bar-marriage','子女':'bar-children','父母':'bar-parents'};
-
-  for (var di = 0; di < dayunList.length; di++) {
-    var dy = dayunList[di];
-    var isCurrent = (nowAge >= dy['起始年龄'] && nowAge <= dy['结束年龄']);
-    var majorStr = (dy['主星']||[]).length > 0 ? dy['主星'].join('、') : '无主星';
-    var minorStr = (dy['辅星']||[]).length > 0 ? dy['辅星'].join('、') : '';
-    var scores = dy['评分'] || {};
-    var totalScore = dy['综合评分'] || 0;
-    var rating = dy['综合评级'] || '平运';
-    var ratingCls = badgeMap[rating] || 'badge-pingyun';
-
-    var barHtml = '';
-    var dims = ['财富','事业','婚姻','子女','父母'];
-    for (var bi = 0; bi < dims.length; bi++) {
-      var d = dims[bi];
-      var sv = scores[d] || 50;
-      barHtml += '<div class="score-bar-row ' + barClsMap[d] + '">' +
-        '<span class="score-bar-label">' + d + '</span>' +
-        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + sv + '%"></div></div>' +
-        '<span class="score-bar-val">' + sv + '</span>' +
-      '</div>';
-    }
-
-    var deepHtml = '';
-    var overallDesc = dy['综合解读'] || '';
-    if (overallDesc) deepHtml += '<div class="deep-title">综合解读</div><div class="deep-text">' + overallDesc + '</div>';
-    // LLM 维度点评（P2）
-    var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
-    var llmScore = dy['评分'] || {};
-    for (var k in llmDims) {
-      var t = llmScore[k+'_llm'] || '';
-      if (t) deepHtml += '<div class="dim-section"><span class="dim-label ' + (dimClsMap[k]||'') + '">' + llmDims[k] + '</span><span class="dim-desc">' + t + '</span></div>';
-    }
-    // 模板维度（fallback，无LLM时用）
-    var deepDims = dy['深度解读'] || {};
-    if (!llmScore['财富_llm']) {
-      for (var ddi = 0; ddi < dims.length; ddi++) {
-        var dd = dims[ddi];
-        var ddText = deepDims[dd] || '';
-        if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
-      }
-    }
-
-    var stateCls = '';
-    var nowAge = new Date().getFullYear() - (data['基本信息']||{}).birthYear || (new Date().getFullYear() - parseInt(document.getElementById('year').value));
-    if (isCurrent) stateCls = ' current';
-    else if (dy['结束年龄'] < nowAge) stateCls = ' past';
-    else stateCls = ' future';
-    dayunHtml += '<div class="dayun-card' + stateCls + '" onclick="toggleDayunCard(this)">' +
-      '<div class="dayun-header">' +
-        '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info" style="color:var(--gold)">' + (dy['大运宫名']||(dy['天干']||'')+(dy['地支']||'')+'宫') + '</span></div>' +
-        '<span class="dayun-badge ' + ratingCls + '">' + totalScore + ' ' + rating + '</span>' +
-      '</div>' +
-      '<div class="stars-line"><span class="star-label">主星</span>' + majorStr + (minorStr ? ' &nbsp;<span class="star-label">辅</span>' + minorStr : '') + '</div>' +
-      '<div class="score-bars">' + barHtml + '</div>' +
-      '<div class="dayun-deep">' + deepHtml + buildDayunLiunian(birthYear, dy['起始年龄'], dy['结束年龄']) + '</div>' +
-      '<div class="expand-hint">▸ 点击展开深度解读 + 此运流年</div>' +
-    '</div>';
-  }
-  document.getElementById('dayunTimeline').innerHTML = dayunHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无大运数据</p>';
-  // P0#3: 当前大运默认展开
-  setTimeout(function() {
-    var cur = document.querySelector('.dayun-card.current');
-    if (cur) cur.classList.add('expanded');
-  }, 50);
 
   var feihuaList = data['飞化分析'] || [];
   var feihuaHtml = '';

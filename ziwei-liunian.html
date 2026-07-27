@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命理乾坤 · 紫微斗数</title>
+<link rel="stylesheet" href="mingli-shared.css">
+<style>
+  /* ============================================================
+     紫微斗数页 — 专属样式 (Ziwei Page-Specific Styles)
+     共享样式参见: mingli-shared.css
+     ============================================================ */
+
+  /* ---- 结果区宽度 (紫微需要更宽) ---- */
+  .result-section { max-width: 1100px; }
+
+  /* ---- 命盘总览 ---- */
+  .overview-card { background: var(--bg-card); border: 1px solid var(--gold); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; position: relative; }
+  .overview-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold)); }
+  .overview-card h3 { color: var(--gold); font-size: 1.05em; letter-spacing: 3px; margin-bottom: 14px; }
+  .overview-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .overview-item { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; text-align: center; }
+  .overview-item .label { font-size: 0.76em; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 4px; }
+  .overview-item .value { font-size: 1.15em; color: var(--gold); font-weight: bold; }
+
+  /* ---- 十二宫网格 ---- */
+  .palace-grid-wrapper { margin-bottom: 24px; }
+  .palace-grid-wrapper h3 { color: var(--gold); font-size: 1.05em; letter-spacing: 3px; margin-bottom: 16px; }
+  .palace-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, auto); gap: 6px; }
+  .palace-cell { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; min-height: 80px; }
+  .palace-cell:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(201,168,76,0.15); }
+  .palace-cell.ming { border-color: var(--red-light); }
+  .palace-cell.ming::before { content: '命'; position: absolute; top: 4px; right: 6px; font-size: 0.6em; color: var(--red-light); background: rgba(231,76,60,0.12); padding: 1px 5px; border-radius: 6px; }
+  .palace-cell.shen { border-color: var(--purple); }
+  .palace-cell.shen::after { content: '身'; position: absolute; top: 4px; right: 6px; font-size: 0.6em; color: var(--purple); background: rgba(155,89,182,0.12); padding: 1px 5px; border-radius: 6px; }
+  .palace-cell.ming.shen::before { right: 28px; }
+  .palace-cell.center { background: var(--bg-card2); border: 1px dashed var(--border); cursor: default; min-height: auto; }
+  .palace-cell.center:hover { transform: none; box-shadow: none; border-color: var(--border); }
+  .palace-name { font-size: 0.85em; color: var(--gold); letter-spacing: 2px; margin-bottom: 4px; font-weight: bold; }
+  .palace-gz { font-size: 0.68em; color: var(--text-dim); margin-bottom: 4px; }
+  .palace-main-stars { font-size: 0.78em; color: var(--gold-light); margin-bottom: 3px; line-height: 1.4; }
+  .palace-aux-stars { font-size: 0.68em; color: var(--text-dim); margin-bottom: 3px; line-height: 1.3; }
+  .mw-tag { font-size: 0.7em; vertical-align: super; margin-left: 1px; border-radius: 2px; padding: 0 2px; }
+  .mw-good { color: var(--green); }
+  .mw-mid { color: var(--gold); }
+  .mw-bad { color: var(--red-light); }
+  .p-good .fh-star { color: var(--green); }
+  .p-warn .fh-star { color: var(--gold); }
+  .p-info .fh-star { color: var(--text); }
+  .palace-sihua { font-size: 0.65em; display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 3px; }
+  .sihua-tag { padding: 1px 5px; border-radius: 4px; font-size: 0.95em; }
+  .sihua-lu { background: rgba(39,174,96,0.15); color: var(--green); }
+  .sihua-quan { background: rgba(41,128,185,0.15); color: var(--blue); }
+  .sihua-ke { background: rgba(201,168,76,0.15); color: var(--gold); }
+  .sihua-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
+  .palace-daxian { font-size: 0.62em; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 4px; margin-top: 3px; }
+
+  /* ---- 宫位详情浮窗 ---- */
+  .palace-detail { display: none; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 10px; padding: 18px 20px; margin: 12px 0; position: relative; }
+  .palace-detail.show { display: block; }
+  .palace-detail::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--gold), transparent); }
+  .palace-detail h4 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 8px; }
+  .palace-detail .interpret { color: var(--text); font-size: 0.9em; line-height: 1.8; white-space: pre-line; }
+  .palace-detail .close-btn { position: absolute; top: 10px; right: 14px; background: none; border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; width: 26px; height: 26px; border-radius: 50%; font-size: 0.85em; line-height: 24px; text-align: center; transition: all 0.3s; }
+  .palace-detail .close-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ---- 四化飞星 ---- */
+  .sihua-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+  .sihua-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 14px; }
+  .sihua-details { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sihua-detail-item { flex: 1; min-width: 120px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .sihua-detail-item .label { font-size: 0.74em; color: var(--text-dim); margin-bottom: 4px; }
+  .sihua-detail-item .value { font-size: 1.1em; font-weight: bold; }
+
+  /* ---- 大限信息 ---- */
+  .daxian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }
+  .daxian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 2px; margin-bottom: 14px; }
+  .daxian-details { display: flex; gap: 12px; flex-wrap: wrap; }
+  .daxian-detail-item { flex: 1; min-width: 120px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .daxian-detail-item .label { font-size: 0.74em; color: var(--text-dim); margin-bottom: 4px; }
+  .daxian-detail-item .value { font-size: 1.1em; font-weight: bold; color: var(--gold); }
+
+  /* ---- 大运卡片 ---- */
+  .dayun-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+  .dayun-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .dayun-timeline { display: flex; flex-wrap: wrap; gap: 12px; }
+  .dayun-card { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 280px; max-width: 340px; flex: 1 1 280px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
+  .dayun-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(201,168,76,0.15); }
+  .dayun-card.current { border-color: var(--gold); box-shadow: 0 0 12px rgba(201,168,76,0.2); }
+  .dayun-card.current::after { content: '当前'; position: absolute; top: 8px; right: -22px; background: var(--gold); color: #1a1a1a; font-size: 0.55em; padding: 1px 26px; transform: rotate(45deg); letter-spacing: 1px; font-weight: bold; }
+  .dayun-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .dayun-card .age-range { font-size: 0.95em; color: var(--gold); font-weight: bold; }
+  .dayun-card .gz-info { font-size: 0.72em; color: var(--text-dim); }
+  .dayun-card .stars-line { font-size: 0.76em; color: var(--gold-light); margin-bottom: 10px; }
+  .dayun-card .stars-line .star-label { color: var(--text-dim); margin-right: 4px; }
+
+  .dayun-badge { display: inline-block; padding: 2px 10px; border-radius: 5px; font-size: 0.78em; font-weight: bold; letter-spacing: 1px; }
+  .badge-shangji { background: rgba(39,174,96,0.18); color: var(--green); }
+  .badge-zhongji { background: rgba(52,152,219,0.18); color: var(--blue); }
+  .badge-pingyun { background: rgba(201,168,76,0.18); color: var(--gold); }
+  .badge-pianxiong { background: rgba(231,76,60,0.14); color: var(--red-light); }
+  .badge-daxiong { background: rgba(192,57,43,0.2); color: var(--red-light); }
+
+  /* ---- 大运五维评分条 ---- */
+  .score-bars { margin: 6px 0; }
+  .score-bar-row { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.72em; }
+  .score-bar-label { width: 36px; color: var(--text-dim); flex-shrink: 0; text-align: right; padding-right: 6px; }
+  .score-bar-track { flex: 1; height: 8px; background: rgba(42,53,80,0.6); border-radius: 4px; overflow: hidden; position: relative; }
+  .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; min-width: 4px; }
+  .score-bar-val { width: 26px; text-align: right; flex-shrink: 0; font-weight: bold; margin-left: 4px; }
+  .bar-wealth .score-bar-fill { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+  .bar-wealth .score-bar-val { color: var(--green); }
+  .bar-career .score-bar-fill { background: linear-gradient(90deg, #2980b9, #3498db); }
+  .bar-career .score-bar-val { color: var(--blue); }
+  .bar-marriage .score-bar-fill { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+  .bar-marriage .score-bar-val { color: var(--red-light); }
+  .bar-children .score-bar-fill { background: linear-gradient(90deg, #8e44ad, #9b59b6); }
+  .bar-children .score-bar-val { color: var(--purple); }
+  .bar-parents .score-bar-fill { background: linear-gradient(90deg, #c9a84c, #e8d48b); }
+  .bar-parents .score-bar-val { color: var(--gold-light); }
+
+  /* ---- 大运展开详情 ---- */
+  .dayun-deep { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .dayun-card.expanded .dayun-deep { display: block; }
+  .dayun-card.expanded { max-width: none; width: 100%; flex-basis: 100%; }
+  .dayun-card.past { opacity: 0.55; }
+  .dayun-card.past:hover { opacity: 1; }
+  .dayun-card.future { border-color: rgba(201,168,76,0.15); background: rgba(17,24,39,0.6); }
+  .dayun-deep .deep-title { font-size: 0.85em; color: var(--gold); font-weight: bold; margin-bottom: 6px; letter-spacing: 1px; }
+  .dayun-deep .deep-text { font-size: 0.82em; color: var(--text); line-height: 1.7; margin-bottom: 8px; }
+  .dayun-deep .dim-section { margin-bottom: 6px; }
+  .dayun-deep .dim-label { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68em; font-weight: bold; margin-right: 4px; }
+  .dim-wealth { background: rgba(39,174,96,0.15); color: var(--green); }
+  .dim-career { background: rgba(41,128,185,0.15); color: var(--blue); }
+  .dim-marriage { background: rgba(231,76,60,0.12); color: var(--red-light); }
+  .dim-children { background: rgba(155,89,182,0.12); color: var(--purple); }
+  .dim-parents { background: rgba(201,168,76,0.15); color: var(--gold); }
+  .dayun-deep .dim-desc { font-size: 0.78em; color: var(--text-dim); line-height: 1.6; margin-left: 4px; }
+  .dayun-card .expand-hint { font-size: 0.58em; color: var(--text-dim); text-align: center; margin-top: 6px; opacity: 0.7; }
+
+  /* ---- 大运内嵌流年迷你表 ---- */
+  .ln-mini-title { font-size: 0.74em; color: var(--gold); font-weight: bold; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); letter-spacing: 1px; }
+  .ln-mini-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 6px; }
+  .ln-mini-table { width: 100%; border-collapse: collapse; font-size: 0.62em; min-width: 500px; }
+  .ln-mini-table th { background: rgba(201,168,76,0.06); color: var(--gold); padding: 3px 4px; text-align: left; font-weight: normal; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .ln-mini-table td { padding: 2px 4px; border-bottom: 1px solid rgba(42,53,80,0.25); white-space: nowrap; }
+  .ln-mini-table .ln-yr { color: var(--gold); font-weight: bold; }
+  .ln-mini-table .ln-ss { color: var(--text-dim); font-size: 0.9em; }
+  .ln-mini-table .ln-brief { max-width: 160px; white-space: normal; line-height: 1.4; font-size: 0.9em; color: var(--text-dim); }
+  .ln-mini-table .ln-star { font-size: 0.82em; white-space: nowrap; letter-spacing: -1px; }
+  .ln-mini-table .ln-now td { background: rgba(201,168,76,0.08); }
+  .ln-mini-table tr:hover td { background: rgba(201,168,76,0.04); }
+
+  /* ---- 流年卡片式布局 ---- */
+  .ln-section-title { font-size: 0.76em; color: var(--gold); font-weight: bold; margin-top: 10px; padding: 8px 0; border-top: 1px dashed var(--border); letter-spacing: 1px; }
+  .ln-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 6px; }
+  .ln-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: all 0.2s; }
+  .ln-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px rgba(201,168,76,0.1); }
+  .ln-now-card { border-color: var(--gold); border-width: 2px; background: rgba(201,168,76,0.04); }
+  .ln-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  /* 四化标签行 P2 */
+  .ln-sihua-row { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+  .ln-sihua-badge { padding: 1px 5px; border-radius: 3px; font-size: 0.55em; font-weight: bold; letter-spacing: 0.5px; }
+  .ln-card-year { font-size: 0.85em; font-weight: bold; color: var(--gold); }
+  .ln-card-gz { font-size: 0.72em; color: var(--text-dim); }
+  .ln-card-score { margin-left: auto; font-size: 0.95em; font-weight: bold; }
+  .ln-card-dims { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-bottom: 6px; }
+  .ln-dim-item { display: flex; align-items: center; gap: 3px; font-size: 0.7em; }
+  .ln-dim-label { color: var(--text-dim); min-width: 24px; }
+  .ln-dim-bar { flex: 1; min-width: 40px; height: 4px; background: rgba(42,53,80,0.3); border-radius: 2px; overflow: hidden; }
+  .ln-dim-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .ln-dim-val { color: var(--text-dim); font-weight: bold; min-width: 16px; text-align: right; }
+  .ln-card-brief { font-size: 0.78em; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
+  .ln-card-detail { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .ln-detail-text { font-size: 0.78em; color: var(--text-dim); line-height: 1.65; margin-bottom: 8px; }
+  .ln-monthly-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .ln-month-card { background: var(--bg-card2); border-radius: 5px; padding: 5px 7px; border-top: 3px solid; }
+  .ln-month-label { font-size: 0.72em; font-weight: bold; margin-bottom: 2px; }
+  .ln-month-detail { font-size: 0.75em; color: var(--text); line-height: 1.4; }
+  .ln-expand-hint { font-size: 0.7em; color: var(--text-dim); text-align: center; margin-top: 4px; opacity: 0.7; }
+
+  /* ---- 流年总表 ---- */
+  .liunian-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+  .liunian-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .liunian-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .liunian-table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 0.85em; }
+  .liunian-table th { background: var(--bg-card2); color: var(--gold); padding: 8px 10px; text-align: left; font-weight: normal; letter-spacing: 1px; border-bottom: 2px solid var(--border); position: sticky; top: 0; }
+  .liunian-table td { padding: 7px 10px; border-bottom: 1px solid rgba(42,53,80,0.5); vertical-align: middle; }
+  .liunian-table tr:hover td { background: rgba(201,168,76,0.04); }
+  .liunian-table .year-col { color: var(--gold); font-weight: bold; min-width: 50px; }
+  .liunian-table .gan-zhi { color: var(--gold-light); }
+  .liunian-table .shensha-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.88em; }
+  .liunian-table .ss-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
+  .liunian-table .ss-jixiang { background: rgba(39,174,96,0.12); color: var(--green); }
+  .liunian-table .ss-neutral { background: rgba(136,146,164,0.1); color: var(--text-dim); }
+  .liunian-table .score-good { color: var(--green); font-weight: bold; }
+  .liunian-table .score-mid { color: var(--gold); font-weight: bold; }
+  .liunian-table .score-low { color: var(--red-light); font-weight: bold; }
+  .liunian-table .star-col { font-size: 0.72em; letter-spacing: -1px; white-space: nowrap; }
+  .liunian-filter { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .liunian-filter input { padding: 6px 10px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 0.85em; width: 80px; }
+  .liunian-filter label { color: var(--text-dim); font-size: 0.82em; letter-spacing: 1px; }
+  .liunian-filter button { padding: 6px 14px; background: var(--bg-card2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 0.82em; transition: all 0.3s; }
+  .liunian-filter button:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ---- 四化飞化分析 ---- */
+  .feihua-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+  .feihua-section h3 { color: var(--gold); font-size: 1em; letter-spacing: 3px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .feihua-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .feihua-card { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; transition: all 0.3s; position: relative; overflow: hidden; }
+  .wealth-card { background: linear-gradient(135deg, var(--bg-card2), rgba(201,168,76,0.1)) !important; border-color: rgba(201,168,76,0.25) !important; }
+  .laiyin-card { background: linear-gradient(135deg, var(--bg-card2), rgba(46,204,113,0.08)) !important; border-color: rgba(46,204,113,0.2) !important; }
+  .feihua-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+  .feihua-card.fh-lu::before { background: #2ecc71; }
+  .feihua-card.fh-quan::before { background: #3498db; }
+  .feihua-card.fh-ke::before { background: var(--gold); }
+  .feihua-card.fh-ji::before { background: var(--red-light); }
+  .feihua-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(201,168,76,0.12); }
+  .feihua-card .fh-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .feihua-card .fh-type { font-size: 1.05em; font-weight: bold; padding: 3px 10px; border-radius: 5px; display: inline-block; letter-spacing: 2px; }
+  .fh-type.fh-lu { background: rgba(39,174,96,0.15); color: var(--green); }
+  .fh-type.fh-quan { background: rgba(41,128,185,0.15); color: var(--blue); }
+  .fh-type.fh-ke { background: rgba(201,168,76,0.15); color: var(--gold); }
+  .fh-type.fh-ji { background: rgba(231,76,60,0.12); color: var(--red-light); }
+  .feihua-card .fh-star { font-size: 1.2em; font-weight: bold; color: var(--gold-light); margin-bottom: 8px; letter-spacing: 2px; }
+  .feihua-card .fh-source { font-size: 0.82em; color: var(--text-dim); margin-bottom: 8px; }
+  .feihua-card .fh-source .src-palace { color: var(--gold); font-weight: bold; }
+  .feihua-card .fh-desc { font-size: 0.78em; color: var(--text); line-height: 1.7; }
+
+  /* ---- 八字同步横幅 ---- */
+  .sync-banner { max-width: 720px; margin: 18px auto 0; padding: 0 20px; }
+  .sync-card { background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(201,168,76,0.06) 100%); border: 1px solid rgba(39,174,96,0.3); border-radius: 12px; padding: 16px 22px; display: none; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .sync-card.show { display: flex; }
+  .sync-card .sync-icon { font-size: 1.6em; flex-shrink: 0; }
+  .sync-card .sync-info { flex: 1; min-width: 200px; }
+  .sync-card .sync-title { color: var(--green); font-size: 0.95em; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; }
+  .sync-card .sync-detail { color: var(--text-dim); font-size: 0.82em; line-height: 1.5; }
+  .sync-card .sync-detail strong { color: var(--gold); }
+  .sync-card .sync-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .sync-card .btn-sync { padding: 9px 20px; border: none; border-radius: 8px; background: linear-gradient(135deg, var(--green) 0%, #1e8449 100%); color: #fff; font-family: inherit; font-size: 0.9em; letter-spacing: 2px; cursor: pointer; transition: all 0.3s; font-weight: bold; }
+  .sync-card .btn-sync:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(39,174,96,0.3); }
+  .sync-card .btn-sync-alt { padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-dim); font-family: inherit; font-size: 0.82em; cursor: pointer; transition: all 0.3s; letter-spacing: 1px; }
+  .sync-card .btn-sync-alt:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ---- 紫微页响应式 ---- */
+  @media (max-width: 768px) {
+    .palace-grid { gap: 3px; }
+    .palace-cell { padding: 6px 4px; min-height: 60px; }
+    .palace-name { font-size: 0.72em; letter-spacing: 1px; }
+    .palace-main-stars { font-size: 0.66em; }
+    .palace-aux-stars { font-size: 0.6em; }
+    .overview-info { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .palace-grid { gap: 2px; grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
+    .palace-grid .palace-cell.center { grid-column: span 2; min-height: 36px; font-size: 0.62em; }
+    .palace-cell { padding: 6px 5px; border-radius: 6px; min-height: 52px; }
+    .palace-name { font-size: 0.7em; }
+    .palace-gz { font-size: 0.58em; }
+    .palace-main-stars { font-size: 0.62em; }
+    .palace-aux-stars { display: none; }
+    .overview-info { grid-template-columns: 1fr; }
+    .liunian-table th:nth-child(n+6), .liunian-table td:nth-child(n+6) { display: none; }
+    .liunian-table .ln-brief { max-width: 120px; font-size: 0.78em; }
+    .liunian-filter { flex-wrap: wrap; }
+    .dayun-card { min-width: 100%; max-width: 100%; }
+  }
+</style>
+</head>
+
+<nav class="navbar">
+  <div class="brand">命 理 乾 坤</div>
+  <div class="nav-tabs">
+    <a href="/index.html" class="nav-tab">八字命理</a>
+    <a href="/ziwei.html" class="nav-tab">命盘总览</a>
+    <a href="/ziwei-liunian.html" class="nav-tab active">大运流年</a>
+  </div>
+
+<div class="header">
+  <h1>大 运 流 年</h1>
+  <div class="subtitle">十年一运 · 流年详析</div>
+
+<div class="sync-banner">
+  <div class="sync-card" id="syncCard">
+    <div class="sync-icon">🔗</div>
+    <div class="sync-info">
+      <div class="sync-title">已同步八字页的生辰信息</div>
+      <div class="sync-detail" id="syncDetail"></div>
+    </div>
+    <div class="sync-actions">
+      <button class="btn-sync" onclick="useSyncedBirth()">使用同步数据排盘</button>
+      <button class="btn-sync-alt" onclick="clearSyncedBirth()">手动输入</button>
+    </div>
+  </div>
+</div>
+
+<div class="input-section">
+  <div class="input-card">
+    <h2>☰ 输入生辰信息（公历）</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>出生年份</label>
+        <input type="number" id="year" min="1900" max="2100" value="1987">
+      </div>
+      <div class="form-group">
+        <label>出生月份</label>
+        <input type="number" id="month" min="1" max="12" value="7">
+      </div>
+      <div class="form-group">
+        <label>出生日期</label>
+        <input type="number" id="day" min="1" max="31" value="8">
+      </div>
+      <div class="form-group">
+        <label>出生时辰</label>
+        <select id="hour">
+          <option value="0">子时 (23-01点)</option>
+          <option value="1">丑时 (01-03点)</option>
+          <option value="3">寅时 (03-05点)</option>
+          <option value="5">卯时 (05-07点)</option>
+          <option value="7">辰时 (07-09点)</option>
+          <option value="9">巳时 (09-11点)</option>
+          <option value="11">午时 (11-13点)</option>
+          <option value="13">未时 (13-15点)</option>
+          <option value="15">申时 (15-17点)</option>
+          <option value="17">酉时 (17-19点)</option>
+          <option value="19" selected>戌时 (19-21点)</option>
+          <option value="21">亥时 (21-23点)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label>性别</label>
+        <div class="sex-group">
+          <button class="sex-btn active-male" onclick="setSex('男',this)">♂ 男</button>
+          <button class="sex-btn" onclick="setSex('女',this)">♀ 女</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
+    <label class="refresh-label"><input type="checkbox" id="chkRefresh" onclick="event.stopPropagation()"> 强制刷新LLM</label>
+  </div>
+</div>
+
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">正在排盘分析，请稍候…</div>
+  <div class="loading-stages" id="loadingStages" style="display:none;margin-top:8px;font-size:0.78em;color:var(--text-dim)">
+    <span style="color:var(--gold)">⏳</span> AI 正在进行深度分析，预计 30-50 秒，请耐心等待…
+  </div>
+</div>
+
+<div class="error-section" id="errorSection" style="display:none;max-width:720px;margin:20px auto;padding:0 20px">
+  <div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:10px;padding:20px;text-align:center">
+    <div id="errorTitle" style="font-size:1.2em;color:var(--red-light);margin-bottom:8px">分析超时</div>
+    <div id="errorMsg" style="font-size:0.88em;color:var(--text-dim);margin-bottom:14px">AI 分析耗时过长，建议稍后重试或查看缓存结果</div>
+    <button onclick="doAnalyze()" style="padding:8px 24px;background:var(--gold);color:#1a1a1a;border:none;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:2px">重试分析</button>
+  </div>
+</div>
+<div class="result-section" id="result">
+  <div class="daxian-section" id="daxianSection">
+    <h3>☰ 大限信息</h3>
+    <div class="daxian-details" id="daxianDetails"></div>
+  </div>
+
+  <div class="dayun-section" id="dayunSection">
+    <h3>☰ 大运分析（十年一运）</h3>
+    <div class="dayun-timeline" id="dayunTimeline"></div>
+  </div>
+</div>
+<div class="disclaimer">
+  本系统仅供传统文化学习与娱乐参考，命理分析不能替代专业建议。人生际遇由己，切勿迷信。
+</div>
+<script>
+// ============================================================
+// 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
+// ============================================================
+
+// ---- 全局状态 ----
+var _syncedBirth = null;
+var currentSex = '男';
+var currentResult = null;
+var activeDetailIdx = -1;
+
+// 页面加载时检查是否有八字页同步的生辰信息
+(function initSync() {
+  try {
+    var raw = localStorage.getItem('mingli_birth');
+    if (raw) {
+      _syncedBirth = JSON.parse(raw);
+      // 判断是否24小时内同步的
+      var savedAt = _syncedBirth.savedAt ? new Date(_syncedBirth.savedAt) : null;
+      var now = new Date();
+      if (savedAt && (now - savedAt) < 24 * 3600 * 1000) {
+        showSyncBanner();
+      }
+    }
+  } catch(e) {}
+})();
+
+// 页面加载时恢复上次分析结果（切页不回空白）
+// 缓存版本：评分维度从4维升级到5维时必须清除旧缓存
+var ZIWEI_CACHE_VERSION = 'v7.3';
+(function restoreResult() {
+  try {
+    var ver = localStorage.getItem('mingli_ziwei_ver');
+    if (ver !== ZIWEI_CACHE_VERSION) {
+      localStorage.removeItem('mingli_ziwei_result');
+      localStorage.setItem('mingli_ziwei_ver', ZIWEI_CACHE_VERSION);
+      return;
+    }
+    var raw = localStorage.getItem('mingli_ziwei_result');
+    if (!raw) return;
+    var cached = JSON.parse(raw);
+    if (!cached.result) return;
+    currentResult = cached.result;
+    if (cached.year) document.getElementById('year').value = cached.year;
+    if (cached.month) document.getElementById('month').value = cached.month;
+    if (cached.day) document.getElementById('day').value = cached.day;
+    if (cached.hour) document.getElementById('hour').value = cached.hour;
+    if (cached.sex) {
+      currentSex = cached.sex;
+      document.querySelectorAll('.sex-btn').forEach(function(b) {
+        b.className = 'sex-btn';
+        if ((b.textContent.indexOf('男') >= 0 && cached.sex === '男') ||
+            (b.textContent.indexOf('女') >= 0 && cached.sex === '女')) {
+          b.classList.add(cached.sex === '男' ? 'active-male' : 'active-female');
+        }
+      });
+    }
+    activeDetailIdx = -1;
+    renderResult(cached.result);
+  } catch(e) {}
+})();
+
+function showSyncBanner() {
+  if (!_syncedBirth) return;
+  var card = document.getElementById('syncCard');
+  var detail = document.getElementById('syncDetail');
+  var sexText = _syncedBirth.sex || '男';
+  var bpStr = _syncedBirth.birthplace ? ' · 出生地：<strong>' + _syncedBirth.birthplace + '</strong>' : '';
+  var solarLine = '';
+  if (_syncedBirth.solarHour > 0 && _syncedBirth.birthplace) {
+    // 展示真太阳时信息：原始公历时间 + 调整后时辰 + 经度偏移
+    var rawTimeStr = _syncedBirth.solarHour + ':' + String(_syncedBirth.solarMinute||0).padStart(2,'0') + ' ' + (_syncedBirth.ampm||'AM');
+    solarLine = '<br>☀ 真太阳时 ' + String(_syncedBirth.hour).padStart(2,'0') + ':' + String(_syncedBirth.minute||0).padStart(2,'0') + '（公历 ' + rawTimeStr + '）';
+  }
+  detail.innerHTML = '<strong>' + _syncedBirth.year + '</strong>年<strong>' + _syncedBirth.month + '</strong>月<strong>' + _syncedBirth.day + '</strong>日 ' + timeLabel(_syncedBirth.hour, _syncedBirth.minute) + ' · <strong>' + sexText + '</strong>命' + bpStr + solarLine;
+  card.classList.add('show');
+}
+
+function timeLabel(h, m) {
+  var labels = ['子时','丑时','寅时','卯时','辰时','巳时','午时','未时','申时','酉时','戌时','亥时'];
+  var ranges = ['(23-01)','(01-03)','(03-05)','(05-07)','(07-09)','(09-11)','(11-13)','(13-15)','(15-17)','(17-19)','(19-21)','(21-23)'];
+  var idx = Math.floor(((+h) % 24) / 2);
+  if (idx < 0 || idx > 11) idx = 0;
+  var minStr = m ? ':' + String(m).padStart(2,'0') : ':00';
+  return labels[idx] + ' ' + h + minStr + ranges[idx];
+}
+
+function useSyncedBirth() {
+  if (!_syncedBirth) return;
+  document.getElementById('year').value = _syncedBirth.year;
+  document.getElementById('month').value = _syncedBirth.month;
+  document.getElementById('day').value = _syncedBirth.day;
+  // 将精确小时映射到十二时辰值（八字页真太阳时可能产出精确小时）
+  var rawHour = _syncedBirth.hour;
+  var shichen = rawHour;
+  if (rawHour === 23 || rawHour === 0) shichen = 0;
+  else if (rawHour % 2 === 0) shichen = rawHour - 1;
+  document.getElementById('hour').value = shichen;
+  currentSex = _syncedBirth.sex || '男';
+  // 更新性别按钮状态
+  document.querySelectorAll('.sex-btn').forEach(function(b) {
+    b.className = 'sex-btn';
+    if ((b.textContent.indexOf('男') >= 0 && currentSex === '男') ||
+        (b.textContent.indexOf('女') >= 0 && currentSex === '女')) {
+      b.classList.add(currentSex === '男' ? 'active-male' : 'active-female');
+    }
+  });
+  doAnalyze();
+}
+
+function clearSyncedBirth() {
+  try { localStorage.removeItem('mingli_birth'); } catch(e) {}
+  _syncedBirth = null;
+  document.getElementById('syncCard').classList.remove('show');
+}
+
+// ===== LLM 结果持久缓存 =====
+function _cacheKey(y,m,d,h,s) { return 'ziwei_llm_v2_' + [y,m,d,h,s].join('_'); }
+function _loadCache(y,m,d,h,s) {
+  try { return JSON.parse(localStorage.getItem(_cacheKey(y,m,d,h,s))||'null'); } catch(e) { return null; }
+}
+function _saveCache(y,m,d,h,s, data) {
+  // localStorage 总量检查 — 超过 2MB 清理旧缓存(保留最近5条)
+  try {
+    var total = 0, keys = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('ziwei_llm_') === 0) { total += localStorage.getItem(k).length; keys.push(k); }
+    }
+    if (total > 2 * 1024 * 1024 && keys.length > 5) {
+      keys.sort(); // 按key名排序(ziwei_llm_v2_1987_...)，先删旧
+      for (var j = 0; j < keys.length - 5; j++) localStorage.removeItem(keys[j]);
+    }
+  } catch(e) {}
+  // 只保存LLM相关字段
+  var slim = {};
+  if (data['命盘总结']) slim.summary = data['命盘总结'];
+  if (data['大运']) slim.dayun = data['大运'].map(function(d){return{起始年龄:d['起始年龄'],综合解读:d['综合解读']||''}});
+  if (data['流年']) slim.liunian = data['流年'].map(function(l){return{年份:l['年份'],简评:l['简评']||'',简评详情:l['简评详情']||''}});
+  try { localStorage.setItem(_cacheKey(y,m,d,h,s), JSON.stringify(slim)); } catch(e) {}
+}
+function _mergeCache(data, cache) {
+  if (!cache) return;
+  if (cache.summary && !data['命盘总结']) data['命盘总结'] = cache.summary;
+  if (cache.dayun) {
+    var dm = {}; cache.dayun.forEach(function(d){dm[d['起始年龄']]=d;});
+    (data['大运']||[]).forEach(function(d){var c=dm[d['起始年龄']];if(c&&c['综合解读']&&!d['综合解读'])d['综合解读']=c['综合解读']});
+  }
+  if (cache.liunian) {
+    var lm = {}; cache.liunian.forEach(function(l){lm[l['年份']]=l;});
+    (data['流年']||[]).forEach(function(l){var c=lm[l['年份']];if(c){if(c['简评']&&!l['简评'])l['简评']=c['简评'];if(c['简评详情']&&!l['简评详情'])l['简评详情']=c['简评详情']}});
+  }
+}
+
+function setSex(sex, btn) {
+  currentSex = sex;
+  document.querySelectorAll('.sex-btn').forEach(function(b) { b.className = 'sex-btn'; });
+  btn.classList.add(sex === '男' ? 'active-male' : 'active-female');
+}
+
+function doAnalyze() {
+  var year  = document.getElementById('year').value;
+  var month = document.getElementById('month').value;
+  var day   = document.getElementById('day').value;
+  var hour  = document.getElementById('hour').value;
+
+  if (!year || !month || !day) { alert('请填写完整的出生日期'); return; }
+
+  var btn = document.getElementById('btnAnalyze');
+  btn.disabled = true;
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loadingStages').style.display = 'block';
+  document.getElementById('errorSection').style.display = 'none';
+  document.getElementById('result').classList.remove('show');
+
+  // 检查缓存
+  var isRefresh = document.getElementById('chkRefresh') && document.getElementById('chkRefresh').checked;
+  var cache = isRefresh ? null : _loadCache(year, month, day, hour, currentSex);
+
+  fetch('/api/ziwei', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
+    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex})
+  })
+  .then(function(resp) {
+    if (!resp.ok) {
+      var errTitle = '分析超时', errMsg = 'AI 分析耗时过长，建议稍后重试或查看缓存结果';
+      if (resp.status === 401) { errTitle = '服务认证失败'; errMsg = '密钥验证不通过，请刷新页面后重试'; }
+      else if (resp.status === 500) { errTitle = '服务器错误'; errMsg = '服务器内部处理异常，请稍后重试'; }
+      else if (resp.status === 504) { errTitle = '分析超时'; errMsg = 'AI 正在全力运算中，EdgeOne 限制了单次请求时间，请稍后重试'; }
+      document.getElementById('errorTitle').textContent = errTitle;
+      document.getElementById('errorMsg').textContent = errMsg;
+      throw new Error(errTitle);
+    }
+    return resp.json();
+  })
+  .then(function(data) {
+    if (data.error) { alert(data.error); return; }
+    currentResult = data;
+    activeDetailIdx = -1;
+    // 合并缓存（优先API新数据）
+    _mergeCache(data, cache);
+    // 保存新缓存
+    _saveCache(year, month, day, hour, currentSex, data);
+    renderResult(data);
+    // 缓存分析结果，切页回来保持显示
+    try {
+      localStorage.setItem('mingli_ziwei_result', JSON.stringify({
+        result: data,
+        year: document.getElementById('year').value,
+        month: document.getElementById('month').value,
+        day: document.getElementById('day').value,
+        hour: document.getElementById('hour').value,
+        sex: currentSex
+      }));
+    } catch(e) {}
+  })
+  .catch(function(e) {
+    document.getElementById('errorSection').style.display = 'block';
+    document.getElementById('loading').classList.remove('show');
+    btn.disabled = false;
+  })
+  .finally(function() {
+    btn.disabled = false;
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('loadingStages').style.display = 'none';
+  });
+}
+
+function renderResult(data) {
+  // ---- 大限信息 ----
+  var daxian = data['大限信息'] || {};
+  var daxianDetails = document.getElementById('daxianDetails');
+  if (daxianDetails) {
+    daxianDetails.innerHTML = [
+      {label: '起运年龄', value: (daxian['起运年龄']||'') + '岁'},
+      {label: '运行方向', value: daxian['顺逆']||''}
+    ].map(function(d) {
+      return '<div class="daxian-detail-item"><div class="label">' + d.label + '</div><div class="value">' + d.value + '</div></div>';
+    }).join('');
+  }
+
+  // ---- 大运时间线 ----
+  var dayunList = data['大运'] || [];
+  var nowYear = new Date().getFullYear();
+  var birthYear = parseInt((data['基本信息']||{})['公历'] || document.getElementById('year').value);
+  var dayunHtml = '';
+  var badgeMap = {'大吉':'badge-daji','中吉':'badge-zhongji','小吉':'badge-xiaoji','平运':'badge-pingyun','偏弱':'badge-pingyun','大凶':'badge-daxiong'};
+  var barClsMap = {'财富':'bar-wealth','事业':'bar-career','婚姻':'bar-marriage','子女':'bar-children','父母':'bar-parents'};
+  var dimClsMap = {'财富':'dim-wealth','事业':'dim-career','婚姻':'dim-marriage','子女':'dim-children','父母':'dim-parents','健康':'dim-health'};
+
+  for (var di = 0; di < dayunList.length; di++) {
+    var dy = dayunList[di];
+    var nowAge = nowYear - birthYear;
+    var isCurrent = (nowAge >= dy['起始年龄'] && nowAge <= dy['结束年龄']);
+    var majorStr = (dy['主星']||[]).length > 0 ? dy['主星'].join('、') : '无主星';
+    var minorStr = (dy['辅星']||[]).length > 0 ? dy['辅星'].join('、') : '';
+    var scores = dy['评分'] || {};
+    var totalScore = dy['综合评分'] || 0;
+    var rating = dy['综合评级'] || '平运';
+    var ratingCls = badgeMap[rating] || 'badge-pingyun';
+
+    var barHtml = '';
+    var dims = ['财富','事业','婚姻','子女','父母'];
+    for (var bi = 0; bi < dims.length; bi++) {
+      var d = dims[bi];
+      var sv = scores[d] || 50;
+      barHtml += '<div class="score-bar-row ' + barClsMap[d] + '">' +
+        '<span class="score-bar-label">' + d + '</span>' +
+        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + sv + '%"></div></div>' +
+        '<span class="score-bar-val">' + sv + '</span>' +
+      '</div>';
+    }
+
+    var deepHtml = '';
+    var overallDesc = dy['综合解读'] || '';
+    if (overallDesc) deepHtml += '<div class="deep-title">综合解读</div><div class="deep-text">' + overallDesc + '</div>';
+    var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
+    var llmScore = dy['评分'] || {};
+    for (var k in llmDims) {
+      var t = llmScore[k+'_llm'] || '';
+      if (t) deepHtml += '<div class="dim-section"><span class="dim-label ' + (dimClsMap[k]||'') + '">' + llmDims[k] + '</span><span class="dim-desc">' + t + '</span></div>';
+    }
+    var deepDims = dy['深度解读'] || {};
+    if (!llmScore['财富_llm']) {
+      for (var ddi = 0; ddi < dims.length; ddi++) {
+        var dd = dims[ddi];
+        var ddText = deepDims[dd] || '';
+        if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
+      }
+    }
+
+    var stateCls = '';
+    if (isCurrent) stateCls = ' current';
+    else if (dy['结束年龄'] < nowAge) stateCls = ' past';
+    else stateCls = ' future';
+    dayunHtml += '<div class="dayun-card' + stateCls + '" onclick="toggleDayunCard(this)">' +
+      '<div class="dayun-header">' +
+        '<div><span class="age-range">' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</span> <span class="gz-info" style="color:var(--gold)">' + (dy['大运宫名']||(dy['天干']||'')+(dy['地支']||'')+'宫') + '</span></div>' +
+        '<span class="dayun-badge ' + ratingCls + '">' + totalScore + ' ' + rating + '</span>' +
+      '</div>' +
+      '<div class="stars-line"><span class="star-label">主星</span>' + majorStr + (minorStr ? ' &nbsp;<span class="star-label">辅</span>' + minorStr : '') + '</div>' +
+      '<div class="score-bars">' + barHtml + '</div>' +
+      '<div class="dayun-deep">' + deepHtml + buildDayunLiunian(birthYear, dy['起始年龄'], dy['结束年龄']) + '</div>' +
+      '<div class="expand-hint">▸ 点击展开深度解读 + 此运流年</div>' +
+    '</div>';
+  }
+  var dayunTimeline = document.getElementById('dayunTimeline');
+  if (dayunTimeline) {
+    dayunTimeline.innerHTML = dayunHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无大运数据</p>';
+  }
+  setTimeout(function() {
+    var cur = document.querySelector('.dayun-card.current');
+    if (cur) cur.classList.add('expanded');
+  }, 50);
+
+  document.getElementById('result').classList.add('show');
+  setTimeout(function() {
+    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'start'});
+  }, 100);
+}
+
+function togglePalaceDetail(zhiIdx) {
+  var detailContainer = document.getElementById('palaceDetails');
+  if (activeDetailIdx === zhiIdx) {
+    detailContainer.innerHTML = '';
+    activeDetailIdx = -1;
+    return;
+  }
+  var p = null;
+  var places = currentResult['十二宫'];
+  for (var i = 0; i < places.length; i++) {
+    if (places[i]['宫位'] === zhiIdx) { p = places[i]; break; }
+  }
+  if (!p) return;
+
+  var sihuaMap = p['四化'] || {};
+  var sihuaStr = '';
+  var sihuaKeys = Object.keys(sihuaMap);
+  for (var si = 0; si < sihuaKeys.length; si++) {
+    if (sihuaStr) sihuaStr += ' · ';
+    sihuaStr += sihuaKeys[si] + ': ' + sihuaMap[sihuaKeys[si]];
+  }
+
+  detailContainer.innerHTML =
+    '<div class="palace-detail show">' +
+      '<button class="close-btn" onclick="togglePalaceDetail(' + zhiIdx + ')">&times;</button>' +
+      '<h4>' + p['宫名'] + '宫 ' + p['天干'] + p['地支'] + '</h4>' +
+      '<p style="color:var(--text-dim);font-size:0.82em;margin-bottom:8px">' +
+        '主星：' + ((p['主星']||[]).join('、') || '无') + ' &nbsp;|&nbsp; ' +
+        '辅星：' + ((p['辅星']||[]).join('、') || '无') +
+        (sihuaStr ? ' &nbsp;|&nbsp; ' + sihuaStr : '') +
+      '</p>' +
+      '<p style="color:var(--text-dim);font-size:0.78em;margin-bottom:10px">' +
+        '大限：' + p['大限'] +
+        (p['是否命宫'] ? ' · 命宫' : '') +
+        (p['是否身宫'] ? ' · 身宫' : '') +
+      '</p>' +
+      '<div class="interpret">' + p['解读'] + '</div>' +
+    '</div>';
+  activeDetailIdx = zhiIdx;
+
+  setTimeout(function() {
+    detailContainer.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 100);
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.activeElement.tagName !== 'TEXTAREA') {
+    doAnalyze();
+  }
+});
+
+function buildDayunLiunian(birthYear, startAge, endAge) {
+  var liunianList = (currentResult && currentResult['流年']) || [];
+  if (liunianList.length === 0) return '';
+  var startYear = birthYear + startAge;
+  var endYear = birthYear + endAge;
+  var filtered = [];
+  for (var i = 0; i < liunianList.length; i++) {
+    if (liunianList[i]['年份'] >= startYear && liunianList[i]['年份'] <= endYear) {
+      filtered.push(liunianList[i]);
+    }
+  }
+  if (filtered.length === 0) return '';
+  var nowYear = new Date().getFullYear();
+  var dimCfg = [
+    {key:'事业', color:'#3498db'},{key:'财富', color:'#2ecc71'},
+    {key:'婚姻', color:'#e74c3c'},{key:'子女', color:'#9b59b6'},
+    {key:'健康', color:'#f39c12'}
+  ];
+  var html = '<div class="ln-section-title">此运流年（' + startYear + '—' + endYear + '）</div>';
+  html += '<div class="ln-card-grid">';
+  
+  for (var i = 0; i < filtered.length; i++) {
+    var ln = filtered[i];
+    var isNow = (ln['年份'] === nowYear);
+    var sc = ln['评分']||50;
+    var scColor = sc >= 65 ? '#2ecc71' : sc >= 45 ? '#d4a844' : '#e74c3c';
+    var hasDetail = (ln['简评详情'] && ln['简评详情'].length > 5) || (ln['逐月'] && ln['逐月'].length > 0);
+    var cardId = 'ln-card-' + ln['年份'];
+    
+    // 卡片头：年份 + 干支 + 评分
+    html += '<div class="ln-card' + (isNow ? ' ln-now-card' : '') + '" onclick="toggleLnDetail(\'' + cardId + '\')">';
+    html += '<div class="ln-card-header">';
+    html += '<span class="ln-card-year">' + ln['年份'] + (isNow ? ' ▸' : '') + '</span>';
+    html += '<span class="ln-card-gz">' + (ln['流年干支']||'') + '</span>';
+    html += '<span class="ln-card-score" style="color:' + scColor + '">' + sc + '</span>';
+    html += '</div>';
+    
+    // 四化标签 (P2新增)
+    var sihuaTags = ln['四化'] || null;
+    if (sihuaTags) {
+      var sihuaHtml = '<div class="ln-sihua-row">';
+      var sihuaMap = {'化禄':'#2ecc71','化权':'#3498db','化科':'#c9a84c','化忌':'#e74c3c'};
+      for (var sk in sihuaMap) {
+        if (sihuaTags[sk]) {
+          sihuaHtml += '<span class="ln-sihua-badge" style="background:' + sihuaMap[sk] + '1a;color:' + sihuaMap[sk] + '">' + sk[1] + ' ' + sihuaTags[sk] + '</span>';
+        }
+      }
+      sihuaHtml += '</div>';
+      html += sihuaHtml;
+    }
+    
+    // 5 维 mini bar
+    html += '<div class="ln-card-dims">';
+    for (var di = 0; di < dimCfg.length; di++) {
+      var dv = ln[dimCfg[di].key + '分'] || ln[dimCfg[di].key] || 50;
+      if (typeof dv === 'string') dv = parseInt(dv) || 50;
+      if (dv > 100) dv = 100;
+      var w = dv;
+      var barClr = dv >= 65 ? 'rgba(46,204,113,0.9)' : dv >= 45 ? 'rgba(212,168,68,0.9)' : 'rgba(231,76,60,0.9)';
+      html += '<div class="ln-dim-item">' +
+        '<span class="ln-dim-label">' + dimCfg[di].key + '</span>' +
+        '<span class="ln-dim-bar"><span class="ln-dim-fill" style="width:' + w + '%;background:' + barClr + '"></span></span>' +
+        '<span class="ln-dim-val">' + dv + '</span>' +
+      '</div>';
+    }
+    html += '</div>';
+    
+    // 简评
+    var brief = ln['简评'] || '';
+    if (brief) {
+      html += '<div class="ln-card-brief">' + escapeHtml(brief) + '</div>';
+    }
+    
+    // 可折叠详情区
+    if (hasDetail) {
+      html += '<div class="ln-card-detail" id="' + cardId + '" style="display:none">';
+      
+      // 简评详情
+      var detail = ln['简评详情'] || '';
+      if (detail) {
+        html += '<div class=\"ln-detail-section-title\">📖 年度详析</div>';
+        html += '<div class=\"ln-detail-text\">' + escapeHtml(detail) + '</div>';
+      }
+      
+      // 逐月面板
+      var months = ln['逐月'] || [];
+      if (months.length > 0) {
+        var monthColors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6',
+                          '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#1abc9c'];
+        html += '<div class="ln-monthly-grid">';
+        for (var mi = 0; mi < months.length; mi++) {
+          var m = months[mi];
+          if (!m || !(m.trim())) continue;
+          var col = monthColors[mi % monthColors.length];
+          var sep = m.indexOf('：') > -1 ? '：' : (m.indexOf(':') > -1 ? ':' : null);
+          var parts = sep ? m.split(sep) : [m];
+          var label = (parts[0] || ('月' + (mi + 1))).trim();
+          var mdetail = (parts.slice(1).join(sep || '')).trim();
+          html += '<div class="ln-month-card" style="border-top-color:' + col + '">' +
+            '<div class="ln-month-label" style="color:' + col + '">' + escapeHtml(label) + '</div>' +
+            '<div class="ln-month-detail">' + escapeHtml(mdetail) + '</div>' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+      
+      html += '<div class="ln-expand-hint">▲ 点击收起</div>';
+      html += '</div>'; // end detail
+      
+      html += '<div class="ln-expand-hint">▼ 点击展开详情与流月</div>';
+    }
+    
+    html += '</div>'; // end card
+  }
+  
+  html += '</div>'; // end grid
+  return html;
+}
+
+// 折叠切换
+function toggleLnDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var card = el.parentElement;  // .ln-card
+  var isOpen = el.style.display === 'block';
+  el.style.display = isOpen ? 'none' : 'block';
+  // 更新展开/收起提示
+  var hints = card.querySelectorAll('.ln-expand-hint');
+  if (hints.length >= 2) {
+    hints[0].style.display = isOpen ? 'block' : 'none';   // "点击展开"
+    hints[1].style.display = isOpen ? 'none' : 'block';  // (inside detail) "点击收起"
+  }
+}
+
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// 大运卡片展开互斥 — 同时只能展开一张
+function toggleDayunCard(card) {
+  var wasExpanded = card.classList.contains('expanded');
+  // 先收起所有
+  document.querySelectorAll('.dayun-card.expanded').forEach(function(c) { c.classList.remove('expanded'); });
+  // 再展开当前(如原来没展开)
+  if (!wasExpanded) card.classList.add('expanded');
+}
+
+// 简评浮窗：hover/click 展示详情
+(function() {
+  var tip = document.createElement('div');
+  tip.id = 'brief-tooltip';
+    tip.style.cssText = 'display:none;position:fixed;z-index:9999;max-width:320px;padding:12px 16px;background:var(--bg-card);border:2px solid var(--gold);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,0.35);font-size:0.84em;line-height:1.75;color:var(--text);pointer-events:none;';
+    document.body.appendChild(tip);
+
+  // 给 .ln-tip 加样式
+  var s = document.createElement('style');
+  s.textContent = '.ln-tip{cursor:pointer;text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:3px;text-decoration-style:dotted}.ln-tip:hover{color:var(--gold)}.refresh-label{font-size:0.75em;color:var(--text-dim);cursor:pointer;margin-left:12px;display:inline-flex;align-items:center;gap:4px;user-select:none}.refresh-label input{margin:0;accent-color:var(--gold)}';
+  document.head.appendChild(s);
+
+  var activeEl = null;
+  function show(e) {
+    var txt = this.getAttribute('data-tip');
+    if (!txt) return;
+    tip.textContent = txt;
+    tip.style.display = 'block';
+    var x = e.clientX + 16, y = e.clientY - 10;
+    if (x + 330 > window.innerWidth) x = e.clientX - 330;
+    if (y + 100 > window.innerHeight) y = window.innerHeight - 110;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    activeEl = this;
+  }
+  function hide() { tip.style.display = 'none'; activeEl = null; }
+
+  document.addEventListener('mouseover', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (el && el !== activeEl) show.call(el, e);
+  });
+  document.addEventListener('mouseout', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (el && el === activeEl && !el.contains(e.relatedTarget)) hide();
+  });
+  // 点击切换（移动端）
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('.ln-tip');
+    if (!el) { hide(); return; }
+    if (el === activeEl && tip.style.display === 'block') { hide(); return; }
+    show.call(el, e); tip.style.pointerEvents = 'auto';
+    setTimeout(function() { tip.style.pointerEvents = 'none'; }, 2000);
+  });
+})();
+</script>
+</body>
+</html>
