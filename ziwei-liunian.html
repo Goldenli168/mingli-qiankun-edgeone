@@ -358,6 +358,18 @@
   </div>
 </div>
 <div class="result-section" id="result">
+  <!-- 关键时间点（应期推断） -->
+  <div class="feihua-section" id="timingSection" style="margin-bottom:20px; display:none;">
+    <h3>⏰ 关键时间点</h3>
+    <div id="timingGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>
+  </div>
+
+  <!-- 灾难预警 -->
+  <div class="feihua-section" id="warningSection" style="margin-bottom:20px; display:none;">
+    <h3>⚠️ 流年预警</h3>
+    <div id="warningGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+  </div>
+
   <div class="daxian-section" id="daxianSection">
     <h3>☰ 大限信息</h3>
     <div class="daxian-details" id="daxianDetails"></div>
@@ -611,6 +623,101 @@ function renderResult(data) {
     ].map(function(d) {
       return '<div class="daxian-detail-item"><div class="label">' + d.label + '</div><div class="value">' + d.value + '</div></div>';
     }).join('');
+  }
+
+  // ---- 应期推断：关键时间点 ----
+  var liunians = data['流年'] || [];
+  var nowYear = new Date().getFullYear();
+  var timingSection = document.getElementById('timingSection');
+  var timingGrid = document.getElementById('timingGrid');
+  if (liunians.length > 0 && timingSection && timingGrid) {
+    // 找未来10年评分最高和最低的年份
+    var futureYears = liunians.filter(function(l) { return l['年份'] >= nowYear && l['年份'] <= nowYear + 10; });
+    if (futureYears.length > 0) {
+      var sorted = futureYears.slice().sort(function(a, b) { return (b['评分']||50) - (a['评分']||50); });
+      var best = sorted[0];
+      var worst = sorted[sorted.length - 1];
+      var timingHtml = '';
+      // 最佳年份
+      timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(46,204,113,0.1),var(--bg-card2));border-color:rgba(46,204,113,0.3)">' +
+        '<div style="text-align:center;font-size:0.82em;color:var(--green)">🌟 最佳年份</div>' +
+        '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + best['年份'] + '</div>' +
+        '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (best['流年干支']||'') + ' · 评分' + (best['评分']||'?') + '</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (best['简评']||'').substring(0, 60) + '...</div>' +
+      '</div>';
+      // 最低年份
+      timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(231,76,60,0.08),var(--bg-card2));border-color:rgba(231,76,60,0.2)">' +
+        '<div style="text-align:center;font-size:0.82em;color:var(--red-light)">⚠️ 需谨慎年份</div>' +
+        '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--red-light);margin:8px 0">' + worst['年份'] + '</div>' +
+        '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (worst['流年干支']||'') + ' · 评分' + (worst['评分']||'?') + '</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (worst['简评']||'').substring(0, 60) + '...</div>' +
+      '</div>';
+      // 当前年份
+      var currentYear = liunians.find(function(l) { return l['年份'] === nowYear; });
+      if (currentYear) {
+        timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(201,168,76,0.1),var(--bg-card2));border-color:rgba(201,168,76,0.3)">' +
+          '<div style="text-align:center;font-size:0.82em;color:var(--gold)">📅 今年 ' + nowYear + '</div>' +
+          '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + (currentYear['流年干支']||'') + '</div>' +
+          '<div style="font-size:0.75em;color:var(--text);text-align:center">评分' + (currentYear['评分']||'?') + '</div>' +
+          '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (currentYear['简评']||'').substring(0, 60) + '...</div>' +
+        '</div>';
+      }
+      timingGrid.innerHTML = timingHtml;
+      timingSection.style.display = 'block';
+    }
+  }
+
+  // ---- 灾难预警 ----
+  var warningSection = document.getElementById('warningSection');
+  var warningGrid = document.getElementById('warningGrid');
+  if (liunians.length > 0 && warningSection && warningGrid) {
+    var warnings = [];
+    // 检查未来5年化忌落宫
+    var warnPalaces = {'疾厄': '健康预警', '父母': '长辈/文书预警', '夫妻': '感情预警', '财帛': '财务预警'};
+    for (var wi = 0; wi < liunians.length; wi++) {
+      var ln = liunians[wi];
+      if (ln['年份'] < nowYear || ln['年份'] > nowYear + 5) continue;
+      var brief = ln['简评'] || '';
+      // 从化曜落宫数据提取化忌宫位
+      var sihuaData = ln['四化'] || {};
+      var jiStar = sihuaData['化忌'] || '';
+      if (!jiStar) continue;
+      // 从化曜落宫字符串中提取（如果有的话）
+      for (var palaceName in warnPalaces) {
+        if (brief.indexOf(palaceName) > -1) {
+          var level = palaceName === '疾厄' ? 'high' : palaceName === '父母' ? 'mid' : 'low';
+          var levelColor = level === 'high' ? '#e74c3c' : level === 'mid' ? '#f39c12' : '#c9a84c';
+          var levelText = level === 'high' ? '高风险' : level === 'mid' ? '中风险' : '注意';
+          warnings.push({
+            year: ln['年份'],
+            gz: ln['流年干支'] || '',
+            palace: palaceName,
+            type: warnPalaces[palaceName],
+            level: level,
+            levelColor: levelColor,
+            levelText: levelText,
+            brief: brief.substring(0, 80)
+          });
+          break;
+        }
+      }
+    }
+    if (warnings.length > 0) {
+      var warningHtml = '';
+      for (var wi2 = 0; wi2 < Math.min(warnings.length, 4); wi2++) {
+        var w = warnings[wi2];
+        warningHtml += '<div class="feihua-card" style="border-left:4px solid ' + w.levelColor + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+            '<span style="font-size:0.9em;font-weight:bold;color:var(--gold)">' + w.year + ' ' + w.gz + '</span>' +
+            '<span style="font-size:0.7em;padding:2px 8px;border-radius:4px;background:' + w.levelColor + '22;color:' + w.levelColor + '">' + w.levelText + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.75em;color:var(--red-light);margin-bottom:4px">⚠️ ' + w.type + ' · 化忌入' + w.palace + '宫</div>' +
+          '<div style="font-size:0.72em;color:var(--text-dim);line-height:1.5">' + w.brief + '...</div>' +
+        '</div>';
+      }
+      warningGrid.innerHTML = warningHtml;
+      warningSection.style.display = 'block';
+    }
   }
 
   // ---- 大运时间线 ----
