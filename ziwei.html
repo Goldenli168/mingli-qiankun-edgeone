@@ -848,7 +848,9 @@ function renderResult(data) {
   palaceGrid.innerHTML = gridHtml;
   document.getElementById('palaceDetails').innerHTML = '';
 
-  var feihuaList = data['飞化分析'] || [];
+  var feihuaData = data['飞化分析'] || {};
+  var feihuaList = feihuaData['飞化'] || [];
+  var feihuaChains = feihuaData['串联'] || [];
   var feihuaHtml = '';
   var fhTypeMap = {'化禄':'fh-lu','化权':'fh-quan','化科':'fh-ke','化忌':'fh-ji'};
   var fhDescMap = {
@@ -867,6 +869,19 @@ function renderResult(data) {
       '<div class="fh-source">来源宫位：<span class="src-palace">' + (fh['来源宫']||'') + '</span></div>' +
       '<div class="fh-desc">' + (fh['解读']||'') + '<br><br>' + (fhDescMap[fh['四化']]||'') + '</div>' +
     '</div>';
+  }
+  // 飞化串联卡片
+  if (feihuaChains.length > 0) {
+    feihuaHtml += '<div style="grid-column:1/-1;margin-top:8px;padding-top:12px;border-top:1px dashed var(--border)">' +
+      '<div style="font-size:0.85em;color:var(--gold);margin-bottom:8px;letter-spacing:2px">🔗 飞化串联 · 四化连锁反应</div>';
+    for (var ci = 0; ci < feihuaChains.length; ci++) {
+      var chain = feihuaChains[ci];
+      feihuaHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(201,168,76,0.08),var(--bg-card2));border-color:rgba(201,168,76,0.25)">' +
+        '<div style="font-size:0.82em;color:var(--gold);margin-bottom:6px;letter-spacing:1px">' + (chain['链']||'') + '</div>' +
+        '<div style="font-size:0.78em;color:var(--text);line-height:1.7">' + (chain['解读']||'') + '</div>' +
+      '</div>';
+    }
+    feihuaHtml += '</div>';
   }
   document.getElementById('feihuaGrid').innerHTML = feihuaHtml || '<p style="color:var(--text-dim);font-size:0.85em">暂无飞化数据</p>';
 

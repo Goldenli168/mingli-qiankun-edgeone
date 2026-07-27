@@ -992,11 +992,32 @@ def _build_summary_context(result, patterns):
         a = "、".join(p.get("辅星",[])[:3])
         tag = "命宫" if p.get("是否命宫") else "身宫" if p.get("是否身宫") else ""
         twelves.append(f'{p["宫名"]}{tag}({s}{"+"+a if a else ""})')
+    # 来因宫三方四正（命宫-财帛-官禄-迁移）
+    laiyin = result.get("来因宫", {})
+    laiyin_name = laiyin.get("宫名", "")
+    laiyin_stars = "、".join(laiyin.get("主星", [])) or "空宫"
+    laiyin_aux = "、".join(laiyin.get("辅星", [])) or ""
+    # 命宫三方四正星曜汇总
+    PALACE_NAMES = ["命宫","兄弟","夫妻","子女","财帛","疾厄","迁移","交友","官禄","田宅","福德","父母"]
+    ming_idx = 0
+    for i, p in enumerate(result["十二宫"]):
+        if p.get("是否命宫"):
+            ming_idx = i
+            break
+    # 三方: 命宫(0), 财帛(4), 官禄(8); 对宫: 迁移(6)
+    sanfang_indices = [0, 4, 8, 6]
+    sanfang_stars = []
+    for si in sanfang_indices:
+        p = result["十二宫"][(ming_idx + si) % 12]
+        s = "、".join(p.get("主星",[])) or "空宫"
+        sanfang_stars.append(f'{p["宫名"]}({s})')
     return {
         "birth": result["基本信息"]["公历"],
         "bazi": result.get("八字联合",{}).get("提示",""),
         "patterns": "、".join([p["name"] for p in patterns]),
-        "laiyin": f'{result["来因宫"]["宫名"]}({result["来因宫"].get("释义","")})',
+        "laiyin": f'{laiyin_name}({laiyin.get("释义","")})',
+        "laiyin_stars": f'{laiyin_name}宫({laiyin_stars}{"+"+laiyin_aux if laiyin_aux else ""})',
+        "sanfang": "、".join(sanfang_stars),
         "wealth": result.get("财富级别",{}).get("级别","?"),
         "ming": result["命宫地支"], "shen": result["身宫地支"],
         "twelve": "；".join(twelves),
@@ -1050,9 +1071,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
 
-生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。十二宫：{ctx.get('twelve','')}
+生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。
 
-从三个层面组织：①核心天赋与优势赛道 ②一生主要课题与转折点 ③中晚年生活形态建议。结合时代背景（行业周期/社会老龄化/技术变革）给出务实的人生规划参考。语气专业、有洞察力、有温度，直接输出。"""
+从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度，直接输出。"""
     else:
         return None
     
@@ -1060,7 +1081,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v18"  # v18: 庙旺+格局激活
+        ck = f"zw:{gen_type}:{hash(str(age))}:v19"  # v19: 飞化串联+来因宫叙事
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200  # unified for all types
@@ -2473,27 +2494,31 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
 # ===== 各宫位飞化分析 =====
 def _calc_feihua(year_gan, places):
-    """各宫位飞化分析——按年干四化，分析化曜飞入何宫"""
+    """各宫位飞化分析——按年干四化，分析化曜飞入何宫 + 飞化串联"""
     GAN  = list("甲乙丙丁戊己庚辛壬癸")
     ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
 
     hua_list = _SIHUA_TABLE.get(year_gan, ["", "", "", ""])
     feihua = []
 
+    # 宫位名→宫位数据映射
+    name_to_palace = {p["宫名"]: p for p in places}
+
+    # 第一步：本命年干四化落宫
+    hua_palaces = {}  # {化禄: 宫名, 化权: 宫名, 化科: 宫名, 化忌: 宫名}
     for i in range(4):
         star_name = hua_list[i]
         if not star_name:
             continue
         label = _SIHUA_LABELS[i]
-        # 找化曜所在宫位
         from_palace = ""
         for p in places:
             if star_name in p.get("主星", []) or star_name in p.get("辅星", []):
                 from_palace = p["宫名"]
                 break
         if not from_palace:
-            from_palace = "命宫"  # 默认
-
+            from_palace = "命宫"
+        hua_palaces[label] = from_palace
         feihua.append({
             "四化":   label,
             "星曜":   star_name,
@@ -2501,7 +2526,63 @@ def _calc_feihua(year_gan, places):
             "解读":   "%s：%s%s，由%s飞出，影响该宫运势。" % (label, star_name, label[1:], from_palace)
         })
 
-    return feihua
+    # 第二步：飞化串联——化禄入A宫→A宫宫干化忌到B宫→B宫宫干化科到C宫
+    # 依据《河洛紫微斗数》"四化飞星看契机"
+    chains = []
+    if "化禄" in hua_palaces:
+        palace_a = hua_palaces["化禄"]
+        # A宫宫干四化
+        gan_a = name_to_palace.get(palace_a, {}).get("天干", "")
+        if gan_a:
+            sihua_a = _SIHUA_TABLE.get(gan_a, ["", "", "", ""])
+            # A宫化忌飞到哪
+            if sihua_a[3]:
+                star_ji = sihua_a[3]
+                palace_b = ""
+                for p in places:
+                    if star_ji in p.get("主星", []) or star_ji in p.get("辅星", []):
+                        palace_b = p["宫名"]
+                        break
+                if palace_b:
+                    # B宫宫干四化
+                    gan_b = name_to_palace.get(palace_b, {}).get("天干", "")
+                    if gan_b:
+                        sihua_b = _SIHUA_TABLE.get(gan_b, ["", "", "", ""])
+                        # B宫化科飞到哪
+                        if sihua_b[2]:
+                            star_ke = sihua_b[2]
+                            palace_c = ""
+                            for p in places:
+                                if star_ke in p.get("主星", []) or star_ke in p.get("辅星", []):
+                                    palace_c = p["宫名"]
+                                    break
+                            if palace_c:
+                                chains.append({
+                                    "链": f"化禄({palace_a}) → 化忌({palace_b}) → 化科({palace_c})",
+                                    "解读": f"{palace_a}宫化禄带来机遇，但{palace_a}宫化忌到{palace_b}宫引发问题，{palace_b}宫化科到{palace_c}提供化解之道。",
+                                    "宫位": [palace_a, palace_b, palace_c],
+                                })
+    # 化忌串联
+    if "化忌" in hua_palaces and not chains:
+        palace_a = hua_palaces["化忌"]
+        gan_a = name_to_palace.get(palace_a, {}).get("天干", "")
+        if gan_a:
+            sihua_a = _SIHUA_TABLE.get(gan_a, ["", "", "", ""])
+            if sihua_a[0]:  # A宫化禄
+                star_lu = sihua_a[0]
+                palace_b = ""
+                for p in places:
+                    if star_lu in p.get("主星", []) or star_lu in p.get("辅星", []):
+                        palace_b = p["宫名"]
+                        break
+                if palace_b:
+                    chains.append({
+                        "链": f"化忌({palace_a}) → 化禄({palace_b})",
+                        "解读": f"{palace_a}宫化忌带来挑战，但{palace_a}宫化禄到{palace_b}宫提供转机，宜主动求变。",
+                        "宫位": [palace_a, palace_b],
+                    })
+
+    return {"飞化": feihua, "串联": chains}
 
 
 # ===== 财富级别评估 =====
