@@ -912,10 +912,20 @@ def _build_liunian_context(ln, result, patterns, solar_year):
     ZHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
     yr_zhi_idx = ZHI.index(yr_zhi) if yr_zhi in ZHI else 0
     taisui_palace = "未知宫"
+    ln_star_mw = ""  # 流年命宫主星庙旺标签
     for p in result.get("十二宫",[]):
         if p.get("宫位") == yr_zhi_idx:
-            stars = "、".join(p.get("主星",[])) or "空宫"
+            stars_list = p.get("主星", [])
+            stars = "、".join(stars_list) or "空宫"
             taisui_palace = f"{p.get('宫名','?')}宫({stars})"
+            # 庙旺标签: "紫微(庙) 天机(陷)"
+            mw_parts = []
+            for s in stars_list:
+                mw_label = _get_miaowang_label(s, yr_zhi)
+                if mw_label:
+                    mw_parts.append(f"{s}({mw_label})")
+            if mw_parts:
+                ln_star_mw = " ".join(mw_parts)
             break
     yr = ln["年份"]
     era_tags = {2026:"AI Agent元年/银发经济起步/35+副业潮",2027:"延迟退休落地/AI替代中级岗位/Z世代主导消费",
@@ -946,6 +956,7 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "ln_sihua": sihua_str,
         "ln_palace_sihua": ln_palace_sihua,
         "ln_taisui": taisui_palace,
+        "ln_star_mw": ln_star_mw,  # 流年命宫主星庙旺
         "era_info": era_info,
         "career": ln.get("事业分","?"), "wealth": ln.get("财富分","?"),
         "marriage": ln.get("婚姻分","?"), "children": ln.get("子女分","?"),
@@ -1001,14 +1012,14 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
 【必须使用以下命盘数据,编造宫位将导致分析完全错误】
 化曜落宫: {ctx.get("ln_palace_sihua","")}  太岁: {ctx.get("ln_taisui","")}
-特征: {ctx.get("era_info","")}
+命宫庙旺: {ctx.get("ln_star_mw","")}  特征: {ctx.get("era_info","")}
 
 |||分隔3段,禁止输出"A""B""C"等标题:
 
 段1(40字): 仅一句话,化忌在【XX宫】(必须从上方化曜数据提取),点出全年最大问题
 
-段2(>130字,5项,每项基于上方化曜数据):
-1机会:化禄/权/科各落入哪个宫(从上方数据提取) - 怎么加把劲发挥极致
+段2(>130字,5项,每项基于上方化曜+庙旺数据):
+1机会:化禄/权/科各落入哪个宫(从上方数据提取) - 怎么加把劲发挥极致(庙旺星加分)
 2风险:化忌落入哪个宫(从上方数据提取) - 哪些具体事件(健康/财务/感情)会触发
 3联动:化忌冲对宫产生什么连锁影响
 4应期:该宫位问题最可能哪个农历月爆发
@@ -1046,7 +1057,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v17"  # v17: 流年解析修复(markdown 加粗 vs |||)
+        ck = f"zw:{gen_type}:{hash(str(age))}:v18"  # v18: 庙旺+格局激活
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 1200  # unified for all types
@@ -2329,6 +2340,48 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
                             mw = mi_wang_cache.get(s, 1.0)
                             dims[sf_dim] += int(tbl.get(s, 0) * 0.20 * mw)
 
+        # ═══ ④b 本命格局激活评分调节 ═══
+        # 依据《命理天机》格局在流年中的激活机制
+        ln_activations = []
+        if natal_patterns and ln_palace:
+            ln_zhi = ln_palace.get("宫位", -1)
+            if ln_zhi >= 0:
+                ln_active_stars = set(ln_palace_main)
+                ln_active_stars.update(ln_palace.get("辅星", []))
+                dup_idx = (ln_zhi - 6) % 12
+                dup_palace = _zhi_to_palace.get(dup_idx, {})
+                ln_active_stars.update(dup_palace.get("主星", []))
+                ln_active_stars.update(dup_palace.get("辅星", []))
+                ln_active_sihua = ln_palace.get("四化", {})
+                dup_sihua = dup_palace.get("四化", {})
+                if dup_sihua:
+                    ln_active_sihua = {**ln_active_sihua, **dup_sihua}
+                ln_activations = _get_active_patterns(natal_patterns, list(ln_active_stars), ln_active_sihua)
+
+                # 格局激活评分调节
+                # good格局: 充分激活+8/部分激活+4; warn格局: 充分激活-10/部分激活-5
+                PATTERN_SCORE_ADJ = {
+                    "紫府同宫": {"good_full": 8, "good_part": 4},
+                    "机月同梁": {"good_full": 7, "good_part": 3},
+                    "日照雷门": {"good_full": 6, "good_part": 3},
+                    "月朗天门": {"good_full": 6, "good_part": 3},
+                    "明珠出海": {"good_full": 6, "good_part": 3},
+                    "石中隐玉": {"good_full": 5, "good_part": 2},
+                    "羊陀夹忌": {"warn_full": -10, "warn_part": -5},
+                    "火铃夹印": {"warn_full": -8, "warn_part": -4},
+                    "空劫夹印": {"warn_full": -8, "warn_part": -4},
+                    "命无正曜": {"warn_full": -6, "warn_part": -3},
+                }
+                for pname, level, degree in ln_activations:
+                    adj = PATTERN_SCORE_ADJ.get(pname, {})
+                    if level == "good":
+                        delta = adj.get("good_full", 6) if degree == "充分激活" else adj.get("good_part", 3)
+                    else:
+                        delta = adj.get("warn_full", -8) if degree == "充分激活" else adj.get("warn_part", -4)
+                    # 格局激活影响全局，各维度均匀调节
+                    for dim in DIMS:
+                        dims[dim] += delta
+
         # ═══ ⑤ 太岁冲合调节 ═══
         for dim in DIMS:
             dims[dim] += chong_val * 2
@@ -2379,36 +2432,14 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
         brief = _brief(*brief_ctx)
 
-        # ----- 本命格局在流年中的激活分析 -----
-        if natal_patterns and ln_palace:
-            # 收集流年命宫及其三方四正的星曜和四化
-            ln_zhi = ln_palace.get("宫位", -1)
-            if ln_zhi >= 0:
-                ln_active_stars = set(ln_palace_main)
-                ln_active_stars.update(ln_palace.get("辅星", []))
-                # 加入流年迁移宫（对宫）的星曜
-                dup_idx = (ln_zhi - 6) % 12
-                dup_palace = _zhi_to_palace.get(dup_idx, {})
-                ln_active_stars.update(dup_palace.get("主星", []))
-                ln_active_stars.update(dup_palace.get("辅星", []))
-                
-                ln_active_sihua = ln_palace.get("四化", {})
-                # 也合并迁移宫四化
-                dup_sihua = dup_palace.get("四化", {})
-                if dup_sihua:
-                    ln_active_sihua = {**ln_active_sihua, **dup_sihua}
-                
-                ln_activations = _get_active_patterns(natal_patterns, list(ln_active_stars), ln_active_sihua)
-                if ln_activations:
-                    # 取最高优先级的充分激活good格局
-                    fully_good = [n for n, l, d in ln_activations if l == "good" and d == "充分激活"]
-                    fully_warn = [n for n, l, d in ln_activations if l == "warn" and d == "充分激活"]
-                    if fully_good:
-                        brief = brief[:-1] + "。本命" + "、".join(fully_good[:1]) + "流年引动，格局之光加持" + "。"
-                    elif fully_warn:
-                        brief = brief[:-1] + "。本命" + "、".join(fully_warn[:1]) + "流年引动，宜谨慎行事" + "。"
-            else:
-                ln_activations = []
+        # ----- 本命格局激活 → 简评文本增强（评分已在前面调节） -----
+        if ln_activations:
+            fully_good = [n for n, l, d in ln_activations if l == "good" and d == "充分激活"]
+            fully_warn = [n for n, l, d in ln_activations if l == "warn" and d == "充分激活"]
+            if fully_good:
+                brief = brief[:-1] + "。本命" + "、".join(fully_good[:1]) + "流年引动，格局之光加持" + "。"
+            elif fully_warn:
+                brief = brief[:-1] + "。本命" + "、".join(fully_warn[:1]) + "流年引动，宜谨慎行事" + "。"
 
         # 五维指引
         guide = _guide(dims, age=y - solar_year)
