@@ -777,16 +777,20 @@ function renderResult(data) {
         summarySec.parentNode.insertBefore(specSection, summarySec.nextSibling);
       }
     }
-    var specHtml = '<h3>📋 八字专项分析</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">';
+    var specHtml = '<h3>📋 八字专项分析</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">';
     var specIcons = {'财富':'💰','事业':'💼','婚姻':'💑','子女':'👶','健康':'🏥'};
     var specColors = {'财富':'#2ecc71','事业':'#3498db','婚姻':'#e74c3c','子女':'#9b59b6','健康':'#f39c12'};
     for (var sk in baziSpecial) {
       var sv = baziSpecial[sk] || {};
       var icon = specIcons[sk] || '📋';
       var clr = specColors[sk] || '#888';
-      var level = sv['级别'] || sv['level'] || '';
-      var detail = sv['detail_head'] || sv['detail'] || '';
-      var income = sv['income_level'] || sv['现代解读'] || '';
+      var level = sv['等级'] || sv['级别'] || sv['level'] || '';
+      var detail = sv['详情'] || sv['detail_head'] || sv['detail'] || '';
+      var modern = sv['现代解读'] || '';
+      var advice = sv['建议'] || sv['注意事项'] || '';
+      var extra = sv['收入层级'] || sv['适合行业'] || sv['配偶特征'] || '';
+      if (Array.isArray(extra)) extra = extra.join('、');
+      if (Array.isArray(advice)) advice = advice.join('；');
       specHtml += '<div class="feihua-card" style="border-left:4px solid ' + clr + '">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
           '<span style="font-size:1.3em">' + icon + '</span>' +
@@ -794,7 +798,9 @@ function renderResult(data) {
           (level ? '<span style="font-size:0.72em;padding:2px 8px;border-radius:4px;background:' + clr + '1a;color:' + clr + '">' + level + '</span>' : '') +
         '</div>' +
         (detail ? '<div style="font-size:0.78em;color:var(--text);line-height:1.6;margin-bottom:6px">' + detail + '</div>' : '') +
-        (income ? '<div style="font-size:0.72em;color:var(--text-dim);line-height:1.5">' + income + '</div>' : '') +
+        (modern ? '<div style="font-size:0.75em;color:var(--text-dim);line-height:1.6;margin-bottom:6px;padding-top:6px;border-top:1px dashed var(--border)">🌐 ' + modern + '</div>' : '') +
+        (extra ? '<div style="font-size:0.75em;color:var(--text-dim);line-height:1.5;margin-bottom:4px">📌 ' + extra + '</div>' : '') +
+        (advice ? '<div style="font-size:0.75em;color:var(--gold);margin-top:6px;padding:6px 8px;background:rgba(201,168,76,0.06);border-radius:5px;line-height:1.5">💡 ' + advice + '</div>' : '') +
       '</div>';
     }
     specHtml += '</div>';
