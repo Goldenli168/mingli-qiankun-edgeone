@@ -430,6 +430,7 @@
 var _syncedBirth = null;
 var currentSex = '男';
 var currentResult = null;
+var currentBirthYear = 1987;  // P5: 用于流年筛选
 var activeDetailIdx = -1;
 
 // 页面加载时检查是否有八字页同步的生辰信息
@@ -677,27 +678,36 @@ function renderResult(data) {
       var worst = sorted[sorted.length - 1];
       var timingHtml = '';
       // 最佳年份
+      var bestBrief = (best['简评']||'').substring(0, 80);
+      var bestDetail = (best['简评详情']||'').substring(0, 120);
       timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(46,204,113,0.1),var(--bg-card2));border-color:rgba(46,204,113,0.3)">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--green)">🌟 最佳年份</div>' +
         '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + best['年份'] + '</div>' +
         '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (best['流年干支']||'') + ' · 评分' + (best['评分']||'?') + '</div>' +
-        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (best['简评']||'').substring(0, 60) + '...</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + bestBrief + '...</div>' +
+        '<div style="font-size:0.7em;color:var(--green);margin-top:6px;padding:6px;background:rgba(46,204,113,0.08);border-radius:5px;line-height:1.5">💡 把握要点：' + (bestDetail ? bestDetail.substring(0, 100) + '...' : '此年运势上佳，宜大胆进取，把握投资/事业/感情机遇，可获突破性进展') + '</div>' +
       '</div>';
       // 最低年份
+      var worstBrief = (worst['简评']||'').substring(0, 80);
+      var worstDetail = (worst['简评详情']||'').substring(0, 120);
       timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(231,76,60,0.08),var(--bg-card2));border-color:rgba(231,76,60,0.2)">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--red-light)">⚠️ 需谨慎年份</div>' +
         '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--red-light);margin:8px 0">' + worst['年份'] + '</div>' +
         '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (worst['流年干支']||'') + ' · 评分' + (worst['评分']||'?') + '</div>' +
-        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (worst['简评']||'').substring(0, 60) + '...</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + worstBrief + '...</div>' +
+        '<div style="font-size:0.7em;color:var(--red-light);margin-top:6px;padding:6px;background:rgba(231,76,60,0.08);border-radius:5px;line-height:1.5">🛡️ 规避要点：' + (worstDetail ? worstDetail.substring(0, 100) + '...' : '此年运势低迷，宜守不宜攻，凡事留有余地，重要决策宜缓行，防意外波折') + '</div>' +
       '</div>';
       // 当前年份
       var currentYear = liunians.find(function(l) { return l['年份'] === nowYear; });
       if (currentYear) {
+        var curBrief = (currentYear['简评']||'').substring(0, 80);
+        var curDetail = (currentYear['简评详情']||'').substring(0, 120);
         timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(201,168,76,0.1),var(--bg-card2));border-color:rgba(201,168,76,0.3)">' +
           '<div style="text-align:center;font-size:0.82em;color:var(--gold)">📅 今年 ' + nowYear + '</div>' +
           '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + (currentYear['流年干支']||'') + '</div>' +
           '<div style="font-size:0.75em;color:var(--text);text-align:center">评分' + (currentYear['评分']||'?') + '</div>' +
-          '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + (currentYear['简评']||'').substring(0, 60) + '...</div>' +
+          '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + curBrief + '...</div>' +
+          '<div style="font-size:0.7em;color:var(--gold);margin-top:6px;padding:6px;background:rgba(201,168,76,0.08);border-radius:5px;line-height:1.5">📋 行动指南：' + (curDetail ? curDetail.substring(0, 100) + '...' : '今年宜稳扎稳打，结合大运趋势做好规划，注意化忌宫位风险，把握化禄宫位机遇') + '</div>' +
         '</div>';
       }
       timingGrid.innerHTML = timingHtml;
@@ -762,6 +772,7 @@ function renderResult(data) {
   var dayunList = data['大运'] || [];
   var nowYear = new Date().getFullYear();
   var birthYear = parseInt((data['基本信息']||{})['公历'] || document.getElementById('year').value);
+  currentBirthYear = birthYear;  // P5: 同步到全局变量供筛选器使用
   var dayunHtml = '';
   var badgeMap = {'大吉':'badge-daji','中吉':'badge-zhongji','小吉':'badge-xiaoji','平运':'badge-pingyun','偏弱':'badge-pingyun','大凶':'badge-daxiong'};
   var barClsMap = {'财富':'bar-wealth','事业':'bar-career','婚姻':'bar-marriage','子女':'bar-children','父母':'bar-parents'};
@@ -792,6 +803,16 @@ function renderResult(data) {
 
     var deepHtml = '';
     var overallDesc = dy['综合解读'] || '';
+    // P44: 检查综合解读是否已包含维度分析内容（避免重复）
+    var hasDimContent = false;
+    var dimKeywords = ['财富', '事业', '婚姻', '子女', '父母', '健康'];
+    for (var dk = 0; dk < dimKeywords.length; dk++) {
+      if (overallDesc.indexOf(dimKeywords[dk] + '（') > -1 || overallDesc.indexOf(dimKeywords[dk] + '(') > -1 || overallDesc.indexOf('**' + dimKeywords[dk]) > -1) {
+        hasDimContent = true;
+        break;
+      }
+    }
+    // 如果综合解读已包含维度内容，只显示综合解读；否则显示综合解读+维度分析
     if (overallDesc) deepHtml += '<div class="deep-title">综合解读</div><div class="deep-text">' + overallDesc + '</div>';
 
     // P8: 大运四化展示
@@ -821,18 +842,21 @@ function renderResult(data) {
       deepHtml += actHtml;
     }
 
-    var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
-    var llmScore = dy['评分'] || {};
-    for (var k in llmDims) {
-      var t = llmScore[k+'_llm'] || '';
-      if (t) deepHtml += '<div class="dim-section"><span class="dim-label ' + (dimClsMap[k]||'') + '">' + llmDims[k] + '</span><span class="dim-desc">' + t + '</span></div>';
-    }
-    var deepDims = dy['深度解读'] || {};
-    if (!llmScore['财富_llm']) {
-      for (var ddi = 0; ddi < dims.length; ddi++) {
-        var dd = dims[ddi];
-        var ddText = deepDims[dd] || '';
-        if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
+    // P44: 只有综合解读不包含维度内容时，才显示维度分析（避免重复）
+    if (!hasDimContent) {
+      var llmDims = {'财富':'财富','事业':'事业','婚姻':'婚姻','子女':'子女','父母':'父母','健康':'健康'};
+      var llmScore = dy['评分'] || {};
+      for (var k in llmDims) {
+        var t = llmScore[k+'_llm'] || '';
+        if (t) deepHtml += '<div class="dim-section"><span class="dim-label ' + (dimClsMap[k]||'') + '">' + llmDims[k] + '</span><span class="dim-desc">' + t + '</span></div>';
+      }
+      var deepDims = dy['深度解读'] || {};
+      if (!llmScore['财富_llm']) {
+        for (var ddi = 0; ddi < dims.length; ddi++) {
+          var dd = dims[ddi];
+          var ddText = deepDims[dd] || '';
+          if (ddText) deepHtml += '<div class="dim-section"><span class="dim-label ' + dimClsMap[dd] + '">' + dd + '</span><span class="dim-desc">' + ddText + '</span></div>';
+        }
       }
     }
 

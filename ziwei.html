@@ -896,8 +896,43 @@ function renderResult(data) {
   var feihuaData = data['飞化分析'] || {};
   var feihuaList = feihuaData['飞化'] || [];
   var feihuaChains = feihuaData['串联'] || [];
+  var dyFeihua = feihuaData['大运四化'] || [];
+  var lnFeihua = feihuaData['流年四化'] || [];
+  var dyInfo = feihuaData['大运信息'] || '';
+  var lnInfo = feihuaData['流年信息'] || '';
   var feihuaHtml = '';
   var fhTypeMap = {'化禄':'fh-lu','化权':'fh-quan','化科':'fh-ke','化忌':'fh-ji'};
+
+  // P46: 三维四化对比（本命/大运/流年）
+  if (dyFeihua.length > 0 || lnFeihua.length > 0) {
+    feihuaHtml += '<div style="grid-column:1/-1;margin-bottom:12px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:8px">📊 三维四化对比</div>';
+    feihuaHtml += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
+    // 本命
+    feihuaHtml += '<div style="background:var(--bg-card2);border:1px solid var(--gold);border-radius:8px;padding:10px"><div style="font-size:0.78em;color:var(--gold);text-align:center;margin-bottom:6px">本命（一生基调）</div>';
+    for (var bi = 0; bi < feihuaList.length; bi++) {
+      var fh = feihuaList[bi];
+      feihuaHtml += '<div style="display:flex;justify-content:space-between;font-size:0.72em;padding:2px 0;border-bottom:1px dashed var(--border)"><span style="color:var(--text-dim)">' + fh['四化'] + '</span><span style="color:var(--gold)">' + fh['星曜'] + '·' + fh['来源宫'] + '</span></div>';
+    }
+    feihuaHtml += '</div>';
+    // 大运
+    feihuaHtml += '<div style="background:var(--bg-card2);border:1px solid #3498db;border-radius:8px;padding:10px"><div style="font-size:0.78em;color:#3498db;text-align:center;margin-bottom:6px">大运' + (dyInfo ? '（' + dyInfo + '）' : '') + '</div>';
+    for (var di2 = 0; di2 < dyFeihua.length; di2++) {
+      var df = dyFeihua[di2];
+      feihuaHtml += '<div style="display:flex;justify-content:space-between;font-size:0.72em;padding:2px 0;border-bottom:1px dashed var(--border)"><span style="color:var(--text-dim)">' + df['四化'] + '</span><span style="color:#3498db">' + df['星曜'] + '·' + df['来源宫'] + '</span></div>';
+    }
+    feihuaHtml += '</div>';
+    // 流年
+    feihuaHtml += '<div style="background:var(--bg-card2);border:1px solid #2ecc71;border-radius:8px;padding:10px"><div style="font-size:0.78em;color:#2ecc71;text-align:center;margin-bottom:6px">流年' + (lnInfo ? '（' + lnInfo + '）' : '') + '</div>';
+    for (var li2 = 0; li2 < lnFeihua.length; li2++) {
+      var lf = lnFeihua[li2];
+      feihuaHtml += '<div style="display:flex;justify-content:space-between;font-size:0.72em;padding:2px 0;border-bottom:1px dashed var(--border)"><span style="color:var(--text-dim)">' + lf['四化'] + '</span><span style="color:#2ecc71">' + lf['星曜'] + '·' + lf['来源宫'] + '</span></div>';
+    }
+    feihuaHtml += '</div>';
+    feihuaHtml += '</div></div>';
+  }
+
+  // 本命四化详细解读
+  feihuaHtml += '<div style="grid-column:1/-1;margin-bottom:8px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px">本命四化详解</div></div>';
   for (var fi = 0; fi < feihuaList.length; fi++) {
     var fh = feihuaList[fi];
     var fhCls = fhTypeMap[fh['四化']] || '';

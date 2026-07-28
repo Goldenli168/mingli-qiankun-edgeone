@@ -688,8 +688,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         "大运": _dayun_scored,
         # 流年分析（使用已评分的大运，确保地基有效）
         "流年": _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_branch, _dayun_scored, ln_weights=ln_weights, birth_sihua=sihua, natal_patterns=_natal_patterns),
-        # 各宫位飞化分析
-        "飞化分析": _calc_feihua(year_gan, places),
+        # 各宫位飞化分析（本命+大运+流年 三维对比）
+        "飞化分析": _calc_feihua(year_gan, places, _dayun_scored, solar_year),
         # P1: 财富级别定性评估
         "财富级别": _assess_wealth_level(places, _natal_patterns),
         # P3: 来因宫（月柱地支定位法，与文墨天机一致）
@@ -2513,8 +2513,8 @@ def _calc_liunian(solar_year, year_gan, year_zhi_i, places, ming_branch, shen_br
 
 
 # ===== 各宫位飞化分析 =====
-def _calc_feihua(year_gan, places):
-    """各宫位飞化分析——按年干四化，分析化曜飞入何宫 + 飞化串联 + 组合解读"""
+def _calc_feihua(year_gan, places, dayun_list=None, solar_year=None):
+    """各宫位飞化分析——本命+大运+流年 三维对比 + 飞化串联 + 组合解读"""
     GAN  = list("甲乙丙丁戊己庚辛壬癸")
     ZHI  = list("子丑寅卯辰巳午未申酉戌亥")
 
@@ -2523,6 +2523,27 @@ def _calc_feihua(year_gan, places):
 
     # 宫位名→宫位数据映射
     name_to_palace = {p["宫名"]: p for p in places}
+
+    # 找当前大运天干（P46: 大运四化对比）
+    dy_gan = ""
+    dy_info = ""
+    if dayun_list and solar_year:
+        import datetime
+        now_year = datetime.datetime.now().year
+        now_age = now_year - solar_year
+        for dy in dayun_list:
+            if dy.get("起始年龄", 0) <= now_age <= dy.get("结束年龄", 999):
+                dy_gan = dy.get("天干", "")
+                dy_info = f"{dy.get('起始年龄','')}-{dy.get('结束年龄','')}岁{dy.get('大运宫名','')}"
+                break
+
+    # 找当前流年天干（P46: 流年四化对比）
+    ln_gan = ""
+    ln_year = 0
+    if solar_year:
+        import datetime
+        ln_year = datetime.datetime.now().year
+        ln_gan = GAN[(ln_year - 4) % 10]
 
     # 宫位含义映射（依据《紫微斗数全书》十二宫详解）
     PALACE_MEANING = {
@@ -2649,7 +2670,53 @@ def _calc_feihua(year_gan, places):
             "建议":   _advice(label, from_palace, star_name),
         })
 
-    # 第二步：飞化串联——化禄入A宫→A宫宫干化忌到B宫→B宫宫干化科到C宫
+    # 第二步：大运+流年四化对比（P46）
+    dy_feihua = []
+    ln_feihua = []
+    if dy_gan:
+        dy_hua_list = _SIHUA_TABLE.get(dy_gan, ["", "", "", ""])
+        for i in range(4):
+            star_name = dy_hua_list[i]
+            if not star_name:
+                continue
+            label = _SIHUA_LABELS[i]
+            from_palace = ""
+            for p in places:
+                if star_name in p.get("主星", []) or star_name in p.get("辅星", []):
+                    from_palace = p["宫名"]
+                    break
+            if not from_palace:
+                from_palace = "命宫"
+            dy_feihua.append({
+                "四化": label,
+                "星曜": star_name,
+                "来源宫": from_palace,
+                "宫位含义": PALACE_MEANING.get(from_palace, ""),
+                "解读": _combo_reading(label, from_palace, star_name),
+            })
+    if ln_gan:
+        ln_hua_list = _SIHUA_TABLE.get(ln_gan, ["", "", "", ""])
+        for i in range(4):
+            star_name = ln_hua_list[i]
+            if not star_name:
+                continue
+            label = _SIHUA_LABELS[i]
+            from_palace = ""
+            for p in places:
+                if star_name in p.get("主星", []) or star_name in p.get("辅星", []):
+                    from_palace = p["宫名"]
+                    break
+            if not from_palace:
+                from_palace = "命宫"
+            ln_feihua.append({
+                "四化": label,
+                "星曜": star_name,
+                "来源宫": from_palace,
+                "宫位含义": PALACE_MEANING.get(from_palace, ""),
+                "解读": _combo_reading(label, from_palace, star_name),
+            })
+
+    # 第三步：飞化串联——化禄入A宫→A宫宫干化忌到B宫→B宫宫干化科到C宫
     # 依据《河洛紫微斗数》"四化飞星看契机"
     chains = []
     if "化禄" in hua_palaces:
@@ -2718,7 +2785,8 @@ def _calc_feihua(year_gan, places):
                         "宫位": [palace_a, palace_b],
                     })
 
-    return {"飞化": feihua, "串联": chains}
+    return {"飞化": feihua, "串联": chains, "大运四化": dy_feihua, "流年四化": ln_feihua,
+            "大运信息": dy_info, "流年信息": f"{ln_year}年{ln_gan}"}
 
 
 # ===== 财富级别评估 =====
