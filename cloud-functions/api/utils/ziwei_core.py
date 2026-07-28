@@ -1067,16 +1067,16 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含5维):
+        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含7维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-内容要包含:财富、事业、婚姻、子女、父母5维,各维度60-80字。
+内容要包含:财富、事业、婚姻、子女、父母、健康、大运整体结论7部分,各部分60-80字。
 口语务实,结合时代背景,直接输出。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出1段约300字综合点评(包含5维):
+        prompt = f"""资深命理师。请分析这大运,输出1段约350字综合点评(包含7维):
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-5维(财富/事业/婚姻/子女/父母)各50-60字。
+7维(财富/事业/婚姻/子女/父母/健康/整体结论)各40-50字。
 口语务实,直接输出。"""
     
     elif gen_type == "summary":
@@ -2591,13 +2591,13 @@ def _calc_feihua(year_gan, places, dayun_list=None, solar_year=None):
         pm = PALACE_MEANING.get(palace, palace)
         st = STAR_TRAIT.get(star, star)
         if hua == "化禄":
-            return f"{star}化禄入{palace}宫（{pm}），{st}。此年{palace}宫领域有意外收获，宜主动把握机遇，尤其利于与{star}相关的活动。"
+            return f"{star}化禄入{palace}宫（{pm}），{st}。此生{palace}宫领域有意外收获，宜主动把握机遇，尤其利于与{star}相关的活动。"
         elif hua == "化权":
-            return f"{star}化权入{palace}宫（{pm}），{st}。此年{palace}宫领域有主导权，宜积极争取表现，但需防过于强势引发反弹。"
+            return f"{star}化权入{palace}宫（{pm}），{st}。此生{palace}宫领域有主导权，宜积极争取表现，但需防过于强势引发反弹。"
         elif hua == "化科":
-            return f"{star}化科入{palace}宫（{pm}），{st}。此年{palace}宫领域有贵人暗助，宜展现才华积累名声，利考试学习或公众形象。"
+            return f"{star}化科入{palace}宫（{pm}），{st}。此生{palace}宫领域有贵人暗助，宜展现才华积累名声，利考试学习或公众形象。"
         elif hua == "化忌":
-            return f"{star}化忌入{palace}宫（{pm}），{st}。此年{palace}宫领域需防波折，宜守不宜攻，凡事留有余地，尤其注意与{star}相关的隐患。"
+            return f"{star}化忌入{palace}宫（{pm}），{st}。此生{palace}宫领域需防波折，宜守不宜攻，凡事留有余地，尤其注意与{star}相关的隐患。"
         return f"{star}{hua}入{palace}宫，{st}。"
 
     # 四化具体建议（有针对性）
@@ -2605,44 +2605,44 @@ def _calc_feihua(year_gan, places, dayun_list=None, solar_year=None):
         """四化+宫位+星曜 具体建议"""
         if hua == "化禄":
             if palace == "财帛":
-                return f"建议：今年{star}化禄入财帛，是投资理财的黄金期，可适度加大投入，但需分散风险，不宜孤注一掷。"
+                return f"建议：此生{star}化禄入财帛，是投资理财的黄金期，可适度加大投入，但需分散风险，不宜孤注一掷。"
             elif palace == "官禄":
-                return f"建议：今年{star}化禄入官禄，事业有突破机遇，宜主动承担重要项目，展现领导才能，可获晋升加薪。"
+                return f"建议：此生{star}化禄入官禄，事业有突破机遇，宜主动承担重要项目，展现领导才能，可获晋升加薪。"
             elif palace == "福德":
-                return f"建议：今年{star}化禄入福德，精神投资有回报，宜发展兴趣爱好，参加文化活动，易遇贵人赏识。"
+                return f"建议：此生{star}化禄入福德，精神投资有回报，宜发展兴趣爱好，参加文化活动，易遇贵人赏识。"
             elif palace == "夫妻":
-                return f"建议：今年{star}化禄入夫妻，感情升温好时机，宜主动经营关系，单身者易遇正缘，已婚者宜共同规划未来。"
+                return f"建议：此生{star}化禄入夫妻，感情升温好时机，宜主动经营关系，单身者易遇正缘，已婚者宜共同规划未来。"
             elif palace == "田宅":
-                return f"建议：今年{star}化禄入田宅，房产运佳，宜考虑购房装修或不动产投资，家庭关系和谐。"
+                return f"建议：此生{star}化禄入田宅，房产运佳，宜考虑购房装修或不动产投资，家庭关系和谐。"
             else:
-                return f"建议：今年{star}化禄入{palace}，该领域有意外收获，宜主动把握，但需见好就收，不宜贪多。"
+                return f"建议：此生{star}化禄入{palace}，该领域有意外收获，宜主动把握，但需见好就收，不宜贪多。"
         elif hua == "化权":
             if palace == "官禄":
-                return f"建议：今年{star}化权入官禄，是展现领导力的关键年，宜争取管理职责，但需防过于强势，宜刚柔并济。"
+                return f"建议：此生{star}化权入官禄，是展现领导力的关键期，宜争取管理职责，但需防过于强势，宜刚柔并济。"
             elif palace == "命宫":
-                return f"建议：今年{star}化权入命宫，自我主导力强，宜设定明确目标，但需防刚愎自用，宜多听他人意见。"
+                return f"建议：此生{star}化权入命宫，自我主导力强，宜设定明确目标，但需防刚愎自用，宜多听他人意见。"
             else:
-                return f"建议：今年{star}化权入{palace}，该领域有主导权，宜积极争取，但需防权力欲过盛，宜以理服人。"
+                return f"建议：此生{star}化权入{palace}，该领域有主导权，宜积极争取，但需防权力欲过盛，宜以理服人。"
         elif hua == "化科":
             if palace == "命宫":
-                return f"建议：今年{star}化科入命宫，名声贵人运佳，宜展现才华，利考试面试，公众形象良好。"
+                return f"建议：此生{star}化科入命宫，名声贵人运佳，宜展现才华，利考试面试，公众形象良好。"
             elif palace == "官禄":
-                return f"建议：今年{star}化科入官禄，事业有贵人提携，宜多参加行业活动，积累人脉资源，利名声传播。"
+                return f"建议：此生{star}化科入官禄，事业有贵人提携，宜多参加行业活动，积累人脉资源，利名声传播。"
             else:
-                return f"建议：今年{star}化科入{palace}，该领域有贵人暗助，宜展现才华，利学习考试或名声积累。"
+                return f"建议：此生{star}化科入{palace}，该领域有贵人暗助，宜展现才华，利学习考试或名声积累。"
         elif hua == "化忌":
             if palace == "疾厄":
-                return f"建议：今年{star}化忌入疾厄，健康是重点，宜定期体检，注意作息规律，避免过度劳累，尤其防{star}相关旧疾。"
+                return f"建议：此生{star}化忌入疾厄，健康是重点，宜定期体检，注意作息规律，避免过度劳累，尤其防{star}相关旧疾。"
             elif palace == "父母":
-                return f"建议：今年{star}化忌入父母，需注意长辈健康与文书契约，宜多陪伴长辈，重要合同需仔细审核，防法律纠纷。"
+                return f"建议：此生{star}化忌入父母，需注意长辈健康与文书契约，宜多陪伴长辈，重要合同需仔细审核，防法律纠纷。"
             elif palace == "夫妻":
-                return f"建议：今年{star}化忌入夫妻，感情易生波折，宜多沟通包容，防第三者介入或误会加深，单身者不宜急于确定关系。"
+                return f"建议：此生{star}化忌入夫妻，感情易生波折，宜多沟通包容，防第三者介入或误会加深，单身者不宜急于确定关系。"
             elif palace == "财帛":
-                return f"建议：今年{star}化忌入财帛，财务需谨慎，宜保守理财，防投资陷阱或意外支出，不宜借贷担保。"
+                return f"建议：此生{star}化忌入财帛，财务需谨慎，宜保守理财，防投资陷阱或意外支出，不宜借贷担保。"
             elif palace == "迁移":
-                return f"建议：今年{star}化忌入迁移，外出需防意外，宜注意交通安全，重要行程宜提前规划，防行程变动。"
+                return f"建议：此生{star}化忌入迁移，外出需防意外，宜注意交通安全，重要行程宜提前规划，防行程变动。"
             else:
-                return f"建议：今年{star}化忌入{palace}，该领域需防波折，宜守不宜攻，凡事留有余地，重要决策宜缓行。"
+                return f"建议：此生{star}化忌入{palace}，该领域需防波折，宜守不宜攻，凡事留有余地，重要决策宜缓行。"
         return ""
 
     # 第一步：本命年干四化落宫
@@ -2785,8 +2785,109 @@ def _calc_feihua(year_gan, places, dayun_list=None, solar_year=None):
                         "宫位": [palace_a, palace_b],
                     })
 
+    # ===== 三维四化影响分析 + 关联解读 + 综合分析 =====
+    # 依据《河洛紫微斗数》"四化飞星看契机"+《紫微斗数全书》"三盘联动"
+    def _impact_analysis(hua, palace, star, level_name):
+        """单个四化对命主的影响分析"""
+        pm = PALACE_MEANING.get(palace, palace)
+        st = STAR_TRAIT.get(star, star)
+        if hua == "化禄":
+            return f"{level_name}化禄在{palace}（{pm.split('、')[0]}），{st}。先天/当前{palace}宫领域有意外收获，宜主动把握机遇。"
+        elif hua == "化权":
+            return f"{level_name}化权在{palace}（{pm.split('、')[0]}），{st}。{palace}宫领域有主导权，宜积极争取，但需防过于强势。"
+        elif hua == "化科":
+            return f"{level_name}化科在{palace}（{pm.split('、')[0]}），{st}。{palace}宫领域有贵人暗助，宜展现才华积累名声。"
+        elif hua == "化忌":
+            return f"{level_name}化忌在{palace}（{pm.split('、')[0]}），{st}。{palace}宫领域需防波折，宜守不宜攻，凡事留有余地。"
+        return f"{level_name}{hua}在{palace}，{st}。"
+
+    def _relation_analysis(benming, dayun, liunian):
+        """三维四化关联解读"""
+        relations = []
+        # 化禄关联
+        bm_lu = benming.get("化禄", "")
+        dy_lu = dayun.get("化禄", "")
+        ln_lu = liunian.get("化禄", "")
+        if bm_lu and dy_lu:
+            if bm_lu == dy_lu:
+                relations.append(f"本命化禄({bm_lu})与大运化禄({dy_lu})同宫，先天优势在此运被放大，是关键发展期。")
+            else:
+                relations.append(f"本命化禄({bm_lu})与大运化禄({dy_lu})不同宫，先天{PALACE_MEANING.get(bm_lu, bm_lu).split('、')[0]}优势转化为当前{PALACE_MEANING.get(dy_lu, dy_lu).split('、')[0]}机遇。")
+        if dy_lu and ln_lu:
+            if dy_lu == ln_lu:
+                relations.append(f"大运化禄({dy_lu})与流年化禄({ln_lu})同宫，今年该领域运势叠加，是行动关键年。")
+            else:
+                relations.append(f"大运化禄({dy_lu})与流年化禄({ln_lu})不同宫，当前{PALACE_MEANING.get(dy_lu, dy_lu).split('、')[0]}机遇延伸至今年的{PALACE_MEANING.get(ln_lu, ln_lu).split('、')[0]}领域。")
+        # 化忌关联
+        bm_ji = benming.get("化忌", "")
+        dy_ji = dayun.get("化忌", "")
+        ln_ji = liunian.get("化忌", "")
+        if bm_ji and dy_ji:
+            if bm_ji == dy_ji:
+                relations.append(f"本命化忌({bm_ji})与大运化忌({dy_ji})同宫，先天隐患在此运被激发，需特别注意。")
+            else:
+                relations.append(f"本命化忌({bm_ji})与大运化忌({dy_ji})不同宫，先天{PALACE_MEANING.get(bm_ji, bm_ji).split('、')[0]}隐患转化为当前{PALACE_MEANING.get(dy_ji, dy_ji).split('、')[0]}风险。")
+        if dy_ji and ln_ji:
+            if dy_ji == ln_ji:
+                relations.append(f"大运化忌({dy_ji})与流年化忌({ln_ji})同宫，今年该领域风险叠加，宜保守谨慎。")
+            else:
+                relations.append(f"大运化忌({dy_ji})与流年化忌({ln_ji})不同宫，当前{PALACE_MEANING.get(dy_ji, dy_ji).split('、')[0]}风险延伸至今年的{PALACE_MEANING.get(ln_ji, ln_ji).split('、')[0]}领域。")
+        return relations
+
+    def _synthesis(benming, dayun, liunian, dy_info, ln_info):
+        """综合分析：本命+大运+流年 对当前大运/流年的影响"""
+        synthesis = []
+        # 本命→大运影响
+        bm_lu = benming.get("化禄", "")
+        bm_ji = benming.get("化忌", "")
+        dy_lu = dayun.get("化禄", "")
+        dy_ji = dayun.get("化忌", "")
+        ln_lu = liunian.get("化禄", "")
+        ln_ji = liunian.get("化忌", "")
+        if bm_lu and dy_lu:
+            if bm_lu == dy_lu:
+                synthesis.append(f"本命化禄({bm_lu})与大运化禄({dy_lu})同宫共振，先天优势在此运被充分激活，是十年关键发展期，宜大胆进取。")
+            else:
+                synthesis.append(f"本命化禄({bm_lu})生大运化禄({dy_lu})，先天{PALACE_MEANING.get(bm_lu, bm_lu).split('、')[0]}优势为此运{PALACE_MEANING.get(dy_lu, dy_lu).split('、')[0]}领域提供支撑，宜借力发展。")
+        if bm_ji and dy_ji:
+            if bm_ji == dy_ji:
+                synthesis.append(f"本命化忌({bm_ji})与大运化忌({dy_ji})同宫共振，先天隐患在此运被激发，需特别注意{PALACE_MEANING.get(dy_ji, dy_ji).split('、')[0]}领域的风险防控。")
+            else:
+                synthesis.append(f"本命化忌({bm_ji})生大运化忌({dy_ji})，先天{PALACE_MEANING.get(bm_ji, bm_ji).split('、')[0]}隐患可能引发此运{PALACE_MEANING.get(dy_ji, dy_ji).split('、')[0]}领域的波折，宜提前防范。")
+        # 大运→流年影响
+        if dy_lu and ln_lu:
+            if dy_lu == ln_lu:
+                synthesis.append(f"大运化禄({dy_lu})与流年化禄({ln_lu})同宫叠加，今年该领域运势倍增，是行动关键年，宜积极把握。")
+            else:
+                synthesis.append(f"大运化禄({dy_lu})生流年化禄({ln_lu})，当前{PALACE_MEANING.get(dy_lu, dy_lu).split('、')[0]}机遇延伸至今年的{PALACE_MEANING.get(ln_lu, ln_lu).split('、')[0]}领域，宜顺势而为。")
+        if dy_ji and ln_ji:
+            if dy_ji == ln_ji:
+                synthesis.append(f"大运化忌({dy_ji})与流年化忌({ln_ji})同宫叠加，今年该领域风险倍增，宜保守谨慎，凡事留有余地。")
+            else:
+                synthesis.append(f"大运化忌({dy_ji})生流年化忌({ln_ji})，当前{PALACE_MEANING.get(dy_ji, dy_ji).split('、')[0]}风险可能引发今年{PALACE_MEANING.get(ln_ji, ln_ji).split('、')[0]}领域的波折，宜提前规避。")
+        return synthesis
+
+    # 构建三维四化字典（四化→宫名，用于关联分析）
+    bm_map = {fh["四化"]: fh["来源宫"] for fh in feihua}
+    dy_map = {fh["四化"]: fh["来源宫"] for fh in dy_feihua}
+    ln_map = {fh["四化"]: fh["来源宫"] for fh in ln_feihua}
+
+    # 每个维度的影响分析
+    impact_analysis = {
+        "本命": [_impact_analysis(fh["四化"], fh["来源宫"], fh["星曜"], "本命") for fh in feihua],
+        "大运": [_impact_analysis(fh["四化"], fh["来源宫"], fh["星曜"], "大运") for fh in dy_feihua],
+        "流年": [_impact_analysis(fh["四化"], fh["来源宫"], fh["星曜"], "流年") for fh in ln_feihua],
+    }
+
+    # 三维关联解读
+    relation_analysis = _relation_analysis(bm_map, dy_map, ln_map)
+
+    # 综合分析
+    synthesis = _synthesis(bm_map, dy_map, ln_map, dy_info, f"{ln_year}年{ln_gan}")
+
     return {"飞化": feihua, "串联": chains, "大运四化": dy_feihua, "流年四化": ln_feihua,
-            "大运信息": dy_info, "流年信息": f"{ln_year}年{ln_gan}"}
+            "大运信息": dy_info, "流年信息": f"{ln_year}年{ln_gan}",
+            "影响分析": impact_analysis, "关联解读": relation_analysis, "综合分析": synthesis}
 
 
 # ===== 财富级别评估 =====

@@ -931,6 +931,47 @@ function renderResult(data) {
     feihuaHtml += '</div></div>';
   }
 
+  // P47: 三维四化影响分析 + 关联解读 + 综合分析
+  var impactAnalysis = feihuaData['影响分析'] || {};
+  var relationAnalysis = feihuaData['关联解读'] || [];
+  var synthesisAnalysis = feihuaData['综合分析'] || [];
+
+  if (impactAnalysis['本命'] || relationAnalysis.length > 0 || synthesisAnalysis.length > 0) {
+    feihuaHtml += '<div style="grid-column:1/-1;margin-bottom:12px">';
+    // 影响分析
+    if (impactAnalysis['本命']) {
+      feihuaHtml += '<div style="margin-bottom:12px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:6px">📊 三维四化影响分析</div>';
+      var impactLevels = {'本命':'var(--gold)','大运':'#3498db','流年':'#2ecc71'};
+      for (var level in impactAnalysis) {
+        if (impactAnalysis[level].length > 0) {
+          feihuaHtml += '<div style="margin-bottom:8px"><div style="font-size:0.78em;color:' + impactLevels[level] + ';margin-bottom:4px">' + level + '</div>';
+          for (var ia = 0; ia < impactAnalysis[level].length; ia++) {
+            feihuaHtml += '<div style="font-size:0.75em;color:var(--text-dim);line-height:1.6;padding-left:8px;border-left:2px solid ' + impactLevels[level] + ';margin-bottom:3px">' + impactAnalysis[level][ia] + '</div>';
+          }
+          feihuaHtml += '</div>';
+        }
+      }
+      feihuaHtml += '</div>';
+    }
+    // 关联解读
+    if (relationAnalysis.length > 0) {
+      feihuaHtml += '<div style="margin-bottom:12px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:6px">🔗 三维四化关联解读</div>';
+      for (var ra = 0; ra < relationAnalysis.length; ra++) {
+        feihuaHtml += '<div style="font-size:0.78em;color:var(--text);line-height:1.7;padding:8px;background:rgba(201,168,76,0.06);border-radius:6px;margin-bottom:6px;border-left:3px solid var(--gold)">' + relationAnalysis[ra] + '</div>';
+      }
+      feihuaHtml += '</div>';
+    }
+    // 综合分析
+    if (synthesisAnalysis.length > 0) {
+      feihuaHtml += '<div><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:6px">🎯 综合分析（对当前大运/流年的影响）</div>';
+      for (var sa = 0; sa < synthesisAnalysis.length; sa++) {
+        feihuaHtml += '<div style="font-size:0.78em;color:var(--text);line-height:1.7;padding:8px;background:linear-gradient(135deg,rgba(201,168,76,0.1),var(--bg-card2));border-radius:6px;margin-bottom:6px;border:1px solid rgba(201,168,76,0.25)">' + synthesisAnalysis[sa] + '</div>';
+      }
+      feihuaHtml += '</div>';
+    }
+    feihuaHtml += '</div>';
+  }
+
   // 本命四化详细解读
   feihuaHtml += '<div style="grid-column:1/-1;margin-bottom:8px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px">本命四化详解</div></div>';
   for (var fi = 0; fi < feihuaList.length; fi++) {

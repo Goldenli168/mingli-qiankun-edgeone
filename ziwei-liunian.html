@@ -678,36 +678,36 @@ function renderResult(data) {
       var worst = sorted[sorted.length - 1];
       var timingHtml = '';
       // 最佳年份
-      var bestBrief = (best['简评']||'').substring(0, 80);
-      var bestDetail = (best['简评详情']||'').substring(0, 120);
+      var bestBrief = best['简评'] || '';
+      var bestDetail = best['简评详情'] || '';
       timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(46,204,113,0.1),var(--bg-card2));border-color:rgba(46,204,113,0.3)">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--green)">🌟 最佳年份</div>' +
         '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + best['年份'] + '</div>' +
         '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (best['流年干支']||'') + ' · 评分' + (best['评分']||'?') + '</div>' +
-        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + bestBrief + '...</div>' +
-        '<div style="font-size:0.7em;color:var(--green);margin-top:6px;padding:6px;background:rgba(46,204,113,0.08);border-radius:5px;line-height:1.5">💡 把握要点：' + (bestDetail ? bestDetail.substring(0, 100) + '...' : '此年运势上佳，宜大胆进取，把握投资/事业/感情机遇，可获突破性进展') + '</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px;line-height:1.6">' + bestBrief + '</div>' +
+        '<div style="font-size:0.7em;color:var(--green);margin-top:6px;padding:8px;background:rgba(46,204,113,0.08);border-radius:5px;line-height:1.6">💡 把握要点：' + (bestDetail || '此年运势上佳，宜大胆进取，把握投资/事业/感情机遇，可获突破性进展') + '</div>' +
       '</div>';
       // 最低年份
-      var worstBrief = (worst['简评']||'').substring(0, 80);
-      var worstDetail = (worst['简评详情']||'').substring(0, 120);
+      var worstBrief = worst['简评'] || '';
+      var worstDetail = worst['简评详情'] || '';
       timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(231,76,60,0.08),var(--bg-card2));border-color:rgba(231,76,60,0.2)">' +
         '<div style="text-align:center;font-size:0.82em;color:var(--red-light)">⚠️ 需谨慎年份</div>' +
         '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--red-light);margin:8px 0">' + worst['年份'] + '</div>' +
         '<div style="font-size:0.75em;color:var(--text);text-align:center">' + (worst['流年干支']||'') + ' · 评分' + (worst['评分']||'?') + '</div>' +
-        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + worstBrief + '...</div>' +
-        '<div style="font-size:0.7em;color:var(--red-light);margin-top:6px;padding:6px;background:rgba(231,76,60,0.08);border-radius:5px;line-height:1.5">🛡️ 规避要点：' + (worstDetail ? worstDetail.substring(0, 100) + '...' : '此年运势低迷，宜守不宜攻，凡事留有余地，重要决策宜缓行，防意外波折') + '</div>' +
+        '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px;line-height:1.6">' + worstBrief + '</div>' +
+        '<div style="font-size:0.7em;color:var(--red-light);margin-top:6px;padding:8px;background:rgba(231,76,60,0.08);border-radius:5px;line-height:1.6">🛡️ 规避要点：' + (worstDetail || '此年运势低迷，宜守不宜攻，凡事留有余地，重要决策宜缓行，防意外波折') + '</div>' +
       '</div>';
       // 当前年份
       var currentYear = liunians.find(function(l) { return l['年份'] === nowYear; });
       if (currentYear) {
-        var curBrief = (currentYear['简评']||'').substring(0, 80);
-        var curDetail = (currentYear['简评详情']||'').substring(0, 120);
+        var curBrief = currentYear['简评'] || '';
+        var curDetail = currentYear['简评详情'] || '';
         timingHtml += '<div class="feihua-card" style="background:linear-gradient(135deg,rgba(201,168,76,0.1),var(--bg-card2));border-color:rgba(201,168,76,0.3)">' +
           '<div style="text-align:center;font-size:0.82em;color:var(--gold)">📅 今年 ' + nowYear + '</div>' +
           '<div style="text-align:center;font-size:1.5em;font-weight:bold;color:var(--gold);margin:8px 0">' + (currentYear['流年干支']||'') + '</div>' +
           '<div style="font-size:0.75em;color:var(--text);text-align:center">评分' + (currentYear['评分']||'?') + '</div>' +
-          '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px">' + curBrief + '...</div>' +
-          '<div style="font-size:0.7em;color:var(--gold);margin-top:6px;padding:6px;background:rgba(201,168,76,0.08);border-radius:5px;line-height:1.5">📋 行动指南：' + (curDetail ? curDetail.substring(0, 100) + '...' : '今年宜稳扎稳打，结合大运趋势做好规划，注意化忌宫位风险，把握化禄宫位机遇') + '</div>' +
+          '<div style="font-size:0.72em;color:var(--text-dim);text-align:center;margin-top:4px;line-height:1.6">' + curBrief + '</div>' +
+          '<div style="font-size:0.7em;color:var(--gold);margin-top:6px;padding:8px;background:rgba(201,168,76,0.08);border-radius:5px;line-height:1.6">📋 行动指南：' + (curDetail || '今年宜稳扎稳打，结合大运趋势做好规划，注意化忌宫位风险，把握化禄宫位机遇') + '</div>' +
         '</div>';
       }
       timingGrid.innerHTML = timingHtml;
