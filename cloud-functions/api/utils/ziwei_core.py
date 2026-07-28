@@ -837,32 +837,32 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ===== 大运LLM: 串行调用(流年池已跑10s,剩余~12-15s给大运) =====
     # 1完整(8s) + 2精简(6s) = 14s < 15s ✓
     _age_now = _now - solar_year
-    _dayun_pending = []  # 待LLM的大运列表
+    _dayun_pending = []  # 待LLM的大运列表（当前+未来）
+    _dayun_past = []     # 过去大运列表（模板fallback）
     for dy in result["大运"]:
-        if _time.time() > _llm_deadline: break
         _age_end = dy.get('结束年龄', 0)
-        # 跳过完全已过的大运(结束年龄 < 当前年龄)
-        if _age_end < _age_now: continue
+        _age_start = dy.get('起始年龄', 0)
+        # 跳过完全已过的大运(结束年龄 < 当前年龄) → 模板fallback
+        if _age_end < _age_now:
+            _dayun_past.append(dy)
+            continue
         # 加入待LLM列表(当前+未来所有)
         _dayun_pending.append(dy)
 
-    # 串行调用大运LLM(避免并发限速,内置重试2次)
-    # P53: 所有大运完整7维分析，分批处理（当前+未来3个优先）
+    # P54: 并发调用大运LLM（当前+未来大运）+ 过去大运模板fallback
+    # 策略: ThreadPoolExecutor 并发3个，总时间从50s→20s
     if _dayun_pending:
         import re as _re
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
         _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
-        _dayun_count = 0
-        # P53: 分批处理——先处理当前+未来3个大运（完整LLM），再处理其他（精简LLM）
-        _priority_count = min(4, len(_dayun_pending))  # 当前+未来3个
-        for _dy in _dayun_pending:
-            if _time.time() > _llm_deadline: break
-            _dayun_count += 1
+
+        def _process_dayun_llm(_dy):
+            """处理单个大运的LLM调用+解析"""
             try:
-                # P53: 所有大运完整LLM（dayun类型，7维分析）
-                # 当前+未来3个用完整LLM，其他也用完整LLM（用户要求）
                 _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
-                if not _llm: continue
+                if not _llm:
+                    return _dy, None
                 _field_map = {}
                 # 主解析:按【字段名】切分
                 _pieces = _re.split(_pat, _llm)
@@ -898,6 +898,20 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                             if _lbl.startswith(_f_name) and len(_cnt) > 10:
                                 _field_map[_f_name] = _cnt
                                 break
+                return _dy, _field_map
+            except Exception:
+                return _dy, None
+
+        # 并发调用（max_workers=3，避免DeepSeek限流）
+        _pool_deadline = min(_llm_deadline, _time.time() + 20)  # 最多20s
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_process_dayun_llm, dy): dy for dy in _dayun_pending}
+            for future in as_completed(futures):
+                if _time.time() > _pool_deadline:
+                    break
+                _dy, _field_map = future.result()
+                if not _field_map:
+                    continue
                 # 写入字段
                 if "综合" in _field_map:
                     _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
@@ -909,8 +923,6 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                 _v = _v[len(_pfx):].strip()
                                 break
                         _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
-            except Exception:
-                pass
 
     return result
 
