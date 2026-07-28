@@ -901,7 +901,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                 break
                 # 写入字段
                 if "综合" in _field_map:
-                    _dy["综合解读"] = _field_map["综合"][:400]
+                    _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
                 for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
                     if _f_name in _field_map:
                         _v = _field_map[_f_name]
