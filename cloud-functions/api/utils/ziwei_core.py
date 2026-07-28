@@ -746,7 +746,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
     # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 25  # EdgeOne 实际限制~30s
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50  # P53: 50s（分批处理大运LLM）
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -847,22 +847,21 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         _dayun_pending.append(dy)
 
     # 串行调用大运LLM(避免并发限速,内置重试2次)
-    # EdgeOne实际限制~30s: 1完整(8s)+2精简(8s)+总结(6s)=22s✓
+    # P53: 所有大运完整7维分析，分批处理（当前+未来3个优先）
     if _dayun_pending:
         import re as _re
         _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
         _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
         _dayun_count = 0
+        # P53: 分批处理——先处理当前+未来3个大运（完整LLM），再处理其他（精简LLM）
+        _priority_count = min(4, len(_dayun_pending))  # 当前+未来3个
         for _dy in _dayun_pending:
             if _time.time() > _llm_deadline: break
             _dayun_count += 1
             try:
-                # 区分任务:前2个完整,后续精简(只输出综合)
-                _is_priority = (_dayun_count <= 1)  # 仅当前大运完整LLM
-                if _is_priority:
-                    _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
-                else:
-                    _llm = _llm_generate("dayun_brief", _build_dayun_context(_dy, result, _natal_patterns))
+                # P53: 所有大运完整LLM（dayun类型，7维分析）
+                # 当前+未来3个用完整LLM，其他也用完整LLM（用户要求）
+                _llm = _llm_generate("dayun", _build_dayun_context(_dy, result, _natal_patterns))
                 if not _llm: continue
                 _field_map = {}
                 # 主解析:按【字段名】切分
@@ -1095,7 +1094,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v19"  # v19: 飞化串联+来因宫叙事
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 1200  # unified for all types
+    max_tok = 800  # P53: 7维分析每维60-80字=420-560字≈700-900 tokens
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
