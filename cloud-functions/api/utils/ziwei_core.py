@@ -1457,6 +1457,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "婚姻": "此运婚姻和美，感情顺遂，太阴天同主柔顺，陆斌兆云：「夫妻宫吉，鸾凤和鸣」.",
             "子女": "此运子女有成，亲子融洽，天同天府主福泽，子女宫吉庆有余.",
             "父母": "此运与长辈缘分深厚，得荫庇助力，天梁太阳主尊长，父母宫安稳.",
+            "健康": "此运身体康健，精力充沛，天同天府主福寿，倪海厦云：「疾厄宫吉，十年无忧」.",
         }
     elif score >= 75:
         base = {
@@ -1465,6 +1466,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "婚姻": "此运婚姻平稳，偶有磨擦但可化解，宜多包容沟通.",
             "子女": "此运子女运中等，需多关心教育引导，不可放任.",
             "父母": "此运与父母关系尚可，宜多尽孝道，注意长辈健康.",
+            "健康": "此运健康平稳，偶有小恙但无大碍，宜规律作息，适度锻炼.",
         }
     elif score >= 60:
         base = {
@@ -1473,6 +1475,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "婚姻": "此运婚姻有波折，需防口舌是非，倪海厦云：「夫妻宫化忌，感情多考验」.",
             "子女": "此运子女运平淡，亲子间易生隔阂，需耐心沟通.",
             "父母": "此运与父母缘分较薄，宜多关怀长辈，注意健康问题.",
+            "健康": "此运健康需关注，易有慢性疲劳，倪海厦云：「疾厄宫逢煞，宜调养身心」，注意作息规律.",
         }
     elif score >= 35:
         base = {
@@ -1481,6 +1484,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "婚姻": "此运婚姻不利，感情多舛，需防分离变故，宜互相体谅.",
             "子女": "此运子女运较差，亲子矛盾增多，需以柔克刚.",
             "父母": "此运父母运势低，长辈健康堪忧，宜多陪伴照护.",
+            "健康": "此运健康欠佳，易有旧疾复发，陆斌兆云：「疾厄宫化忌，宜定期体检」，防微杜渐.",
         }
     else:
         base = {
@@ -1489,6 +1493,7 @@ def _dim_interpret(dim, score, ming_stars, dim_stars, dim_sihua):
             "婚姻": "此运婚姻大凶，感情裂痕深重，需防婚变离散.",
             "子女": "此运子女运凶，亲子关系紧张，宜以退为进，切勿强硬.",
             "父母": "此运父母宫逢大煞，长辈恐有灾厄，宜尽孝及时.",
+            "健康": "此运健康大凶，恐有重疾隐患，倪海厦云：「疾厄宫逢煞忌，宜及早就医」，切勿拖延.",
         }
 
     desc = base.get(dim, "")
@@ -2754,10 +2759,29 @@ def _calc_feihua(year_gan, places, dayun_list=None, solar_year=None):
                                 st_a = STAR_TRAIT.get(hua_list[0], hua_list[0])
                                 st_ji = STAR_TRAIT.get(star_ji, star_ji)
                                 st_ke = STAR_TRAIT.get(star_ke, star_ke)
+                                # 具体事件预测
+                                EVENT_MAP = {
+                                    "福德": "兴趣爱好获得认可、文化活动带来机遇、精神投资有回报",
+                                    "田宅": "房屋漏水/装修纠纷/邻里矛盾、不动产交易需谨慎",
+                                    "命宫": "自我提升化解危机、学习新技能、公众形象改善",
+                                    "官禄": "事业突破机遇、管理职责加重、职场人际关系",
+                                    "财帛": "投资收益波动、理财决策需谨慎、意外收入或支出",
+                                    "夫妻": "感情升温或波折、合作关系变化、婚姻决策",
+                                    "父母": "长辈健康关注、文书契约纠纷、传统权威挑战",
+                                    "子女": "子女教育投资、创作项目启动、亲子关系调整",
+                                    "疾厄": "健康体检发现、慢性疲劳调理、情绪管理",
+                                    "迁移": "外出发展机遇、环境变迁适应、交通安全注意",
+                                    "交友": "朋友合作机遇、社交圈层拓展、团队协作",
+                                    "兄弟": "手足同僚合作、人脉资源拓展、竞争关系",
+                                }
+                                event_a = EVENT_MAP.get(palace_a, f"{palace_a}宫领域机遇")
+                                event_b = EVENT_MAP.get(palace_b, f"{palace_b}宫领域风险")
+                                event_c = EVENT_MAP.get(palace_c, f"{palace_c}宫领域化解")
                                 chains.append({
                                     "链": f"化禄({palace_a}) → 化忌({palace_b}) → 化科({palace_c})",
-                                    "解读": f"{palace_a}宫{pm_a.split('、')[0]}化禄带来机遇（{st_a}），但{palace_a}宫化忌到{palace_b}宫{pm_b.split('、')[0]}引发问题（{st_ji}），{palace_b}宫化科到{palace_c}{pm_c.split('、')[0]}提供化解之道（{st_ke}）。",
-                                    "建议": f"今年宜在{palace_a}宫领域主动把握机遇，同时警惕{palace_b}宫领域的潜在风险，可通过{palace_c}领域的努力来化解危机，形成良性循环。",
+                                    "解读": f"{palace_a}宫{pm_a.split('、')[0]}化禄带来机遇（{st_a}），具体表现为{event_a}。但{palace_a}宫化忌到{palace_b}宫{pm_b.split('、')[0]}引发问题（{st_ji}），需防{event_b}。{palace_b}宫化科到{palace_c}{pm_c.split('、')[0]}提供化解之道（{st_ke}），可通过{event_c}来化解危机。",
+                                    "建议": f"今年宜在{palace_a}宫领域主动把握机遇（{event_a}），同时警惕{palace_b}宫领域的潜在风险（{event_b}），可通过{palace_c}领域的努力（{event_c}）来化解危机，形成良性循环。",
+                                    "应期": f"此连锁反应在农历三月、九月尤为明显，宜提前规划。",
                                     "宫位": [palace_a, palace_b, palace_c],
                                 })
     # 化忌串联
