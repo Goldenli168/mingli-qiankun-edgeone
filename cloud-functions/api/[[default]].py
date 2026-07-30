@@ -6,6 +6,8 @@ EdgeOne Pages Cloud Function - Flask 模式
 
 import sys
 import os
+import json as _json
+import time as _time
 
 # 将 cloud-functions 目录加入 Python 路径，确保 utils 模块可被正确导入
 sys.path.insert(0, os.path.dirname(__file__))
@@ -17,6 +19,47 @@ from utils.bazi_core import (
     calc_dayun
 )
 from utils.ziwei_core import full_ziwei_analysis
+
+# ===== 排盘缓存（P55） =====
+_CACHE_DIR = os.environ.get("TMPDIR", os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__))))
+_ZIWEI_CACHE_FILE = os.path.join(_CACHE_DIR, "ml_ziwei_cache.json")
+_ZIWEI_CACHE_TTL = 3600  # 1小时
+_ZIWEI_CACHE_MAX = 100
+
+def _load_ziwei_cache() -> dict:
+    if not os.path.exists(_ZIWEI_CACHE_FILE):
+        return {}
+    try:
+        with open(_ZIWEI_CACHE_FILE, 'r', encoding='utf-8') as f:
+            raw = _json.load(f)
+        now = _time.time()
+        clean = {}
+        for k, v in raw.items():
+            if isinstance(v, dict) and v.get('ts', 0) > now - _ZIWEI_CACHE_TTL:
+                clean[k] = v['data']
+        return clean
+    except Exception:
+        return {}
+
+def _save_ziwei_cache(key: str, data: dict):
+    merged = {}
+    if os.path.exists(_ZIWEI_CACHE_FILE):
+        try:
+            with open(_ZIWEI_CACHE_FILE, 'r', encoding='utf-8') as f:
+                merged = _json.load(f)
+        except Exception:
+            pass
+    merged[key] = {'data': data, 'ts': _time.time()}
+    if len(merged) > _ZIWEI_CACHE_MAX:
+        sorted_items = sorted(merged.items(), key=lambda x: x[1].get('ts', 0))
+        merged = dict(sorted_items[-_ZIWEI_CACHE_MAX:])
+    try:
+        with open(_ZIWEI_CACHE_FILE, 'w', encoding='utf-8') as f:
+            _json.dump(merged, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+_ZIWEI_CACHE = _load_ziwei_cache()
 
 app = Flask(__name__)
 
@@ -116,7 +159,21 @@ def ziwei_api():
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
     try:
+        # P55: 排盘缓存（同八字+时辰缓存1小时）
+        cache_key = f"ziwei:{year}:{month}:{day}:{hour}:{sex}"
+        force_refresh = data.get("refresh", False)
+        if not force_refresh and cache_key in _ZIWEI_CACHE:
+            result = _ZIWEI_CACHE[cache_key]
+            result["_from_cache"] = True
+            response = jsonify(result)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["X-Cache"] = "HIT"
+            return response
+
         result = full_ziwei_analysis(year, month, day, hour, sex)
+        # P55: 写入缓存
+        _ZIWEI_CACHE[cache_key] = result
+        _save_ziwei_cache(cache_key, result)
     except Exception as e:
         import traceback
         err_msg = "分析异常: %s" % str(e)[:200]
@@ -127,6 +184,7 @@ def ziwei_api():
 
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["X-Cache"] = "MISS"
     return response
 
 
