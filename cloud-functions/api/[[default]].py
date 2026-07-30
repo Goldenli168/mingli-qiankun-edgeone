@@ -188,6 +188,74 @@ def ziwei_api():
     return response
 
 
+# ========== 交互式问答 API（P56） ==========
+
+@app.route("/ask", methods=["POST", "OPTIONS"])
+def ask_api():
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+
+    try:
+        data = request.get_json(force=True) or {}
+        question = data.get("question", "").strip()
+        year = data.get("year")
+        month = data.get("month")
+        day = data.get("day")
+        hour = data.get("hour", 12)
+        sex = data.get("sex", "男")
+
+        if not question:
+            return jsonify({"error": "请输入问题"}), 400
+        if not all([year, month, day]):
+            return jsonify({"error": "参数不完整"}), 400
+
+        # 先排盘（命中缓存→秒回）
+        cache_key = f"ziwei:{year}:{month}:{day}:{hour}:{sex}"
+        if cache_key in _ZIWEI_CACHE:
+            result = _ZIWEI_CACHE[cache_key]
+        else:
+            result = full_ziwei_analysis(year, month, day, hour, sex)
+            _ZIWEI_CACHE[cache_key] = result
+            _save_ziwei_cache(cache_key, result)
+
+        # LLM 生成针对性回答
+        from utils.llm_client import llm_call
+        # 构建命盘摘要（用于 LLM 上下文）
+        places = result.get("十二宫", [])
+        sihua = result.get("四化", {})
+        palace_summary = []
+        for p in places:
+            stars = "、".join(p.get("主星", []) + p.get("辅星", []))
+            palace_summary.append(f"{p['宫名']}宫({p['天干']}{p['地支']}): {stars}")
+        sihua_summary = f"年干{sihua.get('年干','')}: 化禄{sihua.get('化禄','')}/化权{sihua.get('化权','')}/化科{sihua.get('化科','')}/化忌{sihua.get('化忌','')}"
+
+        prompt = f"""你是资深命理师。用户命盘如下：
+{chr(10).join(palace_summary[:6])}
+四化: {sihua_summary}
+
+用户问题: {question}
+
+请结合命盘数据，给出针对性回答（200字以内）:
+1. 问题分析（结合命盘宫位/星曜/四化）
+2. 具体建议（该怎么做）
+3. 化解方法（如果有不利影响）
+
+语气专业有温度，直接输出回答。"""
+
+        answer = llm_call(prompt, cache_key=f"ask:{hash(question)}", max_tokens=600, retries=1)
+        if not answer:
+            return jsonify({"error": "AI 分析超时，请稍后重试"}), 500
+
+        response = jsonify({"answer": answer, "question": question})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+    except Exception as e:
+        import traceback
+        return jsonify({"error": "分析异常: %s" % str(e)[:200]}), 500
+
+
 # ========== 流年详情 API ==========
 
 @app.route("/liunian", methods=["GET", "OPTIONS"])

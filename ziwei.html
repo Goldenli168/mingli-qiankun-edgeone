@@ -342,6 +342,16 @@
     </div>
     <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
     <label class="refresh-label"><input type="checkbox" id="chkRefresh" onclick="event.stopPropagation()"> 强制刷新LLM</label>
+    <!-- P58: 定制报告 -->
+    <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
+      <div style="font-size:0.82em;color:var(--text-dim);margin-bottom:8px">生成专项报告（PDF下载）：</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="liunian-filter-btn" onclick="generateReport('财富')">💰 财富报告</button>
+        <button class="liunian-filter-btn" onclick="generateReport('事业')">💼 事业报告</button>
+        <button class="liunian-filter-btn" onclick="generateReport('婚姻')">💑 婚姻报告</button>
+        <button class="liunian-filter-btn" onclick="generateReport('综合')">📊 综合报告</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -378,6 +388,16 @@
   </div>
 
   <div id="palaceDetails"></div>
+
+  <!-- P56: 交互式问答（LLM） -->
+  <div class="feihua-section" id="qaSection" style="margin-bottom:20px; display:none;">
+    <h3>💬 命盘问答</h3>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="text" id="qaInput" placeholder="例如：我夫妻宫化忌怎么办？" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card2);color:var(--text);font-size:0.88em;font-family:inherit">
+      <button class="btn-analyze" style="padding:10px 24px;font-size:0.88em" onclick="askQuestion()">提问</button>
+    </div>
+    <div id="qaAnswer" style="display:none;padding:14px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--gold);font-size:0.85em;line-height:1.8;color:var(--text)"></div>
+  </div>
 
   <!-- Stage 4: 全局命盘总结 -->
   <div class="feihua-section" id="summaryTextSection" style="margin-bottom:20px; display:none;">
@@ -1054,6 +1074,93 @@ function togglePalaceDetail(zhiIdx) {
   setTimeout(function() {
     detailContainer.scrollIntoView({behavior:'smooth', block:'center'});
   }, 100);
+}
+
+// P56: 交互式问答（LLM）
+function askQuestion() {
+  var input = document.getElementById('qaInput');
+  var answer = document.getElementById('qaAnswer');
+  var question = input.value.trim();
+  if (!question) { alert('请输入问题'); return; }
+  if (!currentResult) { alert('请先排盘'); return; }
+
+  answer.style.display = 'block';
+  answer.innerHTML = '<span style="color:var(--gold)">⏳ AI 正在分析您的问题...</span>';
+
+  fetch('/api/ask', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-API-Key': API_KEY},
+    body: JSON.stringify({
+      question: question,
+      year: parseInt(document.getElementById('year').value),
+      month: parseInt(document.getElementById('month').value),
+      day: parseInt(document.getElementById('day').value),
+      hour: parseInt(document.getElementById('hour').value),
+      sex: currentSex
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      answer.innerHTML = '<span style="color:var(--red-light)">❌ ' + data.error + '</span>';
+    } else {
+      answer.innerHTML = '<div style="font-size:0.82em;color:var(--gold);margin-bottom:6px">💬 ' + escapeHtml(question) + '</div>' + escapeHtml(data.answer || '暂无回答');
+    }
+  })
+  .catch(function(e) {
+    answer.innerHTML = '<span style="color:var(--red-light)">❌ 网络错误，请稍后重试</span>';
+  });
+}
+
+// P58: 生成专项报告（PDF下载）
+function generateReport(type) {
+  if (!currentResult) { alert('请先排盘'); return; }
+  var reportHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>命理乾坤 · ' + type + '专项报告</title>' +
+    '<style>body{font-family:serif;max-width:800px;margin:0 auto;padding:40px;line-height:1.8;color:#333}' +
+    'h1{color:#c9a84c;text-align:center;border-bottom:2px solid #c9a84c;padding-bottom:10px}' +
+    'h2{color:#c9a84c;margin-top:30px}h3{color:#666}table{width:100%;border-collapse:collapse;margin:10px 0}' +
+    'td,th{border:1px solid #ddd;padding:8px;text-align:left}.score{color:#c9a84c;font-weight:bold}' +
+    '.section{margin:20px 0;padding:15px;background:#f9f9f9;border-radius:8px}</style></head><body>';
+
+  var basic = currentResult['基本信息'] || {};
+  reportHtml += '<h1>命理乾坤 · ' + type + '专项报告</h1>' +
+    '<div class="section"><h2>基本信息</h2>' +
+    '<p>公历：' + (basic['公历']||'') + ' | 农历：' + (basic['农历']||'') + ' | 性别：' + (basic['性别']||'') + '</p>' +
+    '<p>命宫：' + (currentResult['命宫地支']||'') + ' | 身宫：' + (currentResult['身宫地支']||'') + ' | 五行局：' + (currentResult['五行局']||'') + '</p></div>';
+
+  // 四化
+  var sihua = currentResult['四化'] || {};
+  reportHtml += '<div class="section"><h2>四化飞星</h2><table><tr><th>四化</th><th>星曜</th></tr>' +
+    '<tr><td>化禄</td><td>' + (sihua['化禄']||'') + '</td></tr>' +
+    '<tr><td>化权</td><td>' + (sihua['化权']||'') + '</td></tr>' +
+    '<tr><td>化科</td><td>' + (sihua['化科']||'') + '</td></tr>' +
+    '<tr><td>化忌</td><td>' + (sihua['化忌']||'') + '</td></tr></table></div>';
+
+  // 大运
+  var dayun = currentResult['大运'] || [];
+  reportHtml += '<div class="section"><h2>大运走势</h2><table><tr><th>年龄段</th><th>宫位</th><th>评分</th><th>评级</th></tr>';
+  for (var i = 0; i < Math.min(dayun.length, 8); i++) {
+    var dy = dayun[i];
+    reportHtml += '<tr><td>' + dy['起始年龄'] + '-' + dy['结束年龄'] + '岁</td><td>' + (dy['大运宫名']||dy['宫位']||'') + '</td><td class="score">' + (dy['综合评分']||'') + '</td><td>' + (dy['综合评级']||'') + '</td></tr>';
+  }
+  reportHtml += '</table></div>';
+
+  // 流年（今年）
+  var liunians = currentResult['流年'] || [];
+  var nowYear = new Date().getFullYear();
+  var currentLn = liunians.find(function(l) { return l['年份'] === nowYear; });
+  if (currentLn) {
+    reportHtml += '<div class="section"><h2>' + nowYear + '年流年分析</h2>' +
+      '<p>干支：' + (currentLn['流年干支']||'') + ' | 评分：<span class="score">' + (currentLn['评分']||'') + '</span></p>' +
+      '<p>简评：' + (currentLn['简评']||'') + '</p></div>';
+  }
+
+  reportHtml += '<div style="text-align:center;margin-top:40px;color:#999;font-size:0.8em">命理乾坤 · 仅供传统文化学习与娱乐参考</div></body></html>';
+
+  var win = window.open('', '_blank');
+  win.document.write(reportHtml);
+  win.document.close();
+  setTimeout(function() { win.print(); }, 500);
 }
 
 document.addEventListener('keydown', function(e) {

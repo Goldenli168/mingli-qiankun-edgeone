@@ -396,6 +396,12 @@
     <div class="daxian-details" id="daxianDetails"></div>
   </div>
 
+  <!-- P57: 行动清单 -->
+  <div class="feihua-section" id="actionSection" style="margin-bottom:20px; display:none;">
+    <h3>📋 行动清单（每月具体建议）</h3>
+    <div id="actionGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px"></div>
+  </div>
+
   <div class="dayun-section" id="dayunSection">
     <h3>☰ 大运分析（十年一运）</h3>
     <!-- P5: 流年筛选器 -->
@@ -765,6 +771,49 @@ function renderResult(data) {
       }
       warningGrid.innerHTML = warningHtml;
       warningSection.style.display = 'block';
+    }
+  }
+
+  // ---- P57: 行动清单（每月具体行动建议） ----
+  var actionSection = document.getElementById('actionSection');
+  var actionGrid = document.getElementById('actionGrid');
+  if (liunians.length > 0 && actionSection && actionGrid) {
+    var currentYearData = liunians.find(function(l) { return l['年份'] === nowYear; });
+    if (currentYearData) {
+      var months = currentYearData['逐月'] || [];
+      var actionHtml = '';
+      var monthActions = {
+        '正月': '制定全年计划，宜学习新技能',
+        '二月': '拓展人脉，宜社交活动',
+        '三月': '把握投资机遇，宜理财规划',
+        '四月': '专注事业，宜主动承担项目',
+        '五月': '注意健康，宜体检调养',
+        '六月': '感情经营，宜沟通包容',
+        '七月': '保守理财，防意外支出',
+        '八月': '事业发展，宜争取晋升',
+        '九月': '谨慎决策，防合同纠纷',
+        '十月': '家庭和谐，宜陪伴长辈',
+        '十一月': '学习充电，宜考试进修',
+        '十二月': '总结复盘，规划明年'
+      };
+      for (var mi = 0; mi < months.length && mi < 6; mi++) {
+        var m = months[mi];
+        if (!m || !m.trim()) continue;
+        var sep = m.indexOf('：') > -1 ? '：' : (m.indexOf(':') > -1 ? ':' : null);
+        var parts = sep ? m.split(sep) : [m];
+        var label = (parts[0] || ('月' + (mi + 1))).trim();
+        var detail = (parts.slice(1).join(sep || '')).trim();
+        var action = monthActions[label] || '顺势而为，把握机遇';
+        actionHtml += '<div class="feihua-card" style="border-left:4px solid var(--gold)">' +
+          '<div style="font-size:0.85em;font-weight:bold;color:var(--gold);margin-bottom:4px">' + label + '</div>' +
+          '<div style="font-size:0.75em;color:var(--text-dim);line-height:1.5;margin-bottom:4px">' + detail + '</div>' +
+          '<div style="font-size:0.72em;color:var(--gold);padding:4px 8px;background:rgba(201,168,76,0.08);border-radius:4px">📋 ' + action + '</div>' +
+        '</div>';
+      }
+      if (actionHtml) {
+        actionGrid.innerHTML = actionHtml;
+        actionSection.style.display = 'block';
+      }
     }
   }
 
