@@ -1,1 +1,1 @@
-{"framework": "python", "deploy_trigger": "v8.56-maxDuration-60s-20260730", "cloudFunctions": {"python": {"maxDuration": 60}}}
+{"framework": "python", "deploy_trigger": "v8.57-health-fix-20260730", "cloudFunctions": {"python": {"maxDuration": 60}}}
