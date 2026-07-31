@@ -1,1 +1,1 @@
-{"framework": "python", "deploy_trigger": "v8.63-minimal-fix-20260731", "cloudFunctions": {"python": {"maxDuration": 60}}}
+{"deploy_trigger": "v9.1-nodejs-llm-test-20260731", "cloudFunctions": {"nodejs": {"maxDuration": 60}}}

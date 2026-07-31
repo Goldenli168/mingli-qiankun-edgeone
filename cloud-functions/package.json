@@ -1,0 +1,8 @@
+{
+  "name": "mingli-qiankun-edge-functions",
+  "version": "1.0.0",
+  "description": "命理乾坤 Edge Functions (Node.js)",
+  "dependencies": {
+    "iztro": "^2.5.8"
+  }
+}
