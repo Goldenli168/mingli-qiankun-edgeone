@@ -77,6 +77,9 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: i
     data = json.dumps({"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens, "temperature": 0.7, "stream": False}).encode('utf-8')
 
+    # P55: 增加调用间隔（避免DeepSeek限流）
+    _time.sleep(2)
+
     # 重试 2 次 (共 3 次机会)
     for attempt in range(retries + 1):
         try:
@@ -84,7 +87,7 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: i
                 headers={'Content-Type': 'application/json',
                          'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
                          'User-Agent': 'mq/1.0'})
-            with urllib.request.urlopen(req, timeout=8, context=ctx_ssl) as resp:
+            with urllib.request.urlopen(req, timeout=15, context=ctx_ssl) as resp:  # P55: 8s→15s（DeepSeek响应慢）
                 result = json.loads(resp.read().decode('utf-8'))
                 content = result['choices'][0]['message']['content'].strip()
                 if len(content) > 10:
@@ -94,7 +97,7 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: i
                 return None
         except Exception as e:
             if attempt < retries:
-                _time.sleep(0.3 * (attempt + 1))  # 指数退避: 0.3s, 0.6s
+                _time.sleep(2 * (attempt + 1))  # P55: 0.3s→2s（避免限流）
                 continue
             # 最后一次失败,记录但不抛
             return None

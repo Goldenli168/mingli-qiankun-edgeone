@@ -747,9 +747,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
-    # P55: DeepSeek限流严重，完全禁用LLM（所有分析用模板fallback）
+    # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50  # P53: 50s（分批处理大运LLM）
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -759,12 +759,22 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     # 仅标记当前大运内的流年需LLM处理(在并行池里统一做)
     _liunian_llm_years = set()
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if _now <= yr <= _dy_end:
+            _liunian_llm_years.add(yr)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # P55: 完全禁用LLM（DeepSeek限流严重）
-    # tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    # 流年: 当前大运内所有剩余年份(从今年到大运结束)
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if yr in _liunian_llm_years:  # _liunian_llm_years 已正确过滤: _now~_dy_end
+            tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
+
+    # 总结（概要，保留）
+    tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
     # ===== 流年+总结池: 先跑(10s硬上限,剩余时间留给大运) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 10)  # 最多10s
@@ -844,8 +854,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         else:
             _dayun_past.append(dy)  # 未来大运也模板fallback
 
-    # P54: 并发调用大运LLM（当前+未来大运）+ 过去大运模板fallback
-    # 策略: ThreadPoolExecutor 并发3个，总时间从50s→20s
+    # P55: 串行调用大运LLM（避免DeepSeek限流）
     if _dayun_pending:
         import re as _re
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -897,27 +906,25 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             except Exception:
                 return _dy, None
 
-        # 并发调用（max_workers=3，避免DeepSeek限流）
+        # P55: 串行调用（max_workers=1，避免DeepSeek限流）
         _pool_deadline = min(_llm_deadline, _time.time() + 20)  # 最多20s
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = {pool.submit(_process_dayun_llm, dy): dy for dy in _dayun_pending}
-            for future in as_completed(futures):
-                if _time.time() > _pool_deadline:
-                    break
-                _dy, _field_map = future.result()
-                if not _field_map:
-                    continue
-                # 写入字段
-                if "综合" in _field_map:
-                    _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
-                for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
-                    if _f_name in _field_map:
-                        _v = _field_map[_f_name]
-                        for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
-                            if _v.startswith(_pfx):
-                                _v = _v[len(_pfx):].strip()
-                                break
-                        _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
+        for _dy in _dayun_pending:
+            if _time.time() > _pool_deadline:
+                break
+            _dy, _field_map = _process_dayun_llm(_dy)
+            if not _field_map:
+                continue
+            # 写入字段
+            if "综合" in _field_map:
+                _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
+            for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
+                if _f_name in _field_map:
+                    _v = _field_map[_f_name]
+                    for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
+                        if _v.startswith(_pfx):
+                            _v = _v[len(_pfx):].strip()
+                            break
+                    _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
 
     return result
 
