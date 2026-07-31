@@ -780,7 +780,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ===== 流年+总结池: 先跑(120s硬上限,自建服务器超时时间无限制) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 120)  # P56: 10s→120s（自建服务器超时时间无限制）
     if tasks and _time.time() < _pool_deadline:
-        with ThreadPoolExecutor(max_workers=3) as pool:
+        with ThreadPoolExecutor(max_workers=1) as pool:  # P56: 3→1（串行调用，避免DeepSeek限流）
             futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _pool_deadline}
             for fut in as_completed(futures, timeout=max(1, _pool_deadline - _time.time())):
                 t = futures[fut]
