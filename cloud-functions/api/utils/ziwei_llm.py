@@ -150,7 +150,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。大运四化:{sihua}。维度:{sc}。
 要求:
 1. 输出7个维度:财富、事业、婚姻、子女、父母、健康、大运整体结论
-2. 每维80字左右,必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响,如化忌入某宫带来的风险、化禄化权带来的机遇
+2. 每维严格控制在80字以内(不超过85字),必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响,如化忌入某宫带来的风险、化禄化权带来的机遇
 3. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
 4. 口语务实,结合时代背景,直接输出,不要多余开场白。"""
 
@@ -174,7 +174,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v20"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v21"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
