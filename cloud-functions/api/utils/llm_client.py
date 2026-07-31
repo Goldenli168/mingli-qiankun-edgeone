@@ -87,7 +87,7 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: i
                 headers={'Content-Type': 'application/json',
                          'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
                          'User-Agent': 'mq/1.0'})
-            with urllib.request.urlopen(req, timeout=15, context=ctx_ssl) as resp:  # P55: 8s→15s（DeepSeek响应慢）
+            with urllib.request.urlopen(req, timeout=25, context=ctx_ssl) as resp:  # P55: 15s→25s（DeepSeek响应慢）
                 result = json.loads(resp.read().decode('utf-8'))
                 content = result['choices'][0]['message']['content'].strip()
                 if len(content) > 10:
