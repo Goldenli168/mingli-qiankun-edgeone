@@ -162,6 +162,12 @@ def ziwei_api():
         # P55: 排盘缓存（同八字+时辰缓存1小时）
         cache_key = f"ziwei:{year}:{month}:{day}:{hour}:{sex}"
         force_refresh = data.get("refresh", False)
+        if not force_refresh and cache_key not in _ZIWEI_CACHE:
+            # P58: 内存miss时回源文件(多worker/进程写入的文件缓存共享)
+            try:
+                _ZIWEI_CACHE.update(_load_ziwei_cache())
+            except Exception:
+                pass
         if not force_refresh and cache_key in _ZIWEI_CACHE:
             result = _ZIWEI_CACHE[cache_key]
             result["_from_cache"] = True
