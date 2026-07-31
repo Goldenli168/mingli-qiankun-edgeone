@@ -172,6 +172,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
+    global _last_llm_debug
     _last_llm_debug.append({
         'gen_type': gen_type, 'max_tok': max_tok,
         'prompt_len': len(prompt), 'prompt_head': prompt[:80],
