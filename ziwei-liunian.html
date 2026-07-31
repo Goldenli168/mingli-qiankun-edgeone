@@ -545,7 +545,7 @@ function clearSyncedBirth() {
 }
 
 // ===== LLM 结果持久缓存 =====
-function _cacheKey(y,m,d,h,s) { return 'ziwei_llm_v2_' + [y,m,d,h,s].join('_'); }
+function _cacheKey(y,m,d,h,s) { return 'ziwei_llm_v3_' + [y,m,d,h,s].join('_'); }
 function _loadCache(y,m,d,h,s) {
   try { return JSON.parse(localStorage.getItem(_cacheKey(y,m,d,h,s))||'null'); } catch(e) { return null; }
 }
@@ -796,7 +796,7 @@ function renderResult(data) {
         '十一月': '学习充电，宜考试进修',
         '十二月': '总结复盘，规划明年'
       };
-      for (var mi = 0; mi < months.length && mi < 6; mi++) {
+      for (var mi = 0; mi < months.length && mi < 12; mi++) {
         var m = months[mi];
         if (!m || !m.trim()) continue;
         var sep = m.indexOf('：') > -1 ? '：' : (m.indexOf(':') > -1 ? ':' : null);

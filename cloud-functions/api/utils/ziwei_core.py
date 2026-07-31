@@ -856,8 +856,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     if _dayun_pending:
         import re as _re
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母"]
-        _pat = r'[\[【](' + '|'.join(_FIELDS) + r')[\]】]'
+        _FIELDS = ["综合", "财富", "事业", "婚姻", "子女", "父母", "健康"]
+        # P58: 支持带分数标签【财富 57分】+ 大运整体结论
+        _pat = r'[\[【](综合|财富|事业|婚姻|子女|父母|健康|大运整体结论|整体结论)[^\]】]{0,20}[\]】]'
 
         def _process_dayun_llm(_dy):
             """处理单个大运的LLM调用+解析"""
@@ -866,12 +867,18 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 if not _llm:
                     return _dy, None
                 _field_map = {}
-                # 主解析:按【字段名】切分
+                # 主解析:按【字段名(可带分数)】切分
                 _pieces = _re.split(_pat, _llm)
                 if len(_pieces) >= 3:
                     for _i in range(1, len(_pieces) - 1, 2):
                         _f_name = _pieces[_i]
+                        # P58: 大运整体结论/整体结论 → 综合
+                        if _f_name in ("大运整体结论", "整体结论"):
+                            _f_name = "综合"
                         _content = _pieces[_i + 1].strip() if _i + 1 < len(_pieces) else ''
+                        # P58: 清理残留的 ** 标记和多余空行
+                        _content = _content.strip('*').strip()
+                        _content = _re.sub(r'\n{3,}', '\n\n', _content)
                         if _f_name in _FIELDS and _f_name not in _field_map:
                             _field_map[_f_name] = _content
                 # 备用:按 ||| 切
@@ -893,9 +900,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                     import re as _re3
                     _split_parts = _re3.split(r'\*\*([^\*]+)\*\*', _llm)
                     for _i in range(1, len(_split_parts) - 1, 2):
-                        _lbl = _split_parts[_i].strip()
+                        _lbl = _split_parts[_i].strip().strip('【】[]* 　')  # P58: 去掉标记符号
                         _cnt = _split_parts[_i+1].strip() if _i+1 < len(_split_parts) else ''
-                        for _f_name in ["财富","事业","婚姻","子女","父母"]:
+                        for _f_name in ["财富","事业","婚姻","子女","父母","健康"]:
                             if _f_name in _field_map: continue
                             if _lbl.startswith(_f_name) and len(_cnt) > 10:
                                 _field_map[_f_name] = _cnt
@@ -915,7 +922,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             # 写入字段
             if "综合" in _field_map:
                 _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
-            for _f_name in ["财富", "事业", "婚姻", "子女", "父母"]:
+            for _f_name in ["财富", "事业", "婚姻", "子女", "父母", "健康"]:
                 if _f_name in _field_map:
                     _v = _field_map[_f_name]
                     for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:

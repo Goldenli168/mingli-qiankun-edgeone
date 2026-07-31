@@ -56,6 +56,9 @@ def _build_dayun_context(dy, result, patterns):
     bazi = result.get("八字联合", {}).get("日主", "") + result.get("八字联合", {}).get("日主状态", "")
     scores = dy.get("评分", {})
     score_str = " ".join([f"{k}{v}分" for k, v in scores.items() if not k.endswith("_llm")])
+    # P58: 大运四化(用户要求:维度分析须结合四化影响)
+    sihua = dy.get("大运四化", {})
+    sihua_str = " ".join([f"{k}·{v}" for k, v in sihua.items()])
     return {
         "dayun_age": f"{dy.get('起始年龄','')}-{dy.get('结束年龄','')}",
         "dayun_gong": dy.get("大运宫名", dy.get("宫位", "")),
@@ -63,6 +66,7 @@ def _build_dayun_context(dy, result, patterns):
         "birth": birth,
         "bazi": bazi,
         "scores": score_str,
+        "sihua": sihua_str,
     }
 
 
@@ -141,10 +145,14 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
-        prompt = f"""资深命理师。请分析这大运,输出1段约500字综合点评(包含7维):
-{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
-内容要包含:财富、事业、婚姻、子女、父母、健康、大运整体结论7部分,各部分60-80字。
-口语务实,结合时代背景,直接输出。"""
+        sihua = ctx.get('sihua','')
+        prompt = f"""资深命理师。请分析这大运,输出7个维度的点评:
+{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。大运四化:{sihua}。维度:{sc}。
+要求:
+1. 输出7个维度:财富、事业、婚姻、子女、父母、健康、大运整体结论
+2. 每维80字左右,必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响,如化忌入某宫带来的风险、化禄化权带来的机遇
+3. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
+4. 口语务实,结合时代背景,直接输出,不要多余开场白。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
@@ -166,7 +174,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v19"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v20"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
