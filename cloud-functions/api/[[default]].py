@@ -170,10 +170,43 @@ def ziwei_api():
             response.headers["X-Cache"] = "HIT"
             return response
 
-        result = full_ziwei_analysis(year, month, day, hour, sex)
-        # P55: 写入缓存
-        _ZIWEI_CACHE[cache_key] = result
-        _save_ziwei_cache(cache_key, result)
+        # P57: single-flight 文件锁（跨worker防重复计算）
+        # 外网链路约80s无数据会断连, 断开后客户端重试时:
+        # - 若无锁: 多个worker重复计算 → DeepSeek并发限流 → 全部变慢 → 缓存永远写不上
+        # - 有锁: 只有第一个请求计算, 后续请求收到202秒回, 前端轮询至缓存HIT
+        import hashlib as _hl
+        _lock_name = "ml_lock_" + _hl.md5(cache_key.encode()).hexdigest()[:16] + ".lock"
+        _lock_file = os.path.join(_CACHE_DIR, _lock_name)
+        if not force_refresh and os.path.exists(_lock_file):
+            try:
+                _lock_age = _time.time() - os.path.getmtime(_lock_file)
+            except Exception:
+                _lock_age = 999
+            if _lock_age < 300:  # 锁5分钟内有效
+                resp = jsonify({"status": "computing", "message": "深度分析进行中，请稍后重试", "retry_after": 30})
+                resp.status_code = 202
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Retry-After"] = "30"
+                return resp
+            else:
+                try: os.remove(_lock_file)  # 过期锁清理
+                except Exception: pass
+
+        # 创建锁后开始计算
+        try:
+            with open(_lock_file, 'w') as _lf:
+                _lf.write(str(_time.time()))
+        except Exception:
+            pass
+
+        try:
+            result = full_ziwei_analysis(year, month, day, hour, sex)
+            # P55: 写入缓存
+            _ZIWEI_CACHE[cache_key] = result
+            _save_ziwei_cache(cache_key, result)
+        finally:
+            try: os.remove(_lock_file)
+            except Exception: pass
     except Exception as e:
         import traceback
         err_msg = "分析异常: %s" % str(e)[:200]
