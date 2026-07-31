@@ -749,7 +749,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
     # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50  # P53: 50s（分批处理大运LLM）
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 180  # P56: 50s→180s（自建服务器超时时间无限制）
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -777,8 +777,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
-    # ===== 流年+总结池: 先跑(10s硬上限,剩余时间留给大运) =====
-    _pool_deadline = min(_llm_deadline, _time.time() + 10)  # 最多10s
+    # ===== 流年+总结池: 先跑(120s硬上限,自建服务器超时时间无限制) =====
+    _pool_deadline = min(_llm_deadline, _time.time() + 120)  # P56: 10s→120s（自建服务器超时时间无限制）
     if tasks and _time.time() < _pool_deadline:
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _pool_deadline}
