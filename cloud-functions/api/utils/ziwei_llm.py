@@ -169,7 +169,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         ck = f"zw:{gen_type}:{hash(str(age))}:v19"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 800  # 7维分析每维60-80字=420-560字≈700-900 tokens
+    max_tok = 800  # P56: 保持800（用户要求，不能减少）
     result = llm_call(prompt, ck, max_tokens=max_tok)
     # 诊断日志(列表,最多存10条)
     _last_llm_debug.append({

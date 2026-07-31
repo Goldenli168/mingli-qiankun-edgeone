@@ -758,13 +758,23 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             break
 
     # 仅标记当前大运内的流年需LLM处理(在并行池里统一做)
-    # P55: 不处理流年LLM（DeepSeek响应慢，流年用模板fallback）
+    # P56: 流年LLM是当年+未来3年（用户要求）
     _liunian_llm_years = set()
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if _now <= yr <= _now + 3:  # 当年+未来3年
+            _liunian_llm_years.add(yr)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # P55: 只保留总结LLM（1个任务，15-20秒，在30秒内完成）
+    # 流年: 当年+未来3年
+    for ln in _liunian_raw:
+        yr = ln["年份"]
+        if yr in _liunian_llm_years:
+            tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
+
+    # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
     # ===== 流年+总结池: 先跑(10s硬上限,剩余时间留给大运) =====
@@ -828,9 +838,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 except Exception:
                     pass
 
-    # ===== 大运LLM: 只处理当前大运（避免DeepSeek限流） =====
+    # ===== 大运LLM: 当前+未来大运（用户要求） =====
     _age_now = _now - solar_year
-    _dayun_pending = []  # 待LLM的大运列表（仅当前大运）
+    _dayun_pending = []  # 待LLM的大运列表（当前+未来大运）
     _dayun_past = []     # 过去大运列表（模板fallback）
     for dy in result["大运"]:
         _age_end = dy.get('结束年龄', 0)
@@ -839,11 +849,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if _age_end < _age_now:
             _dayun_past.append(dy)
             continue
-        # P55: 只处理当前大运（避免DeepSeek限流）
-        if _age_start <= _age_now <= _age_end:
-            _dayun_pending.append(dy)
-        else:
-            _dayun_past.append(dy)  # 未来大运也模板fallback
+        # P56: 当前+未来大运（用户要求）
+        _dayun_pending.append(dy)
 
     # P55: 串行调用大运LLM（避免DeepSeek限流）
     if _dayun_pending:
