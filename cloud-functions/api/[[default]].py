@@ -310,5 +310,5 @@ def liunian_api():
 # REBUILD_MARKER_v8.35_20260727 — 飞化串联+来因宫叙事+页面拆分+应期预警
 def health():
     from utils.ziwei_llm import _last_llm_debug
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.57-nodejs-ready", "has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "llm_debug": _last_llm_debug})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.58-maxDuration-60s", "has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "llm_debug": _last_llm_debug})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
