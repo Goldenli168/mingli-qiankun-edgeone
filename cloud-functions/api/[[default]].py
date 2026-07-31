@@ -310,5 +310,24 @@ def liunian_api():
 # REBUILD_MARKER_v8.35_20260727 — 飞化串联+来因宫叙事+页面拆分+应期预警
 def health():
     from utils.ziwei_llm import _last_llm_debug
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.57-nodejs-ready", "has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "llm_debug": _last_llm_debug})
+    # P55: 网络测试（检查EdgeOne云函数能否访问DeepSeek API）
+    import urllib.request, ssl, time as _time
+    network_test = {"deepseek": "unknown", "google": "unknown"}
+    try:
+        ctx_ssl = ssl.create_default_context()
+        ctx_ssl.check_hostname = False; ctx_ssl.verify_mode = ssl.CERT_NONE
+        start = _time.time()
+        req = urllib.request.Request("https://api.deepseek.com/v1/models", headers={'User-Agent': 'mq/1.0'})
+        with urllib.request.urlopen(req, timeout=5, context=ctx_ssl) as resp:
+            network_test["deepseek"] = f"ok ({_time.time()-start:.1f}s)"
+    except Exception as e:
+        network_test["deepseek"] = f"fail ({str(e)[:50]})"
+    try:
+        start = _time.time()
+        req = urllib.request.Request("https://www.google.com", headers={'User-Agent': 'mq/1.0'})
+        with urllib.request.urlopen(req, timeout=5, context=ctx_ssl) as resp:
+            network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
+    except Exception as e:
+        network_test["google"] = f"fail ({str(e)[:50]})"
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v8.65-network-test", "has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
