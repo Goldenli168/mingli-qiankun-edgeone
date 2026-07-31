@@ -837,10 +837,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                 except Exception:
                     pass
 
-    # ===== 大运LLM: 串行调用(流年池已跑10s,剩余~12-15s给大运) =====
-    # 1完整(8s) + 2精简(6s) = 14s < 15s ✓
+    # ===== 大运LLM: 只处理当前大运（避免DeepSeek限流） =====
     _age_now = _now - solar_year
-    _dayun_pending = []  # 待LLM的大运列表（当前+未来）
+    _dayun_pending = []  # 待LLM的大运列表（仅当前大运）
     _dayun_past = []     # 过去大运列表（模板fallback）
     for dy in result["大运"]:
         _age_end = dy.get('结束年龄', 0)
@@ -849,8 +848,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
         if _age_end < _age_now:
             _dayun_past.append(dy)
             continue
-        # 加入待LLM列表(当前+未来所有)
-        _dayun_pending.append(dy)
+        # P55: 只处理当前大运（避免DeepSeek限流）
+        if _age_start <= _age_now <= _age_end:
+            _dayun_pending.append(dy)
+        else:
+            _dayun_past.append(dy)  # 未来大运也模板fallback
 
     # P54: 并发调用大运LLM（当前+未来大运）+ 过去大运模板fallback
     # 策略: ThreadPoolExecutor 并发3个，总时间从50s→20s
