@@ -747,9 +747,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                                                    sihua=_SIHUA_TABLE.get(GAN[(yr-4)%10], ["","","",""]))
     
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
-    # 流年LLM从并行池走，不再串行逐个调用
+    # P55: DeepSeek限流严重，完全禁用LLM（所有分析用模板fallback）
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50  # P53: 50s（分批处理大运LLM）
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 50
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -758,14 +758,13 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             break
 
     # 仅标记当前大运内的流年需LLM处理(在并行池里统一做)
-    # P55: 不处理流年LLM（DeepSeek限流严重，流年用模板fallback）
     _liunian_llm_years = set()
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
 
-    # 总结（概要，保留）
-    tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    # P55: 完全禁用LLM（DeepSeek限流严重）
+    # tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
 
     # ===== 流年+总结池: 先跑(10s硬上限,剩余时间留给大运) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 10)  # 最多10s
