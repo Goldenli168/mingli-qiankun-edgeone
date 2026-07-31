@@ -758,21 +758,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             break
 
     # 仅标记当前大运内的流年需LLM处理(在并行池里统一做)
-    # P55: 只处理今年（减少LLM调用，避免DeepSeek限流）
+    # P55: 不处理流年LLM（DeepSeek限流严重，流年用模板fallback）
     _liunian_llm_years = set()
-    for ln in _liunian_raw:
-        yr = ln["年份"]
-        if yr == _now:  # 只处理今年
-            _liunian_llm_years.add(yr)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
-
-    # 流年: 只处理今年
-    for ln in _liunian_raw:
-        yr = ln["年份"]
-        if yr in _liunian_llm_years:
-            tasks.append(("liunian", ln, _build_liunian_context(ln, result, _natal_patterns, solar_year)))
 
     # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
