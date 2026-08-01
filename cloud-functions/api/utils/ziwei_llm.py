@@ -9,6 +9,19 @@ from .llm_client import llm_call
 _last_llm_debug = []
 
 
+def _age_stage(age):
+    """人生阶段描述(P59: 用于LLM年龄约束,防止对小孩谈婚姻职场)"""
+    if age < 7: return "幼儿期,只能谈:家庭环境、性格雏形、健康养育,严禁谈学业压力/感情/事业/财富"
+    if age < 13: return "童年期(小学阶段),只能谈:学业启蒙、兴趣培养、性格养成、家庭氛围、童年健康,严禁谈婚姻/职场/投资"
+    if age < 19: return "青少年期(中学阶段),侧重:学业考试、叛逆期心理、同学关系、兴趣方向,严禁谈婚姻/职场"
+    if age < 24: return "青年早期(大学或初入社会),侧重:学业职业起点、初恋与情感探索、独立生活、方向选择"
+    if age < 31: return "青年期(20多岁),侧重:事业打拼与跳槽选择、婚恋相亲、租房买房压力、自我定位"
+    if age < 41: return "壮年早期(30多岁),侧重:事业上升与瓶颈、婚姻经营、育儿压力、房贷车贷、健康预警"
+    if age < 51: return "壮年后期(40多岁),侧重:事业高原与转型、子女升学、父母养老、中年婚姻经营、慢性病预防"
+    if age < 61: return "中年期(50多岁),侧重:事业收尾与传承、子女成家立业、孙辈、退休规划、健康管理"
+    return "晚年期(60岁以上),侧重:退休生活、健康养生、含饴弄孙、财富传承、心态调适"
+
+
 def _build_liunian_context(ln, result, patterns, solar_year):
     """构建流年LLM上下文"""
     year = ln.get("年份", 0)
@@ -41,12 +54,16 @@ def _build_liunian_context(ln, result, patterns, solar_year):
                 break
     # 时代背景
     era_info = "2026年丙午，火旺之年，利行动忌冲动"
+    # P59: 流年对应年龄+人生阶段
+    ln_age = year - solar_year + 1  # 虚岁
     return {
         "ln_gz": gz,
         "ln_palace_sihua": ln_palace_sihua,
         "ln_taisui": f"{year}年{year_zhi}",
         "ln_star_mw": ln_star_mw,
         "era_info": era_info,
+        "ln_age": ln_age,
+        "age_stage": _age_stage(ln_age),
     }
 
 
@@ -59,6 +76,8 @@ def _build_dayun_context(dy, result, patterns):
     # P58: 大运四化(用户要求:维度分析须结合四化影响)
     sihua = dy.get("大运四化", {})
     sihua_str = " ".join([f"{k}·{v}" for k, v in sihua.items()])
+    # P59: 大运起始年龄的人生阶段(防止对小孩谈婚姻职场)
+    age_stage = _age_stage(dy.get("起始年龄", 30))
     return {
         "dayun_age": f"{dy.get('起始年龄','')}-{dy.get('结束年龄','')}",
         "dayun_gong": dy.get("大运宫名", dy.get("宫位", "")),
@@ -67,6 +86,7 @@ def _build_dayun_context(dy, result, patterns):
         "bazi": bazi,
         "scores": score_str,
         "sihua": sihua_str,
+        "age_stage": age_stage,
     }
 
 
@@ -117,6 +137,21 @@ def _build_summary_context(result, patterns):
     }
 
 
+def _build_feihua_context(result, solar_year):
+    """构建三维四化LLM上下文(P59: 大白话接地气解读)"""
+    import datetime as _dt2
+    feihua = result.get("飞化分析", {})
+    def _fmt(items):
+        return " ".join([f"{it.get('四化','')}·{it.get('星曜','')}落{it.get('来源宫','')}宫" for it in items])
+    age = _dt2.datetime.now().year - solar_year + 1  # 当前虚岁
+    return {
+        "natal": _fmt(feihua.get("飞化", [])),
+        "dayun": _fmt(feihua.get("大运四化", [])),
+        "liunian": _fmt(feihua.get("流年四化", [])),
+        "age": age,
+    }
+
+
 def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
 
@@ -126,6 +161,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【必须使用以下命盘数据,编造宫位将导致分析完全错误】
 化曜落宫: {ctx.get("ln_palace_sihua","")}  太岁: {ctx.get("ln_taisui","")}
 命宫庙旺: {ctx.get("ln_star_mw","")}  特征: {ctx.get("era_info","")}
+命主该年{ctx.get("ln_age","")}岁(虚岁),处于:{ctx.get("age_stage","")}
+
+【年龄约束】所有分析必须符合命主该年实际年龄的生活场景(例如对10岁孩子只谈学业兴趣,对40岁的人谈事业家庭健康),严禁出现与年龄不符的内容(如对小孩谈婚姻投资,对老人谈求职)。
 
 |||分隔3段,禁止输出"A""B""C"等标题:
 
@@ -146,13 +184,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     elif gen_type == "dayun":
         sc = ctx.get('scores','')
         sihua = ctx.get('sihua','')
+        stage = ctx.get('age_stage','')
         prompt = f"""资深命理师。请分析这大运,输出7个维度的点评:
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。大运四化:{sihua}。维度:{sc}。
+命主在此大运处于:{stage}
 要求:
 1. 输出7个维度:财富、事业、婚姻、子女、父母、健康、大运整体结论
-2. 每维严格控制在80字以内(不超过85字),必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响,如化忌入某宫带来的风险、化禄化权带来的机遇
-3. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
-4. 口语务实,结合时代背景,直接输出,不要多余开场白。"""
+2. 前6维每维严格控制在80字以内,必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响
+3. 大运整体结论150字左右,详细分析这十年的整体走势、关键策略与人生建议
+4. 【重要】所有内容必须符合命主该年龄段的实际生活场景,例如对3-12岁儿童只能谈学业兴趣家庭,严禁谈婚姻职场投资;对60岁以上老人不谈跳槽晋升
+5. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
+6. 口语务实,直接输出,不要多余开场白。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
@@ -160,6 +202,20 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
 7维(财富/事业/婚姻/子女/父母/健康/整体结论)各40-50字。
 口语务实,直接输出。"""
+
+    elif gen_type == "feihua":
+        prompt = f"""你是说话接地气的资深命理师,像朋友聊天一样解读四化飞星,说人话。
+命主{ctx.get('age','')}岁。三组四化数据:
+本命四化:{ctx.get('natal','')}
+大运四化:{ctx.get('dayun','')}
+流年四化:{ctx.get('liunian','')}
+
+要求:
+1. 逐条输出共12条,格式严格为: "本命化X·星落X宫: 大白话解读" / "大运化X·星落X宫: ..." / "流年化X·星落X宫: ..."
+2. 每条30-40字,联系命主{ctx.get('age','')}岁的真实生活场景(职场、房贷、孩子教育、父母健康、婚姻关系等)
+3. 化禄=机会与收获,化权=主导与压力,化科=贵人与名声,化忌=风险与波折,解读必须符合吉凶性质
+4. 严禁空话套话("宜守不宜攻""凡事留有余地""把握机遇""展现才华"等),要具体到可感知的事(如"今年赚钱门路多,但别裸辞""跟配偶容易为钱拌嘴,工资卡别藏着掖着")
+5. 直接输出12条,不要开场白不要总结。"""
 
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
@@ -174,7 +230,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v21"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v22"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）

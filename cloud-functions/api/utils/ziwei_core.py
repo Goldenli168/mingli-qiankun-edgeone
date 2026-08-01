@@ -13,7 +13,7 @@ from .bazi_data import *
 from .ziwei_data import *
 
 # P59: 导入LLM模块（拆分自 ziwei_core.py）
-from .ziwei_llm import _llm_generate, _build_liunian_context, _build_dayun_context, _build_summary_context
+from .ziwei_llm import _llm_generate, _build_liunian_context, _build_dayun_context, _build_summary_context, _build_feihua_context
 
 # ---- 庙旺查询工具函数 ----
 def _get_miaowang_label(star, zhi):
@@ -776,6 +776,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     # 总结（概要，保留）
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
+    # P59: 三维四化大白话解读(接地气,替代生硬模板)
+    tasks.append(("feihua", result, _build_feihua_context(result, solar_year)))
 
     # ===== 流年+总结池: 先跑(120s硬上限,自建服务器超时时间无限制) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 120)  # P56: 10s→120s（自建服务器超时时间无限制）
@@ -835,6 +837,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
                     elif gen_type == "summary":
                         target["命盘总结"] = llm
+                    elif gen_type == "feihua":
+                        # P59: 大白话解读,按行拆分12条
+                        _fh_lines = [l.strip() for l in llm.split("\n") if l.strip() and "化" in l and "宫" in l]
+                        if _fh_lines:
+                            target.setdefault("飞化分析", {})["llm解读"] = _fh_lines
                 except Exception:
                     pass
 

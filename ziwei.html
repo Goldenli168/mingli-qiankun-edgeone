@@ -979,8 +979,22 @@ function renderResult(data) {
 
   if (impactAnalysis['本命'] || relationAnalysis.length > 0 || synthesisAnalysis.length > 0) {
     feihuaHtml += '<div style="grid-column:1/-1;margin-bottom:12px">';
-    // 影响分析
-    if (impactAnalysis['本命']) {
+    // P59: 三维四化大白话解读(LLM接地气版,优先显示)
+    var llmFeihua = feihuaData['llm解读'] || [];
+    if (llmFeihua.length > 0) {
+      feihuaHtml += '<div style="margin-bottom:12px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:6px">📊 三维四化影响分析</div>';
+      var _lvlColors = {'本命':'var(--gold)','大运':'#3498db','流年':'#2ecc71'};
+      for (var lf = 0; lf < llmFeihua.length; lf++) {
+        var _line = llmFeihua[lf];
+        var _clr = '#888';
+        if (_line.indexOf('本命') === 0) _clr = _lvlColors['本命'];
+        else if (_line.indexOf('大运') === 0) _clr = _lvlColors['大运'];
+        else if (_line.indexOf('流年') === 0) _clr = _lvlColors['流年'];
+        feihuaHtml += '<div style="font-size:0.78em;color:var(--text);line-height:1.6;padding-left:8px;border-left:2px solid ' + _clr + ';margin-bottom:4px">' + _line + '</div>';
+      }
+      feihuaHtml += '</div>';
+    } else if (impactAnalysis['本命']) {
+      // 模板fallback(LLM未生成时)
       feihuaHtml += '<div style="margin-bottom:12px"><div style="font-size:0.85em;color:var(--gold);letter-spacing:2px;margin-bottom:6px">📊 三维四化影响分析</div>';
       var impactLevels = {'本命':'var(--gold)','大运':'#3498db','流年':'#2ecc71'};
       for (var level in impactAnalysis) {
