@@ -465,14 +465,18 @@ def _get_active_patterns(natal_patterns, active_stars, active_sihua=None):
     return activations
 
 
-def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None):
+def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None, force_refresh=False):
     """
     紫微斗数全盘分析
     输入: 公历日期 + 时辰(0-23) + 性别
     返回: 完整紫微命盘数据
     ln_weights: 可选 dict，覆盖流年评分权重。Key: dy_floor, ln_ming, ln_aux,
                 sihua_star, sihua_aux, sanfang。None 时使用默认值。
+    force_refresh: True时强制重新生成所有LLM内容(勾选"强制刷新LLM")
     """
+    # P60: 设置LLM强制刷新标志(模块级,本次请求内所有LLM调用生效)
+    from . import ziwei_llm as _zllm
+    _zllm._FORCE_REFRESH = force_refresh
     try:
         from iztro_py import astro
     except ImportError:

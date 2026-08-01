@@ -8,6 +8,9 @@ from .llm_client import llm_call
 # 诊断日志（最多存10条）
 _last_llm_debug = []
 
+# P60: 强制刷新LLM标志(由ziwei_core设置,勾选"强制刷新LLM"时为True)
+_FORCE_REFRESH = False
+
 
 def _age_stage(age):
     """人生阶段描述(P59: 用于LLM年龄约束,防止对小孩谈婚姻职场)"""
@@ -238,7 +241,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
-    result = llm_call(prompt, ck, max_tokens=max_tok)
+    result = llm_call(prompt, ck, max_tokens=max_tok, skip_cache=_FORCE_REFRESH)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
     _last_llm_debug.append({

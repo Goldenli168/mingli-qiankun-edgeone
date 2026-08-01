@@ -206,7 +206,7 @@ def ziwei_api():
             pass
 
         try:
-            result = full_ziwei_analysis(year, month, day, hour, sex)
+            result = full_ziwei_analysis(year, month, day, hour, sex, force_refresh=force_refresh)
             # P55: 写入缓存
             _ZIWEI_CACHE[cache_key] = result
             _save_ziwei_cache(cache_key, result)

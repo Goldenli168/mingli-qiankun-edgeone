@@ -609,7 +609,7 @@ function doAnalyze() {
 
   // P57: 202轮询+断连重试（外网链路~80s断连，服务端single-flight计算完成后缓存HIT秒回）
   var _ziweiAttempt = 0;
-  var _ziweiBody = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex});
+  var _ziweiBody = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doZiweiFetch() {

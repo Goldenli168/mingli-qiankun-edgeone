@@ -60,13 +60,13 @@ def _save_entry(key: str, content: str):
 _LLM_CACHE = _load_cache()
 
 
-def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: int = 2) -> str | None:
+def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: int = 2, skip_cache: bool = False) -> str | None:
     """通用 LLM 调用: 发 prompt 到 DeepSeek, 带缓存, 失败重试, 重试用尽返回 None"""
     import json, urllib.request, ssl
 
     # 缓存
     ck = cache_key or f"generic:{hash(prompt)}"
-    if ck in _LLM_CACHE:
+    if not skip_cache and ck in _LLM_CACHE:  # P60: skip_cache=强制刷新LLM
         return _LLM_CACHE[ck]
 
     if not DEEPSEEK_API_KEY:
