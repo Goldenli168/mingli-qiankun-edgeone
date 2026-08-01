@@ -41,6 +41,10 @@ def _build_liunian_context(ln, result, patterns, solar_year):
     for k, v in sihua.items():
         if v:
             sihua_parts.append(f"{k}:{v}")
+    # P59: ln["四化"]为空时从飞化分析补充(否则流年分析误报"化忌在无宫")
+    if not sihua_parts:
+        for it in result.get("飞化分析", {}).get("流年四化", []):
+            sihua_parts.append(f"{it.get('四化','')}:{it.get('星曜','')}落{it.get('来源宫','')}宫")
     ln_palace_sihua = " | ".join(sihua_parts) if sihua_parts else "无"
     # 命宫庙旺
     ln_star_mw = ""
