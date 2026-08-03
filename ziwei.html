@@ -622,7 +622,7 @@ function doAnalyze() {
     .then(function(resp) {
       // 202: 服务端正在计算(single-flight), 30s后重试
       if (resp.status === 202) {
-        if (_ziweiAttempt > 10) throw new Error('分析超时');
+        if (_ziweiAttempt > 12) throw new Error('分析超时');
         if (_loadingText) _loadingText.textContent = '深度分析进行中（约1-2分钟），请稍候...';
         return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
       }
@@ -638,7 +638,7 @@ function doAnalyze() {
       return resp.json();
     }, function(netErr) {
       // 网络断开(链路idle超时): 服务端仍会继续算完并写缓存, 30s后重试即可HIT
-      if (_ziweiAttempt > 10) throw netErr;
+      if (_ziweiAttempt > 12) throw netErr;
       if (_loadingText) _loadingText.textContent = '分析时间较长，自动重试中（服务端持续计算）...';
       return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
     });

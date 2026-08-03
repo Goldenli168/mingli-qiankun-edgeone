@@ -753,7 +753,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ③ LLM 并行批量生成(流年+大运+总结),控总时40s
     # 流年LLM从并行池走，不再串行逐个调用
     import datetime as _dt, time as _time
-    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 180  # P56: 50s→180s（自建服务器超时时间无限制）
+    _now = _dt.datetime.now().year; _llm_deadline = _time.time() + 350  # P61: 180s→350s（流年池150s+大运池150s+余量,覆盖全部未来大运）
     _age = _now - solar_year
     _dy_end = _now
     for dy in result["大运"]:
@@ -783,8 +783,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # P59: 三维四化大白话解读(接地气,替代生硬模板)
     tasks.append(("feihua", result, _build_feihua_context(result, solar_year)))
 
-    # ===== 流年+总结池: 先跑(120s硬上限,自建服务器超时时间无限制) =====
-    _pool_deadline = min(_llm_deadline, _time.time() + 120)  # P56: 10s→120s（自建服务器超时时间无限制）
+    # ===== 流年+总结池: 先跑(150s硬上限,P61: 120→150 给大运留足时间) =====
+    _pool_deadline = min(_llm_deadline, _time.time() + 150)
     if tasks and _time.time() < _pool_deadline:
         with ThreadPoolExecutor(max_workers=1) as pool:  # P56: 3→1（串行调用，避免DeepSeek限流）
             futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _pool_deadline}
@@ -922,8 +922,8 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             except Exception:
                 return _dy, None
 
-        # P55: 串行调用（max_workers=1，避免DeepSeek限流）
-        _pool_deadline = min(_llm_deadline, _time.time() + 20)  # 最多20s
+        # P61: 串行调用大运LLM（150s预算,覆盖当前+全部未来大运,用户硬性要求）
+        _pool_deadline = min(_llm_deadline, _time.time() + 150)  # P61: 20s→150s（此前只够1-2个大运,其余未来大运全模板fallback）
         for _dy in _dayun_pending:
             if _time.time() > _pool_deadline:
                 break
