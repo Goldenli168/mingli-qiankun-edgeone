@@ -4,6 +4,7 @@
 版本: v1.0
 """
 from .llm_client import llm_call
+from .ziwei_data import _SIHUA_TABLE, _SIHUA_LABELS
 
 # 诊断日志（最多存10条）
 _last_llm_debug = []
@@ -44,10 +45,20 @@ def _build_liunian_context(ln, result, patterns, solar_year):
     for k, v in sihua.items():
         if v:
             sihua_parts.append(f"{k}:{v}")
-    # P59: ln["四化"]为空时从飞化分析补充(否则流年分析误报"化忌在无宫")
+    # P59: ln["四化"]为空时用该流年自己的天干算四化+星曜落本命宫位
+    # (严禁用飞化分析的流年四化——那是固定当前年的数据,会导致2028年错用2026年四化)
     if not sihua_parts:
-        for it in result.get("飞化分析", {}).get("流年四化", []):
-            sihua_parts.append(f"{it.get('四化','')}:{it.get('星曜','')}落{it.get('来源宫','')}宫")
+        ln_gan = gz[0] if gz else ""  # 流年天干(如"戊申"→"戊")
+        sihua_stars = _SIHUA_TABLE.get(ln_gan, ["", "", "", ""])  # [禄,权,科,忌]星名
+        # 星曜在本命盘的宫位
+        star_palace = {}
+        for p in result.get("十二宫", []):
+            for s in (p.get("主星", []) or []) + (p.get("辅星", []) or []):
+                star_palace.setdefault(s, p.get("宫名", ""))
+        for hi, sname in enumerate(sihua_stars):
+            if sname:
+                palace = star_palace.get(sname, "?")
+                sihua_parts.append(f"{_SIHUA_LABELS[hi]}:{sname}落{palace}宫")
     ln_palace_sihua = " | ".join(sihua_parts) if sihua_parts else "无"
     # 命宫庙旺
     ln_star_mw = ""
@@ -237,7 +248,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v22"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v23"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
