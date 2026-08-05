@@ -1772,7 +1772,15 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 
 柱间特殊关系:{rel_str}
 
-要求(每柱独立一段,格式严格为"年柱(0-15岁): 内容"):
+【干支锁定-最高优先级】四柱干支已给定:年柱{fp['year'][0]}{fp['year'][1]}、月柱{fp['month'][0]}{fp['month'][1]}、日柱{fp['day'][0]}{fp['day'][1]}、时柱{fp['hour'][0]}{fp['hour'][1]}。严禁更改/编造干支,解读中引用干支时必须与给定完全一致(曾有模型把日柱{fp['day'][0]}{fp['day'][1]}错写成其他干支导致分析全错)。
+
+输出格式(严格遵守,每段开头必须带方括号标注的给定干支):
+年柱(0-15岁)[{fp['year'][0]}{fp['year'][1]}]: 内容
+月柱(16-30岁)[{fp['month'][0]}{fp['month'][1]}]: 内容
+日柱(31-45岁)[{fp['day'][0]}{fp['day'][1]}]: 内容
+时柱(46岁后)[{fp['hour'][0]}{fp['hour'][1]}]: 内容
+
+要求:
 1. 共4段,每柱80-100字
 2. 年柱月柱用回顾验证语气:描述该阶段最可能的典型经历,让命主有"确实如此"的共鸣,并点出该阶段如何塑造了现在的性格习惯(如"这解释了你现在为什么...")
 3. 日柱(31-45岁)是重点:命主今年{age}岁正处此运,详写当下核心课题——事业处境/婚姻状态/健康预警的真实画面
@@ -1781,9 +1789,11 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v1", max_tokens=800)
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v2", max_tokens=800)
         if result:
-            # 解析4段: "年柱(0-15岁): 内容"
+            # 解析4段并校验段首干支: "年柱(0-15岁)[丁卯]: 内容"
+            import re as _re
+            gz_map = {"年柱": fp['year'], "月柱": fp['month'], "日柱": fp['day'], "时柱": fp['hour']}
             parsed = {}
             cur_key = None
             for line in result.strip().split("\n"):
@@ -1791,16 +1801,24 @@ def _sizhu_llm(fp, bz, sex, birth_year):
                 if not line:
                     continue
                 matched = False
-                for p, cn in pos_cn.items():
+                for cn, (qg, qz) in gz_map.items():
                     if line.startswith(cn):
-                        # "年柱(0-15岁): xxx" 或 "年柱：xxx"
-                        body = line.split(":", 1)[-1].split("：", 1)[-1].strip()
-                        # 去掉括号段
-                        import re as _re
-                        body = _re.sub(r'^[（(][^)）]*[)）]\s*[:：]?\s*', '', body)
-                        if len(body) > 10:
-                            parsed[cn] = body
-                            cur_key = cn
+                        # 校验方括号干支: [丁卯]必须等于给定干支
+                        m = _re.match(r'^' + cn + r'[（(][^)）]*[)）]\s*\[([^\]]+)\]\s*[:：]?\s*(.*)', line)
+                        if m:
+                            mark = m.group(1).strip()
+                            body = m.group(2).strip()
+                            if mark == f"{qg}{qz}" and len(body) > 10:
+                                parsed[cn] = body
+                                cur_key = cn
+                        else:
+                            # 无方括号标注:兼容旧格式,但要求该行不含其他干支组合开头
+                            body = line.split(":", 1)[-1].split("：", 1)[-1].strip()
+                            body = _re.sub(r'^[（(][^)）]*[)）]\s*[:：]?\s*', '', body)
+                            # 安全检查:前6字不得以其他天干开头(防止"戊午天上火"式编造)
+                            if len(body) > 10 and body[:1] not in "甲乙丙丁戊己庚辛壬癸":
+                                parsed[cn] = body
+                                cur_key = cn
                         matched = True
                         break
                 if not matched and cur_key and len(line) > 5:
