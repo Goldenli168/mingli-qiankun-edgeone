@@ -13,7 +13,7 @@ from .bazi_data import *
 from .ziwei_data import *
 
 # P59: 导入LLM模块（拆分自 ziwei_core.py）
-from .ziwei_llm import _llm_generate, _build_liunian_context, _build_dayun_context, _build_summary_context, _build_feihua_context
+from .ziwei_llm import _llm_generate, _build_liunian_context, _build_dayun_context, _build_summary_context, _build_feihua_context, _build_monthly_context
 
 # ---- 庙旺查询工具函数 ----
 def _get_miaowang_label(star, zhi):
@@ -782,6 +782,11 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     tasks.append(("summary", result, _build_summary_context(result, _natal_patterns)))
     # P59: 三维四化大白话解读(接地气,替代生硬模板)
     tasks.append(("feihua", result, _build_feihua_context(result, solar_year)))
+    # P62: 行动清单LLM个性化建议(结合命主流月宫位+星曜+四化,替代固定文案)
+    for ln in _liunian_raw:
+        if ln["年份"] == _now:
+            tasks.append(("monthly", ln, _build_monthly_context(ln, result, solar_year)))
+            break
 
     # ===== 流年+总结池: 先跑(150s硬上限,P61: 120→150 给大运留足时间) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 150)
@@ -846,6 +851,18 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
                         _fh_lines = [l.strip() for l in llm.split("\n") if l.strip() and "化" in l and "宫" in l]
                         if _fh_lines:
                             target.setdefault("飞化分析", {})["llm解读"] = _fh_lines
+                    elif gen_type == "monthly":
+                        # P62: 行动建议,格式"正月：建议"按行拆成dict
+                        _acts = {}
+                        for _l in llm.split("\n"):
+                            _l = _l.strip().lstrip("0123456789.、 ")
+                            if "：" in _l:
+                                _mk, _mv = _l.split("：", 1)
+                                _mk = _mk.strip().strip('* ')
+                                if _mk.endswith("月") and len(_mv.strip()) > 5:
+                                    _acts[_mk] = _mv.strip()
+                        if _acts:
+                            target["行动建议"] = _acts
                 except Exception:
                     pass
 

@@ -816,6 +816,7 @@ function renderResult(data) {
         '十一月': '学习充电，宜考试进修',
         '十二月': '总结复盘，规划明年'
       };
+      var llmActs = currentYearData['行动建议'] || {};  // P62: LLM个性化建议(结合命主流月数据)
       for (var mi = 0; mi < months.length && mi < 12; mi++) {
         var m = months[mi];
         if (!m || !m.trim()) continue;
@@ -823,7 +824,7 @@ function renderResult(data) {
         var parts = sep ? m.split(sep) : [m];
         var label = (parts[0] || ('月' + (mi + 1))).trim();
         var detail = (parts.slice(1).join(sep || '')).trim();
-        var action = monthActions[label] || '顺势而为，把握机遇';
+        var action = llmActs[label] || monthActions[label] || '顺势而为，把握机遇';
         actionHtml += '<div class="feihua-card" style="border-left:4px solid var(--gold)">' +
           '<div style="font-size:0.85em;font-weight:bold;color:var(--gold);margin-bottom:4px">' + label + '</div>' +
           '<div style="font-size:0.75em;color:var(--text-dim);line-height:1.5;margin-bottom:4px">' + detail + '</div>' +

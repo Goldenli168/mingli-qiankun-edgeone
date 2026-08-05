@@ -170,6 +170,19 @@ def _build_feihua_context(result, solar_year):
     }
 
 
+def _build_monthly_context(ln, result, solar_year):
+    """构建行动清单LLM上下文(P62: 每月个性化建议)"""
+    year = ln.get("年份", 0)
+    months = ln.get("逐月", [])[:12]
+    age = year - solar_year + 1  # 该年虚岁
+    return {
+        "year": year,
+        "months": "\n".join(months),
+        "age": age,
+        "age_stage": _age_stage(age),
+    }
+
+
 def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     """通用LLM生成器: liunian/dayun/summary，失败返回None回退模板"""
 
@@ -235,6 +248,19 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 4. 严禁空话套话("宜守不宜攻""凡事留有余地""把握机遇""展现才华"等),要具体到可感知的事(如"今年赚钱门路多,但别裸辞""跟配偶容易为钱拌嘴,工资卡别藏着掖着")
 5. 直接输出12条,不要开场白不要总结。"""
 
+    elif gen_type == "monthly":
+        prompt = f"""你是说话接地气的资深命理师,给命主的{ctx.get('year','')}年12个月各写一条具体行动建议。
+命主该年{ctx.get('age','')}岁(虚岁),处于:{ctx.get('age_stage','')}
+每月运势数据(月份：宫位(星曜) 四化 — 主题):
+{ctx.get('months','')}
+
+要求:
+1. 输出12条,格式严格为"正月：建议内容",月份必须与输入逐月对应
+2. 每条25-35字,结合该月宫位主题+星曜特质+四化吉凶(如有),给出可立即执行的具体行动
+3. 联系命主{ctx.get('age','')}岁的真实生活(职场/家庭/财务/健康/孩子),说人话
+4. 严禁空话套话("顺势而为""把握机遇""注意身体""宜社交活动"等),要具体到事(如"把年假排在这个月带爸妈做全身体检""这个月别签任何合同,重要谈判推到下月")
+5. 直接输出12条,不要开场白不要总结。"""
+
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
 
@@ -248,7 +274,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v23"
+        ck = f"zw:{gen_type}:{hash(str(age))}:v24"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
