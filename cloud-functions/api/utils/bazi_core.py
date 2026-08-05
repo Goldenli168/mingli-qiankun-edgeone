@@ -1772,7 +1772,8 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 
 柱间特殊关系:{rel_str}
 
-【干支锁定-最高优先级】四柱干支已给定:年柱{fp['year'][0]}{fp['year'][1]}、月柱{fp['month'][0]}{fp['month'][1]}、日柱{fp['day'][0]}{fp['day'][1]}、时柱{fp['hour'][0]}{fp['hour'][1]}。严禁更改/编造干支,解读中引用干支时必须与给定完全一致(曾有模型把日柱{fp['day'][0]}{fp['day'][1]}错写成其他干支导致分析全错)。
+【干支锁定-最高优先级】四柱干支已给定:年柱{fp['year'][0]}{fp['year'][1]}、月柱{fp['month'][0]}{fp['month'][1]}、日柱{fp['day'][0]}{fp['day'][1]}、时柱{fp['hour'][0]}{fp['hour'][1]}。
+严禁更改/编造干支;严禁在解读中引用给定四柱之外的任何天干地支(如日柱是{fp['day'][0]}{fp['day'][1]}就绝不准出现"午火""壬戌"等);不要提及任何具体年份的天干地支;分析羊刃/禄/桃花等神煞时必须基于给定干支推导并说明依据。
 
 输出格式(严格遵守,每段开头必须带方括号标注的给定干支):
 年柱(0-15岁)[{fp['year'][0]}{fp['year'][1]}]: 内容
@@ -1789,8 +1790,30 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v2", max_tokens=800)
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v3", max_tokens=800)
         if result:
+            # P65: 内容级干支编造检测——只允许四柱中的干支
+            _GAN = set("甲乙丙丁戊己庚辛壬癸")
+            _ZHI = set("子丑寅卯辰巳午未申酉戌亥")
+            _allow_gan = {fp['year'][0], fp['month'][0], fp['day'][0], fp['hour'][0]}
+            _allow_zhi = {fp['year'][1], fp['month'][1], fp['day'][1], fp['hour'][1]}
+            _allow_gz = {f"{fp[p][0]}{fp[p][1]}" for p in ['year','month','day','hour']}
+            _WX5 = "水火金木土"
+            def _fabricated(text):
+                """检测文本中引用四柱之外的干支(编造证据),返回违禁词或None"""
+                # 1) 60甲子组合(非四柱)
+                for g in _GAN:
+                    for z in _ZHI:
+                        gz = g + z
+                        if gz in text and gz not in _allow_gz:
+                            return gz
+                # 2) "X水/午火/戌土"式引用(非四柱干支+五行)
+                for i in range(len(text) - 1):
+                    ch, nxt = text[i], text[i+1]
+                    if nxt in _WX5:
+                        if (ch in _GAN and ch not in _allow_gan) or (ch in _ZHI and ch not in _allow_zhi):
+                            return ch + nxt
+                return None
             # 解析4段并校验段首干支: "年柱(0-15岁)[丁卯]: 内容"
             import re as _re
             gz_map = {"年柱": fp['year'], "月柱": fp['month'], "日柱": fp['day'], "时柱": fp['hour']}
@@ -1823,8 +1846,14 @@ def _sizhu_llm(fp, bz, sex, birth_year):
                         break
                 if not matched and cur_key and len(line) > 5:
                     parsed[cur_key] = parsed.get(cur_key, "") + line
-            if len(parsed) >= 3:
-                return parsed
+            # 内容级校验:发现编造干支的段落弃用(前端fallback模板)
+            clean = {}
+            for cn, body in parsed.items():
+                bad = _fabricated(body)
+                if not bad:
+                    clean[cn] = body
+            if len(clean) >= 3:
+                return clean
     except Exception:
         pass
     return None
