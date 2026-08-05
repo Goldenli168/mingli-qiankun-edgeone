@@ -23,7 +23,7 @@ from utils.ziwei_core import full_ziwei_analysis
 # ===== 排盘缓存（P55） =====
 _CACHE_DIR = os.environ.get("TMPDIR", os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__))))
 _ZIWEI_CACHE_FILE = os.path.join(_CACHE_DIR, "ml_ziwei_cache.json")
-_ZIWEI_CACHE_TTL = 3600  # 1小时
+_ZIWEI_CACHE_TTL = 86400  # P63: 1小时→24小时(同一八字分析内容一天内不变,避免反复重算转圈3-4分钟)
 _ZIWEI_CACHE_MAX = 100
 
 def _load_ziwei_cache() -> dict:
