@@ -1739,8 +1739,9 @@ def _pillar_relations(fp):
     return rels
 
 
-def _sizhu_llm(fp, bz, sex, birth_year):
-    """P65: LLM四柱叙事解读(验证式+人生阶段,参考盲派段建业方法)"""
+def _sizhu_llm(fp, bz, sex, birth_year, extra_gz=None):
+    """P65: LLM四柱叙事解读(验证式+人生阶段,参考盲派段建业方法)
+    extra_gz: 额外允许的干支集合(大运/流年干支,命理分析正常组成)"""
     try:
         import datetime as _dt
         from .llm_client import llm_call
@@ -1790,7 +1791,7 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v5", max_tokens=800)
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v6", max_tokens=800)
         if result:
             # P65: 内容级干支编造检测——只允许四柱中的干支
             _GAN = set("甲乙丙丁戊己庚辛壬癸")
@@ -1798,6 +1799,8 @@ def _sizhu_llm(fp, bz, sex, birth_year):
             _allow_gan = {fp['year'][0], fp['month'][0], fp['day'][0], fp['hour'][0]}
             _allow_zhi = {fp['year'][1], fp['month'][1], fp['day'][1], fp['hour'][1]}
             _allow_gz = {f"{fp[p][0]}{fp[p][1]}" for p in ['year','month','day','hour']}
+            if extra_gz:  # 大运/流年干支放行(命理分析正常组成)
+                _allow_gz = _allow_gz | set(extra_gz)
             _WX5 = "水火金木土"
             def _fabricated(text):
                 """检测宫位地支错引(如把日柱戊午错当丁卯分析),返回违禁词或None
@@ -2033,7 +2036,17 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
     bz["四柱分析"] = pillar_analysis(fp, bz, sex)
     # P65: LLM四柱叙事解读(验证式+人生阶段,失败不影响主流程)
     try:
-        _sizhu = _sizhu_llm(fp, bz, sex, year)
+        # 大运+当年/未来3年流年干支放行(命理分析正常引用,不算编造)
+        import datetime as _dt3
+        _ny = _dt3.datetime.now().year
+        _extra = set()
+        for _dy in dl:
+            _dygz = _dy.get("干支") or _dy.get("大运干支") or ""
+            if _dygz:
+                _extra.add(_dygz)
+        for _y in range(_ny, _ny + 4):
+            _extra.add(GAN[(_y - 4) % 10] + ZHI[(_y - 4) % 12])
+        _sizhu = _sizhu_llm(fp, bz, sex, year, extra_gz=_extra)
         if _sizhu:
             bz["四柱分析LLM"] = _sizhu
     except Exception:
