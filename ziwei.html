@@ -359,7 +359,7 @@
   <div class="spinner"></div>
   <div class="loading-text" id="loadingText">正在排盘分析，请稍候…</div>
   <div class="loading-stages" id="loadingStages" style="display:none;margin-top:8px;font-size:0.78em;color:var(--text-dim)">
-    <span style="color:var(--gold)">⏳</span> AI 正在进行深度分析，预计 30-50 秒，请耐心等待…
+    <span style="color:var(--gold)">⏳</span> AI 正在进行深度分析（大运+流年全量LLM生成），约需 2-4 分钟，请耐心等待…
   </div>
 </div>
 
@@ -609,7 +609,9 @@ function doAnalyze() {
 
   // P57: 202轮询+断连重试（外网链路~80s断连，服务端single-flight计算完成后缓存HIT秒回）
   var _ziweiAttempt = 0;
-  var _ziweiBody = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh});
+  // P64: refresh仅在第1次请求生效; 轮询重试带refresh:true会导致服务端每次都重新计算(死循环)
+  var _ziweiBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh});
+  var _ziweiBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doZiweiFetch() {
@@ -617,13 +619,13 @@ function doAnalyze() {
     return fetch('/api/ziwei', {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
-      body: _ziweiBody
+      body: _ziweiAttempt === 1 ? _ziweiBody1 : _ziweiBody2
     })
     .then(function(resp) {
       // 202: 服务端正在计算(single-flight), 30s后重试
       if (resp.status === 202) {
         if (_ziweiAttempt > 12) throw new Error('分析超时');
-        if (_loadingText) _loadingText.textContent = '深度分析进行中（约1-2分钟），请稍候...';
+        if (_loadingText) _loadingText.textContent = '深度分析进行中（约2-4分钟），请稍候...';
         return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
       }
       if (!resp.ok) {

@@ -183,12 +183,14 @@ def ziwei_api():
         import hashlib as _hl
         _lock_name = "ml_lock_" + _hl.md5(cache_key.encode()).hexdigest()[:16] + ".lock"
         _lock_file = os.path.join(_CACHE_DIR, _lock_name)
-        if not force_refresh and os.path.exists(_lock_file):
+        # P64: 锁检查对force_refresh同样生效——否则前端轮询每次都带refresh:true,
+        # 每次轮询都触发新的250s计算,12次轮询=12次重复计算,永远转圈
+        if os.path.exists(_lock_file):
             try:
                 _lock_age = _time.time() - os.path.getmtime(_lock_file)
             except Exception:
                 _lock_age = 999
-            if _lock_age < 300:  # 锁5分钟内有效
+            if _lock_age < 400:  # P64: 锁400s有效(覆盖14个LLM任务~250-350s计算时长)
                 resp = jsonify({"status": "computing", "message": "深度分析进行中，请稍后重试", "retry_after": 30})
                 resp.status_code = 202
                 resp.headers["Access-Control-Allow-Origin"] = "*"
