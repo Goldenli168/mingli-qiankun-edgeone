@@ -1790,7 +1790,7 @@ def _sizhu_llm(fp, bz, sex, birth_year):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v4", max_tokens=800)
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v5", max_tokens=800)
         if result:
             # P65: 内容级干支编造检测——只允许四柱中的干支
             _GAN = set("甲乙丙丁戊己庚辛壬癸")
@@ -1800,19 +1800,19 @@ def _sizhu_llm(fp, bz, sex, birth_year):
             _allow_gz = {f"{fp[p][0]}{fp[p][1]}" for p in ['year','month','day','hour']}
             _WX5 = "水火金木土"
             def _fabricated(text):
-                """检测文本中引用四柱之外的干支(编造证据),返回违禁词或None"""
-                # 1) 60甲子组合(非四柱)
+                """检测宫位地支错引(如把日柱戊午错当丁卯分析),返回违禁词或None
+                注意:天干+五行的泛化表达(如"辛金""丙火猛烈")是命理常用语,不算编造"""
+                # 1) 60甲子组合(非四柱)——引用完整甲子=具体宫位指称,最精准的编造证据
                 for g in _GAN:
                     for z in _ZHI:
                         gz = g + z
                         if gz in text and gz not in _allow_gz:
                             return gz
-                # 2) "X水/午火/戌土"式引用(非四柱干支+五行)
+                # 2) "午火/戌土"式地支+五行引用(该地支不在四柱地支集=宫位搞错)
                 for i in range(len(text) - 1):
                     ch, nxt = text[i], text[i+1]
-                    if nxt in _WX5:
-                        if (ch in _GAN and ch not in _allow_gan) or (ch in _ZHI and ch not in _allow_zhi):
-                            return ch + nxt
+                    if nxt in _WX5 and ch in _ZHI and ch not in _allow_zhi:
+                        return ch + nxt
                 return None
             # 解析4段并校验段首干支: "年柱(0-15岁)[丁卯]: 内容"
             import re as _re
