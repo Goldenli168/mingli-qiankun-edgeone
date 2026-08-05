@@ -1708,6 +1708,110 @@ def gen_overview(bz, sex):
     return "\n\n".join(parts)
 
 
+# ===== 柱间关系计算（P65: 伏吟/透干/同支/半合,供LLM叙事） =====
+def _pillar_relations(fp):
+    """计算四柱间的特殊关系"""
+    from collections import Counter
+    pillars = [('年', fp['year']), ('月', fp['month']), ('日', fp['day']), ('时', fp['hour'])]
+    rels = []
+    # 伏吟（干支全同）
+    for i in range(len(pillars)):
+        for j in range(i + 1, len(pillars)):
+            if pillars[i][1] == pillars[j][1]:
+                rels.append(f"{pillars[i][0]}{pillars[j][0]}伏吟(同为{pillars[i][1][0]}{pillars[i][1][1]})")
+    # 天干透出3+
+    gan_cnt = Counter([p[1][0] for p in pillars])
+    for g, c in gan_cnt.items():
+        if c >= 3:
+            rels.append(f"{c}个{g}干并透(比肩/同气林立)")
+    # 地支同支3+
+    zhi_cnt = Counter([p[1][1] for p in pillars])
+    for z, c in zhi_cnt.items():
+        if c >= 3:
+            rels.append(f"{c}支皆{z}")
+    # 半合局
+    SANHE = {'申子辰': '水', '寅午戌': '火', '亥卯未': '木', '巳酉丑': '金'}
+    zhis = set(p[1][1] for p in pillars)
+    for grp, wx in SANHE.items():
+        hit = [z for z in grp if z in zhis]
+        if len(hit) >= 2:
+            rels.append(f"{''.join(hit)}半合{wx}局")
+    return rels
+
+
+def _sizhu_llm(fp, bz, sex, birth_year):
+    """P65: LLM四柱叙事解读(验证式+人生阶段,参考盲派段建业方法)"""
+    try:
+        import datetime as _dt
+        from .llm_client import llm_call
+        from .ziwei_llm import _age_stage
+        ss = bz["十神"]
+        shensha = bz.get("神煞", [])
+        nayin_map = bz.get("纳音", {})
+        pos_cn = {"year": "年柱", "month": "月柱", "day": "日柱", "hour": "时柱"}
+        age_map = {"year": "0-15岁", "month": "16-30岁", "day": "31-45岁", "hour": "46岁后"}
+        age = _dt.datetime.now().year - birth_year + 1
+        lines = []
+        for p in ["year", "month", "day", "hour"]:
+            g, z = fp[p]
+            pss = ss[p]
+            psha = [s for s in shensha if pos_cn[p] in s.get("位置", "")]
+            sha_str = "、".join([s["名称"] for s in psha]) if psha else "无"
+            cang = "、".join([f"{c}({cs})" for c, cs in zip(pss["支藏"], pss["支藏十神"])])
+            ny = nayin_map.get(pos_cn[p][0], "")
+            lines.append(f"{pos_cn[p]}({age_map[p]}) {g}{z} 天干十神:{pss['干']} 藏干:{cang} 纳音:{ny} 神煞:{sha_str}")
+        rels = _pillar_relations(fp)
+        rel_str = "、".join(rels) if rels else "无特殊"
+        bazi_str = f"{fp['year'][0]}{fp['year'][1]} {fp['month'][0]}{fp['month'][1]} {fp['day'][0]}{fp['day'][1]} {fp['hour'][0]}{fp['hour'][1]}"
+        prompt = f"""你是资深八字命理师(风格:先验证过去再断未来,说人话有叙事感),为命主解读四柱。
+命主{sex},{birth_year}年生,今年{age}岁(虚岁),当前阶段:{_age_stage(age)}。
+八字:{bazi_str},日主{bz.get('日主','')}({bz.get('日主五行','')}),{bz.get('日主状态','')}。
+
+四柱数据:
+{chr(10).join(lines)}
+
+柱间特殊关系:{rel_str}
+
+要求(每柱独立一段,格式严格为"年柱(0-15岁): 内容"):
+1. 共4段,每柱80-100字
+2. 年柱月柱用回顾验证语气:描述该阶段最可能的典型经历,让命主有"确实如此"的共鸣,并点出该阶段如何塑造了现在的性格习惯(如"这解释了你现在为什么...")
+3. 日柱(31-45岁)是重点:命主今年{age}岁正处此运,详写当下核心课题——事业处境/婚姻状态/健康预警的真实画面
+4. 时柱用前瞻规划语气:46岁后的子女教育与晚年方向,给出可提前布局的具体建议
+5. 同一神煞多柱出现时,必须区分不同人生阶段的不同表现(如将星在年柱=童年当班长孩子王,在日柱=当下职场带团队,在时柱=晚年圈中威望)
+6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
+7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
+8. 直接输出4段,不要开场白不要总结"""
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v1", max_tokens=800)
+        if result:
+            # 解析4段: "年柱(0-15岁): 内容"
+            parsed = {}
+            cur_key = None
+            for line in result.strip().split("\n"):
+                line = line.strip().strip('*').strip()
+                if not line:
+                    continue
+                matched = False
+                for p, cn in pos_cn.items():
+                    if line.startswith(cn):
+                        # "年柱(0-15岁): xxx" 或 "年柱：xxx"
+                        body = line.split(":", 1)[-1].split("：", 1)[-1].strip()
+                        # 去掉括号段
+                        import re as _re
+                        body = _re.sub(r'^[（(][^)）]*[)）]\s*[:：]?\s*', '', body)
+                        if len(body) > 10:
+                            parsed[cn] = body
+                            cur_key = cn
+                        matched = True
+                        break
+                if not matched and cur_key and len(line) > 5:
+                    parsed[cur_key] = parsed.get(cur_key, "") + line
+            if len(parsed) >= 3:
+                return parsed
+    except Exception:
+        pass
+    return None
+
+
 # ===== 四柱单独分析 =====
 def pillar_analysis(fp, bz, sex):
     """对每一柱进行单独解读，包括宫位含义、五行十神、神煞影响"""
@@ -1880,6 +1984,13 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
     bz["大运分析"] = ana_dayun_list(dl, bz, sex)
     bz["大运神煞"] = calc_dayun_shensha(dl, fp, bz)
     bz["四柱分析"] = pillar_analysis(fp, bz, sex)
+    # P65: LLM四柱叙事解读(验证式+人生阶段,失败不影响主流程)
+    try:
+        _sizhu = _sizhu_llm(fp, bz, sex, year)
+        if _sizhu:
+            bz["四柱分析LLM"] = _sizhu
+    except Exception:
+        pass
     # 每步大运下的流年分析
     bz["流年"] = {}
     for dy in dl:

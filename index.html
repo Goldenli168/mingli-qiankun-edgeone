@@ -575,21 +575,33 @@ function renderResult(data, birthYear) {
 
   // 四柱单独分析
   var paData = mp['四柱分析'] || [];
+  var paLlm = mp['四柱分析LLM'] || {};  // P65: LLM叙事解读(验证式+人生阶段)
   var paSection = document.getElementById('pillarAnalysis');
   var paGrid = document.getElementById('pillarAnalysisGrid');
   if (paData.length > 0) {
+    // P65: 当前年龄所在柱(用户40岁→日柱31-45岁高亮)
+    var _nowAge = new Date().getFullYear() - parseInt((mp['基本信息']||{})['公历'] || '1987') + 1;
+    var _ageRanges = {'年柱':[0,15],'月柱':[16,30],'日柱':[31,45],'时柱':[46,120]};
     paGrid.innerHTML = paData.map(function(p) {
       var g = p['干支'][0], z = p['干支'][1];
       var shenshaTags = (p['神煞']||[]).map(function(s) {
         return '<span style="color:var(--gold);font-size:0.75em">●' + s + '</span>';
       }).join(' ');
-      return '<div class="pillar-analysis-card">' +
+      // P65: LLM解读优先,模板fallback
+      var _cn = p['宫位'];
+      var _llmText = paLlm[_cn] || '';
+      var _desc = _llmText || p['解读'];
+      var _range = _ageRanges[_cn] || [0,0];
+      var _isCurrent = _nowAge >= _range[0] && _nowAge <= _range[1];
+      var _ageTag = {'年柱':'0-15岁','月柱':'16-30岁','日柱':'31-45岁','时柱':'46岁+'}[_cn] || '';
+      return '<div class="pillar-analysis-card"' + (_isCurrent ? ' style="border:1px solid var(--gold);box-shadow:0 0 12px rgba(201,168,76,0.25)"' : '') + '>' +
         '<div class="pa-header">' +
-          '<span class="pa-pos">' + p['宫位'] + '</span>' +
+          '<span class="pa-pos">' + _cn + '</span>' +
           '<span class="pa-ganzhi"><span class="' + ganCls(g) + '">' + g + '</span><span class="' + zhiCls(z) + '">' + z + '</span></span>' +
           '<span class="pa-wx">' + (p['五行']||'') + ' · ' + (p['天干十神']||'') + '</span>' +
+          (_ageTag ? '<span style="font-size:0.7em;color:' + (_isCurrent ? 'var(--gold)' : 'var(--text-dim)') + '">' + _ageTag + (_isCurrent ? ' · 您正处此运' : '') + '</span>' : '') +
         '</div>' +
-        '<div class="pa-detail">' + p['解读'] + '</div>' +
+        '<div class="pa-detail">' + _desc + '</div>' +
         '<div class="pa-sub">藏干：' + (p['藏干']||'') + ' | 纳音：' + (p['纳音']||'') + (shenshaTags ? ' | 神煞：' + shenshaTags : '') + '</div>' +
         '<div class="pa-sub" style="color:var(--purple)">宫位含义：' + (p['宫位含义']||'') + '</div>' +
       '</div>';

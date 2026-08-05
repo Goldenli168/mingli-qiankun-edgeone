@@ -5,3 +5,4 @@ deploy*.sh
 diag.sh
 __pycache__/
 *.pyc
+mingli-qiankun.service
