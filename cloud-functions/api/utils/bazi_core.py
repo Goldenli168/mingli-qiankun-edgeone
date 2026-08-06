@@ -1791,7 +1791,7 @@ def _sizhu_llm(fp, bz, sex, birth_year, extra_gz=None):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v6", max_tokens=800)
+        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:v6", max_tokens=800, skip_cache=_FORCE_REFRESH)
         if result:
             # P65: 内容级干支编造检测——只允许四柱中的干支
             _GAN = set("甲乙丙丁戊己庚辛壬癸")
@@ -2008,7 +2008,11 @@ def calc_dayun_shensha(dy_list, fp, bz):
 
 
 # ===== 主入口 =====
-def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
+_FORCE_REFRESH = False  # P66: 强制刷新LLM(跳过llm缓存重新生成)
+
+def full_analysis(year, month, day, hour, sex, birthplace="", minute=0, force_refresh=False):
+    global _FORCE_REFRESH
+    _FORCE_REFRESH = force_refresh  # P66: 本次请求内所有llm_call跳过缓存
     fp = get_four_pillars(year, month, day, hour, birthplace, minute)
     # 提取真太阳时校正后的实际日期（可能因跨日而不同）
     solar_info = fp.pop("_solar_info", None)
@@ -2074,7 +2078,7 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0):
 五行：金{bz['五行统计'].get('金',0)} 木{bz['五行统计'].get('木',0)} 水{bz['五行统计'].get('水',0)} 火{bz['五行统计'].get('火',0)} 土{bz['五行统计'].get('土',0)}
 纳音：{bz.get('纳音',{}).get('年','')}·{bz.get('纳音',{}).get('日','')}
 不要罗列星曜和术语，用通俗易懂的语言。"""
-        llm_result = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}")
+        llm_result = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}", skip_cache=_FORCE_REFRESH)
         if llm_result:
             bz["命理总论LLM"] = llm_result.strip()
     except Exception:

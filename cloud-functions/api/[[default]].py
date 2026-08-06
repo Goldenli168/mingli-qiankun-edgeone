@@ -124,7 +124,8 @@ def analyze():
     if not (1 <= day <= 31):
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
-    result = full_analysis(year, month, day, hour, sex, birthplace, minute)
+    force_refresh = data.get("refresh", False)  # P66: 强制刷新LLM
+    result = full_analysis(year, month, day, hour, sex, birthplace, minute, force_refresh=force_refresh)
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response

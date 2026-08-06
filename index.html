@@ -319,7 +319,10 @@
         <small style="color:var(--text-dim)" id="solarHint">填写后优先用于时辰计算</small>
       </div>
     </div>
-    <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
+      <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
+      <label class="refresh-label"><input type="checkbox" id="chkRefresh"> 强制刷新LLM</label>
+    </div>
   </div>
 </div>
 
@@ -451,6 +454,9 @@ function levelClass(lv) {
   return 'level-mid';
 }
 
+// P66: 强制刷新LLM勾选框样式(与紫微页一致)
+(function(){var s=document.createElement('style');s.textContent='.refresh-label{font-size:0.78em;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:4px;user-select:none}.refresh-label input{margin:0;accent-color:var(--gold)}';document.head.appendChild(s);})();
+
 function doAnalyze() {
   var year  = document.getElementById('year').value;
   var month = document.getElementById('month').value;
@@ -472,6 +478,7 @@ function doAnalyze() {
   if (!year || !month || !day) { alert('请填写完整的出生日期'); return; }
 
   var btn = document.getElementById('btnAnalyze');
+  var isRefresh = document.getElementById('chkRefresh') && document.getElementById('chkRefresh').checked;
   btn.disabled = true;
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
@@ -479,7 +486,7 @@ function doAnalyze() {
   fetch('/api/analyze', {
     method: 'POST',
     headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
-    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp})
+    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh})
   })
   .then(function(resp) {
     if (!resp.ok) {
