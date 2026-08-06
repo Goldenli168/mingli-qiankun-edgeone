@@ -1862,6 +1862,90 @@ def _sizhu_llm(fp, bz, sex, birth_year, extra_gz=None):
     return None
 
 
+# ===== P67: LLM七维度叙事解读(验证式+年龄锚定,参考盲派方法论) =====
+_ASPECT_DIMS = ["财富", "事业", "婚姻", "子女", "兄弟", "父母", "健康"]
+
+def _aspects_llm(fp, bz, sex, birth_year, extra_gz=None):
+    """一次LLM调用生成7维度叙事解读,模板判语作参考数据保证结论不跑偏"""
+    try:
+        import datetime as _dt
+        from .llm_client import llm_call
+        from .ziwei_llm import _age_stage
+        age = _dt.datetime.now().year - birth_year + 1
+        bazi_str = f"{fp['year'][0]}{fp['year'][1]} {fp['month'][0]}{fp['month'][1]} {fp['day'][0]}{fp['day'][1]} {fp['hour'][0]}{fp['hour'][1]}"
+        rels = _pillar_relations(fp)
+        rel_str = "、".join(rels) if rels else "无特殊"
+        # 每维度模板判语作参考(传统结论锚点)
+        fx = bz.get("各方面分析", {})
+        refs = []
+        for dim in _ASPECT_DIMS:
+            d = fx.get(dim, {})
+            lv = d.get("等级", "")
+            head = (d.get("详情") or d.get("婚姻质量") or ((d.get("母亲", "") + " " + d.get("父亲", "")).strip()))[:60]
+            refs.append(f"{dim}:等级[{lv}] {head}")
+        ref_str = "\n".join(refs)
+        ss_list = []
+        for p, cn in [("year", "年"), ("month", "月"), ("day", "日"), ("hour", "时")]:
+            ss_list.append(f"{cn}柱{bz['十神'][p]['干']}/{bz['十神'][p]['支']}")
+        shensha_str = "、".join([f"{s['名称']}({s['位置']})" for s in bz.get("神煞", [])]) or "无"
+        prompt = f"""你是资深八字命理师(风格:先验证后建议,说人话有叙事感),为命主写7个维度的解读。
+命主{sex},{birth_year}年生,今年{age}岁(虚岁),当前阶段:{_age_stage(age)}。
+八字:{bazi_str},日主{bz.get('日主','')}({bz.get('日主五行','')}),{bz.get('日主状态','')},格局{bz.get('格局','')},喜用神{'、'.join(bz.get('喜用神',[]))}。
+十神分布:{' '.join(ss_list)}。神煞:{shensha_str}。柱间关系:{rel_str}。
+
+传统判语参考(结论必须与其一致,不得矛盾):
+{ref_str}
+
+要求:
+1. 输出7段,每段格式"财富: 内容"(维度名+冒号),顺序:财富/事业/婚姻/子女/兄弟/父母/健康
+2. 每段70-90字,先一句验证式描述命主最可能的真实经历或状态(让命主有"确实如此"的共鸣),再给一条当下{age}岁可执行的具体建议
+3. 结合{age}岁真实生活场景(职场/家庭/孩子/父母/身体),严禁"宜守不宜攻"类空话
+4. 严禁编造干支,严禁罗列术语,直接输出7段,不要开场白"""
+        result = llm_call(prompt, f"bz:aspects:{hash(bazi_str)}:v1", max_tokens=1000, skip_cache=_FORCE_REFRESH)
+        if result:
+            parsed = {}
+            cur = None
+            for line in result.strip().split("\n"):
+                line = line.strip().strip('*').strip()
+                if not line:
+                    continue
+                hit = False
+                for dim in _ASPECT_DIMS:
+                    if line.startswith(dim):
+                        body = line.split(":", 1)[-1].split("：", 1)[-1].strip()
+                        if len(body) > 10:
+                            parsed[dim] = body
+                            cur = dim
+                        hit = True
+                        break
+                if not hit and cur and len(line) > 5:
+                    parsed[cur] = parsed.get(cur, "") + line
+            # 编造检测(与四柱同规则)
+            _GAN = set("甲乙丙丁戊己庚辛壬癸"); _ZHI = set("子丑寅卯辰巳午未申酉戌亥")
+            _allow_gz = {f"{fp[p][0]}{fp[p][1]}" for p in ['year', 'month', 'day', 'hour']}
+            if extra_gz:
+                _allow_gz = _allow_gz | set(extra_gz)
+            _allow_zhi = {fp['year'][1], fp['month'][1], fp['day'][1], fp['hour'][1]}
+            _WX5 = "水火金木土"
+            def _fab(t):
+                for g in _GAN:
+                    for z in _ZHI:
+                        gz = g + z
+                        if gz in t and gz not in _allow_gz:
+                            return gz
+                for i in range(len(t) - 1):
+                    ch, nxt = t[i], t[i + 1]
+                    if nxt in _WX5 and ch in _ZHI and ch not in _allow_zhi:
+                        return ch + nxt
+                return None
+            clean = {k: v for k, v in parsed.items() if not _fab(v)}
+            if len(clean) >= 5:
+                return clean
+    except Exception:
+        pass
+    return None
+
+
 # ===== 四柱单独分析 =====
 def pillar_analysis(fp, bz, sex):
     """对每一柱进行单独解读，包括宫位含义、五行十神、神煞影响"""
@@ -2038,21 +2122,28 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0, force_re
     bz["大运分析"] = ana_dayun_list(dl, bz, sex)
     bz["大运神煞"] = calc_dayun_shensha(dl, fp, bz)
     bz["四柱分析"] = pillar_analysis(fp, bz, sex)
+    # P65: 大运+当年/未来3年流年干支放行(命理分析正常引用,不算编造)
+    import datetime as _dt3
+    _ny = _dt3.datetime.now().year
+    _extra = set()
+    for _dy in dl:
+        _dygz = _dy.get("干支") or _dy.get("大运干支") or ""
+        if _dygz:
+            _extra.add(_dygz)
+    for _y in range(_ny, _ny + 4):
+        _extra.add(GAN[(_y - 4) % 10] + ZHI[(_y - 4) % 12])
     # P65: LLM四柱叙事解读(验证式+人生阶段,失败不影响主流程)
     try:
-        # 大运+当年/未来3年流年干支放行(命理分析正常引用,不算编造)
-        import datetime as _dt3
-        _ny = _dt3.datetime.now().year
-        _extra = set()
-        for _dy in dl:
-            _dygz = _dy.get("干支") or _dy.get("大运干支") or ""
-            if _dygz:
-                _extra.add(_dygz)
-        for _y in range(_ny, _ny + 4):
-            _extra.add(GAN[(_y - 4) % 10] + ZHI[(_y - 4) % 12])
         _sizhu = _sizhu_llm(fp, bz, sex, year, extra_gz=_extra)
         if _sizhu:
             bz["四柱分析LLM"] = _sizhu
+    except Exception:
+        pass
+    # P67: LLM七维度叙事解读(验证式+年龄锚定,失败fallback模板)
+    try:
+        _aspects = _aspects_llm(fp, bz, sex, year, extra_gz=_extra)
+        if _aspects:
+            bz["各方面分析LLM"] = _aspects
     except Exception:
         pass
     # 每步大运下的流年分析
@@ -2064,21 +2155,22 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0, force_re
     # LLM 命理总论增强（异步非阻塞，失败不影响主流程）
     try:
         from .llm_client import llm_call
+        from .ziwei_llm import _age_stage
         fp4 = bz["四柱"]
         bazi_str = f"{fp4['year'][0]}{fp4['year'][1]} {fp4['month'][0]}{fp4['month'][1]} {fp4['day'][0]}{fp4['day'][1]} {fp4['hour'][0]}{fp4['hour'][1]}"
-        llm_prompt = f"""你是资深八字命理师。请为以下命盘写一段120-180字的白话命理总论，用口语化的方式告诉命主：
-- 日主性格一句话概括
-- 一生总体运势基调
-- 最突出的优势领域
-- 最需要留意的短板
-- 一条点睛的人生建议
-出生：{year}年{month}月{day}日{hour}时，{sex}，出生地{birthplace}
-八字：{bazi_str}，日主{bz['日主']}({bz['日主五行']})，{bz['日主状态']}
-格局：{bz.get('格局','')}，喜用神：{'、'.join(bz.get('喜用神',[]))}
-五行：金{bz['五行统计'].get('金',0)} 木{bz['五行统计'].get('木',0)} 水{bz['五行统计'].get('水',0)} 火{bz['五行统计'].get('火',0)} 土{bz['五行统计'].get('土',0)}
-纳音：{bz.get('纳音',{}).get('年','')}·{bz.get('纳音',{}).get('日','')}
-不要罗列星曜和术语，用通俗易懂的语言。"""
-        llm_result = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}", skip_cache=_FORCE_REFRESH)
+        _age = _dt3.datetime.now().year - year + 1
+        _rels = _pillar_relations(fp)
+        _rel_str = "、".join(_rels) if _rels else "无特殊"
+        llm_prompt = f"""你是资深八字命理师(风格:先验证后展望,说人话有叙事感)。为命主写命理总论,共3段:
+段1(验证,70-90字):描述命主最可能的成长经历与性格表现,让命主有"确实如此"的共鸣
+段2(定位,60-80字):命主今年{_age}岁,正处{_age_stage(_age)},点出当前人生核心课题
+段3(展望,50-70字):未来3年最该做的一件事+最该防的一个坑
+出生:{year}年{month}月{day}日{hour}时,{sex}
+八字:{bazi_str},日主{bz['日主']}({bz['日主五行']}),{bz['日主状态']}
+格局:{bz.get('格局','')},喜用神:{'、'.join(bz.get('喜用神',[]))},柱间关系:{_rel_str}
+五行:金{bz['五行统计'].get('金',0)} 木{bz['五行统计'].get('木',0)} 水{bz['五行统计'].get('水',0)} 火{bz['五行统计'].get('火',0)} 土{bz['五行统计'].get('土',0)}
+严禁罗列术语,严禁编造干支,严禁"宜守不宜攻"类空话,直接输出3段不要开场白。"""
+        llm_result = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}:v2", skip_cache=_FORCE_REFRESH)
         if llm_result:
             bz["命理总论LLM"] = llm_result.strip()
     except Exception:
