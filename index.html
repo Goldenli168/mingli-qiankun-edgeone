@@ -395,7 +395,7 @@ var liunianData = {};
 
 // 页面加载时恢复上次分析结果（切页不回空白）
 // 缓存版本：升级时自动清除旧缓存
-var BAZI_CACHE_VERSION = 'v2.8';
+var BAZI_CACHE_VERSION = 'v2.9';
 (function restoreResult() {
   try {
     var ver = localStorage.getItem('mingli_bazi_ver');
@@ -757,6 +757,7 @@ function renderResult(data, birthYear) {
   var dayunCards = document.getElementById('dayunCards');
   var dyList = mp['大运分析'] || [];
   var dyShensha = mp['大运神煞'] || [];
+  var dyLlmMap = mp['大运分析LLM'] || {};  // P68: LLM大运详解(当前+未来)
   dayunCards.innerHTML = dyList.map(function(d, idx) {
     var score = d['评分'] || 60;
     var scoreCls = score >= 75 ? 'score-daji' : (score >= 60 ? 'score-ji' : (score >= 45 ? 'score-ping' : (score >= 30 ? 'score-xj' : 'score-xiong')));
@@ -780,6 +781,11 @@ function renderResult(data, birthYear) {
     var dyGz = d['大运'] || '';
     var dyG = dyGz[0] || '';
     var dyZ = dyGz[1] || '';
+    // P68: LLM大运详解优先(金色左边条标识),模板概述fallback
+    var dyLlmTxt = dyLlmMap[dyGz] || '';
+    var summaryHtml = dyLlmTxt
+      ? '<div class="dayun-summary" style="border-left:3px solid var(--gold);padding-left:10px;line-height:1.7">' + dyLlmTxt + '</div>'
+      : '<div class="dayun-summary">' + (d['概述']||'') + '</div>';
 
     return '<div class="dayun-card">' +
       '<div class="dayun-header">' +
@@ -789,7 +795,7 @@ function renderResult(data, birthYear) {
         '<span class="dayun-ss">' + (d['天干十神']||'') + '(干) ' + (d['地支十神']||'') + '(支)</span>' +
         '<span class="dayun-score ' + scoreCls + '">' + score + '分 ' + d['吉凶'] + '</span>' +
       '</div>' +
-      '<div class="dayun-summary">' + (d['概述']||'') + '</div>' +
+      summaryHtml +
       '<div class="dayun-dims">' + dimHtml + '</div>' +
       quoteHtml +
       (dyShensha[idx] && dyShensha[idx].length > 0 ? '<div class="dayun-shensha">🔮 神煞影响：' + dyShensha[idx].join('；') + '</div>' : '') +

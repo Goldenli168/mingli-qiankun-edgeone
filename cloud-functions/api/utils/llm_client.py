@@ -35,26 +35,30 @@ def _load_cache() -> dict:
         return {}
 
 
+import threading as _threading
+_SAVE_LOCK = _threading.Lock()  # P68: 并行LLM任务时防止读-改-写丢条目
+
 def _save_entry(key: str, content: str):
-    merged = {}
-    if os.path.exists(_CACHE_FILE):
+    with _SAVE_LOCK:
+        merged = {}
+        if os.path.exists(_CACHE_FILE):
+            try:
+                with open(_CACHE_FILE, 'r', encoding='utf-8') as f:
+                    merged = _json.load(f)
+            except Exception:
+                pass
+        now = _time.time()
+        merged[key] = {'content': content, 'ts': now}
+        if len(merged) > _CACHE_MAX:
+            sorted_items = sorted(merged.items(), key=lambda x: (
+                x[1].get('ts', 0) if isinstance(x[1], dict) else 0
+            ))
+            merged = dict(sorted_items[-_CACHE_MAX:])
         try:
-            with open(_CACHE_FILE, 'r', encoding='utf-8') as f:
-                merged = _json.load(f)
+            with open(_CACHE_FILE, 'w', encoding='utf-8') as f:
+                _json.dump(merged, f, ensure_ascii=False)
         except Exception:
             pass
-    now = _time.time()
-    merged[key] = {'content': content, 'ts': now}
-    if len(merged) > _CACHE_MAX:
-        sorted_items = sorted(merged.items(), key=lambda x: (
-            x[1].get('ts', 0) if isinstance(x[1], dict) else 0
-        ))
-        merged = dict(sorted_items[-_CACHE_MAX:])
-    try:
-        with open(_CACHE_FILE, 'w', encoding='utf-8') as f:
-            _json.dump(merged, f, ensure_ascii=False)
-    except Exception:
-        pass
 
 
 _LLM_CACHE = _load_cache()
