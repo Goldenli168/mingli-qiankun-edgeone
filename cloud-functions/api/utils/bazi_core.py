@@ -444,9 +444,13 @@ def _get_nearest_jieqi(year, month, day, forward=True):
     current = datetime.datetime(year, month, day)
 
     # 收集当年及前后一年的节气
+    # P69: 起运只能数"节"(月建切换点),中气(大暑/雨水等)不参与——
+    # 此前误用24节气全表,出生日距中气更近时起运年龄算错(如1987-7-17误数到大暑6天→2岁,应为立秋22天→7岁)
     jie_list = []
     for y in [year - 1, year, year + 1]:
         for lon, name, zhi in JIE_LON:
+            if lon not in JIE_ONLY_LON:
+                continue
             dt = get_jieqi_date(y, lon)
             if dt:
                 jie_list.append(dt)
@@ -2019,7 +2023,7 @@ def _dayun_llm(fp, bz, dl, dy_shensha, sex, birth_year, extra_gz=None):
 3. 给出方向性建议须落地到2026年当下社会环境(如行业趋势/资产配置/家庭分工/健康管理),喜用神五行可映射现代行业(如喜水→贸易物流文旅,喜火→互联网新能源餐饮)
 4. 当前大运先用一句验证式描述命主近几年最可能的真实处境(让命主有"确实如此"感)
 5. 严禁空话套话(如"宜守不宜攻"),严禁编造干支,直接输出不要开场白"""
-        result = llm_call(prompt, f"bz:dayun:{hash(bazi_str)}:v1", max_tokens=1000, skip_cache=_FORCE_REFRESH)
+        result = llm_call(prompt, f"bz:dayun:{hash(bazi_str)}:v2", max_tokens=1000, skip_cache=_FORCE_REFRESH)
         if result:
             parsed = {}
             cur = None

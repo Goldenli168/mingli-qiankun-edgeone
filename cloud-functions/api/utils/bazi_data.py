@@ -14,7 +14,7 @@ __all__ = [
     "_TIANYI", "_YIMA", "_WENCHANG", "_TAOHUA", "_HUAGAI",
     "_JIANGXING", "_LUSHEN", "_YANGREN", "_TIANDE", "_YUEDE",
     "_WANGSHEN", "_JIESHA", "_GUCHEN", "_GUAXIU",
-    "JIE_LON", "_JIE_MONTH",
+    "JIE_LON", "_JIE_MONTH", "JIE_ONLY_LON",
     "_DTS", "_ZPZQ",
     "_LIUHE", "_LIUCHONG", "_SANHE", "_SANXING", "_LIUHAI", "_SHENGXIAO",
 ]
@@ -139,6 +139,10 @@ JIE_LON = [
     (270, "冬至", "子"), (285, "小寒", "丑"), (300, "大寒", "丑"),
     (315, "立春", "寅"), (330, "雨水", "寅"), (345, "惊蛰", "卯"),
 ]
+
+# P69: 仅12个"节"(月建切换点)——起运天数只能数到"节",中气不参与
+# 传统规则:阳男阴女顺数至下一节,阴男阳女逆数至上一节,3天折1年
+JIE_ONLY_LON = {315, 345, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285}
 _JIE_MONTH = {
     0: (3, 21),    # 春分
     15: (4, 5),    # 清明
