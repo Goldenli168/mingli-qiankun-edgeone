@@ -10,6 +10,44 @@ import time as _time
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
+
+# ===== P70: 命主画像助手(职业/婚姻/子女/收入/关注点 → prompt文本+稳定hash) =====
+def _phash(profile: dict | None) -> str:
+    """画像→稳定短hash(缓存key用,md5跨进程稳定,不用内置hash)"""
+    if not profile:
+        return "noprof"
+    import hashlib
+    s = _json.dumps(profile, sort_keys=True, ensure_ascii=False)
+    return hashlib.md5(s.encode("utf-8")).hexdigest()[:8]
+
+
+def _profile_text(profile: dict | None) -> str:
+    """画像→prompt注入文本,空画像返回空串(不影响原有prompt)"""
+    if not profile:
+        return ""
+    parts = []
+    if profile.get("occupation"):
+        parts.append(f"职业:{profile['occupation']}")
+    if profile.get("marital"):
+        parts.append(f"婚姻状况:{profile['marital']}")
+    if profile.get("children"):
+        parts.append(f"子女:{profile['children']}")
+    if profile.get("income"):
+        parts.append(f"年收入:{profile['income']}")
+    if profile.get("focus"):
+        foc = profile["focus"]
+        if isinstance(foc, list) and foc:
+            parts.append(f"重点关注:{'、'.join(foc)}")
+    if not parts:
+        return ""
+    return (
+        "\n【命主真实画像】已知事实:" + "；".join(parts) + "。\n"
+        "要求:①上述为命主亲口提供的真实信息,直接引用(如'您从事IT管理'),严禁再猜测或与其矛盾;"
+        "②婚姻维度按其真实状态写(已婚谈经营与危机预警,未婚/恋爱谈婚恋时间窗口,离异/丧偶谈再婚机遇与重建);"
+        "③财富维度对照其收入层级:判断当前收入是否已达命局上限,给出跳档路径或守成策略;"
+        "④事业/大运建议结合其所在行业展开;⑤其重点关注领域要分析得更详实。\n"
+    )
+
 # ===== 磁盘缓存 =====
 _CACHE_DIR = os.environ.get("TMPDIR", os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__))))
 _CACHE_FILE = os.path.join(_CACHE_DIR, "ml_llm_cache.json")

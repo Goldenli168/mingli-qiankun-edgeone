@@ -125,7 +125,8 @@ def analyze():
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
     force_refresh = data.get("refresh", False)  # P66: 强制刷新LLM
-    result = full_analysis(year, month, day, hour, sex, birthplace, minute, force_refresh=force_refresh)
+    profile = data.get("profile") if isinstance(data.get("profile"), dict) else None  # P70: 命主画像
+    result = full_analysis(year, month, day, hour, sex, birthplace, minute, force_refresh=force_refresh, profile=profile)
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response
@@ -160,8 +161,12 @@ def ziwei_api():
         return jsonify({"error": "日期请输入1~31之间"}), 400
 
     try:
-        # P55: 排盘缓存（同八字+时辰缓存1小时）
-        cache_key = f"ziwei:{year}:{month}:{day}:{hour}:{sex}"
+        # P55: 排盘缓存（同八字+时辰缓存24小时）
+        # P70: 画像影响LLM内容 → 画像hash进缓存key(无画像保持原key兼容旧缓存)
+        profile = data.get("profile") if isinstance(data.get("profile"), dict) else None
+        from utils.llm_client import _phash as _ph
+        _pkey = _ph(profile) if profile else ""
+        cache_key = f"ziwei:{year}:{month}:{day}:{hour}:{sex}" + (f":{_pkey}" if _pkey else "")
         force_refresh = data.get("refresh", False)
         if not force_refresh and cache_key not in _ZIWEI_CACHE:
             # P58: 内存miss时回源文件(多worker/进程写入的文件缓存共享)
@@ -209,7 +214,7 @@ def ziwei_api():
             pass
 
         try:
-            result = full_ziwei_analysis(year, month, day, hour, sex, force_refresh=force_refresh)
+            result = full_ziwei_analysis(year, month, day, hour, sex, force_refresh=force_refresh, profile=profile)
             # P55: 写入缓存
             _ZIWEI_CACHE[cache_key] = result
             _save_ziwei_cache(cache_key, result)

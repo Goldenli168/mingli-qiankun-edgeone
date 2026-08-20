@@ -3,7 +3,7 @@
 供 ziwei_core 调用
 版本: v1.0
 """
-from .llm_client import llm_call
+from .llm_client import llm_call, _profile_text, _phash
 from .ziwei_data import _SIHUA_TABLE, _SIHUA_LABELS
 
 # 诊断日志（最多存10条）
@@ -11,6 +11,12 @@ _last_llm_debug = []
 
 # P60: 强制刷新LLM标志(由ziwei_core设置,勾选"强制刷新LLM"时为True)
 _FORCE_REFRESH = False
+
+
+def _profile_ctx(result):
+    """P70: 从result取命主画像,返回(prompt注入文本, 画像hash)二元组"""
+    p = result.get("命主画像") if isinstance(result, dict) else None
+    return _profile_text(p), _phash(p)
 
 
 def _age_stage(age):
@@ -74,6 +80,7 @@ def _build_liunian_context(ln, result, patterns, solar_year):
     era_info = "2026年丙午，火旺之年，利行动忌冲动"
     # P59: 流年对应年龄+人生阶段
     ln_age = year - solar_year + 1  # 虚岁
+    _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "ln_gz": gz,
         "ln_palace_sihua": ln_palace_sihua,
@@ -82,6 +89,8 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "era_info": era_info,
         "ln_age": ln_age,
         "age_stage": _age_stage(ln_age),
+        "profile_text": _ptext,
+        "profile_phash": _ph,
     }
 
 
@@ -96,6 +105,7 @@ def _build_dayun_context(dy, result, patterns):
     sihua_str = " ".join([f"{k}·{v}" for k, v in sihua.items()])
     # P59: 大运起始年龄的人生阶段(防止对小孩谈婚姻职场)
     age_stage = _age_stage(dy.get("起始年龄", 30))
+    _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "dayun_age": f"{dy.get('起始年龄','')}-{dy.get('结束年龄','')}",
         "dayun_gong": dy.get("大运宫名", dy.get("宫位", "")),
@@ -105,6 +115,8 @@ def _build_dayun_context(dy, result, patterns):
         "scores": score_str,
         "sihua": sihua_str,
         "age_stage": age_stage,
+        "profile_text": _ptext,
+        "profile_phash": _ph,
     }
 
 
@@ -143,6 +155,7 @@ def _build_summary_context(result, patterns):
     wealth = result.get("财富级别", {}).get("级别", "")
     ming = result.get("命宫地支", "")
     shen = result.get("身宫地支", "")
+    _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "birth": birth,
         "bazi": bazi,
@@ -152,6 +165,8 @@ def _build_summary_context(result, patterns):
         "wealth": wealth,
         "ming": ming,
         "shen": shen,
+        "profile_text": _ptext,
+        "profile_phash": _ph,
     }
 
 
@@ -162,11 +177,14 @@ def _build_feihua_context(result, solar_year):
     def _fmt(items):
         return " ".join([f"{it.get('四化','')}·{it.get('星曜','')}落{it.get('来源宫','')}宫" for it in items])
     age = _dt2.datetime.now().year - solar_year + 1  # 当前虚岁
+    _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "natal": _fmt(feihua.get("飞化", [])),
         "dayun": _fmt(feihua.get("大运四化", [])),
         "liunian": _fmt(feihua.get("流年四化", [])),
         "age": age,
+        "profile_text": _ptext,
+        "profile_phash": _ph,
     }
 
 
@@ -175,11 +193,14 @@ def _build_monthly_context(ln, result, solar_year):
     year = ln.get("年份", 0)
     months = ln.get("逐月", [])[:12]
     age = year - solar_year + 1  # 该年虚岁
+    _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "year": year,
         "months": "\n".join(months),
         "age": age,
         "age_stage": _age_stage(age),
+        "profile_text": _ptext,
+        "profile_phash": _ph,
     }
 
 
@@ -192,7 +213,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【必须使用以下命盘数据,编造宫位将导致分析完全错误】
 化曜落宫: {ctx.get("ln_palace_sihua","")}  太岁: {ctx.get("ln_taisui","")}
 命宫庙旺: {ctx.get("ln_star_mw","")}  特征: {ctx.get("era_info","")}
-命主该年{ctx.get("ln_age","")}岁(虚岁),处于:{ctx.get("age_stage","")}
+命主该年{ctx.get("ln_age","")}岁(虚岁),处于:{ctx.get("age_stage","")}{ctx.get("profile_text","")}
 
 【年龄约束】所有分析必须符合命主该年实际年龄的生活场景(例如对10岁孩子只谈学业兴趣,对40岁的人谈事业家庭健康),严禁出现与年龄不符的内容(如对小孩谈婚姻投资,对老人谈求职)。
 
@@ -218,7 +239,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         stage = ctx.get('age_stage','')
         prompt = f"""资深命理师。请分析这大运,输出7个维度的点评:
 {ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。大运四化:{sihua}。维度:{sc}。
-命主在此大运处于:{stage}
+命主在此大运处于:{stage}{ctx.get('profile_text','')}
 要求:
 1. 输出7个维度:财富、事业、婚姻、子女、父母、健康、大运整体结论
 2. 前6维每维严格控制在80字以内,必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响
@@ -230,13 +251,14 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
         prompt = f"""资深命理师。请分析这大运,输出1段约350字综合点评(包含7维):
-{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。
+{ctx.get('dayun_age','')}岁{ctx.get('dayun_gong','')}宫{ctx.get('dayun_score','')}分。生于{ctx.get('birth','')}年{ctx.get('bazi','')[:50]}。维度:{sc}。{ctx.get('profile_text','')}
 7维(财富/事业/婚姻/子女/父母/健康/整体结论)各40-50字。
 口语务实,直接输出。"""
 
     elif gen_type == "feihua":
         prompt = f"""你是说话接地气的资深命理师,像朋友聊天一样解读四化飞星,说人话。
-命主{ctx.get('age','')}岁。三组四化数据:
+命主{ctx.get('age','')}岁。{ctx.get('profile_text','')}
+三组四化数据:
 本命四化:{ctx.get('natal','')}
 大运四化:{ctx.get('dayun','')}
 流年四化:{ctx.get('liunian','')}
@@ -250,7 +272,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
     elif gen_type == "monthly":
         prompt = f"""你是说话接地气的资深命理师,给命主的{ctx.get('year','')}年12个月各写一条具体行动建议。
-命主该年{ctx.get('age','')}岁(虚岁),处于:{ctx.get('age_stage','')}
+命主该年{ctx.get('age','')}岁(虚岁),处于:{ctx.get('age_stage','')}{ctx.get('profile_text','')}
 每月运势数据(月份：宫位(星曜) 四化 — 主题):
 {ctx.get('months','')}
 
@@ -264,17 +286,17 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     elif gen_type == "summary":
         prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
 
-生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。
+生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。{ctx.get('profile_text','')}
 
 从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度，直接输出。"""
     else:
         return None
 
-    # 缓存key：简洁格式,gen_type+年龄
+    # 缓存key：简洁格式,gen_type+年龄+画像hash(P70:画像不同内容不同,必须入key)
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:v24"
+        ck = f"zw:{gen_type}:{hash(str(age))}:{ctx.get('profile_phash','noprof')}:v25"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）

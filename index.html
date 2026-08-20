@@ -319,6 +319,76 @@
         <small style="color:var(--text-dim)" id="solarHint">填写后优先用于时辰计算</small>
       </div>
     </div>
+    <!-- P70: 命主画像(选填,LLM分析更精准,仅存浏览器) -->
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">
+      <div style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">📋 命主画像（选填 · 让 AI 分析贴合您的真实情况 · 仅保存在您的浏览器，不上传存储）：</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>职业</label>
+          <select id="pfOccupation">
+            <option value="">请选择</option>
+            <option>公务员/事业单位</option>
+            <option>国企/央企职工</option>
+            <option>互联网/IT技术</option>
+            <option>金融/投资</option>
+            <option>教育/培训</option>
+            <option>医疗/健康</option>
+            <option>制造业/工程</option>
+            <option>个体经营/创业</option>
+            <option>销售/市场</option>
+            <option>自由职业</option>
+            <option>学生</option>
+            <option>退休/其他</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>婚姻状况</label>
+          <select id="pfMarital">
+            <option value="">请选择</option>
+            <option>未婚</option>
+            <option>恋爱中</option>
+            <option>已婚</option>
+            <option>离异</option>
+            <option>丧偶</option>
+            <option>再婚</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>子女情况</label>
+          <select id="pfChildren">
+            <option value="">请选择</option>
+            <option>暂无子女</option>
+            <option>备孕中</option>
+            <option>有子女(未成年)</option>
+            <option>子女已成年</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>年收入区间</label>
+          <select id="pfIncome">
+            <option value="">请选择</option>
+            <option>10万以下</option>
+            <option>10-30万</option>
+            <option>30-50万</option>
+            <option>50-100万</option>
+            <option>100万以上</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <div class="form-group" style="flex:1">
+          <label>重点关注（可多选）</label>
+          <div id="pfFocusGroup" style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="focus-chip" data-v="事业" onclick="toggleFocus(this)">事业</button>
+            <button type="button" class="focus-chip" data-v="财富" onclick="toggleFocus(this)">财富</button>
+            <button type="button" class="focus-chip" data-v="婚姻" onclick="toggleFocus(this)">婚姻</button>
+            <button type="button" class="focus-chip" data-v="子女" onclick="toggleFocus(this)">子女</button>
+            <button type="button" class="focus-chip" data-v="健康" onclick="toggleFocus(this)">健康</button>
+            <button type="button" class="focus-chip" data-v="父母" onclick="toggleFocus(this)">父母</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
       <button class="btn-analyze" id="btnAnalyze" onclick="doAnalyze()">排 盘 分 析</button>
       <label class="refresh-label"><input type="checkbox" id="chkRefresh"> 强制刷新LLM</label>
@@ -429,6 +499,11 @@ var BAZI_CACHE_VERSION = 'v3.0';
         }
       });
     }
+    // P70: 恢复命主画像
+    if (cached.profile) {
+      setProfileUI(cached.profile);
+      if (cached.result && cached.result['命主画像']) renderProfileTags(cached.result['命主画像']);
+    }
     renderResult(cached.result, cached.year || 0);
   } catch(e) {}
 })();
@@ -455,7 +530,57 @@ function levelClass(lv) {
 }
 
 // P66: 强制刷新LLM勾选框样式(与紫微页一致)
-(function(){var s=document.createElement('style');s.textContent='.refresh-label{font-size:0.78em;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:4px;user-select:none}.refresh-label input{margin:0;accent-color:var(--gold)}';document.head.appendChild(s);})();
+(function(){var s=document.createElement('style');s.textContent='.refresh-label{font-size:0.78em;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:4px;user-select:none}.refresh-label input{margin:0;accent-color:var(--gold)}'
++'.focus-chip{background:var(--bg-card2);border:1px solid var(--border);color:var(--text-dim);border-radius:14px;padding:3px 12px;font-size:0.78em;cursor:pointer;transition:all 0.2s}'
++'.focus-chip.on{background:rgba(201,168,76,0.18);border-color:var(--gold);color:var(--gold)}'
++'.profile-tag{display:inline-block;background:rgba(201,168,76,0.12);border:1px solid var(--gold);color:var(--gold);border-radius:12px;padding:2px 10px;font-size:0.75em;margin:2px 4px 2px 0}';document.head.appendChild(s);})();
+
+// P70: 命主画像
+function toggleFocus(btn) { btn.classList.toggle('on'); }
+function getProfile() {
+  var foc = [];
+  document.querySelectorAll('#pfFocusGroup .focus-chip.on').forEach(function(b){ foc.push(b.getAttribute('data-v')); });
+  var p = {
+    occupation: document.getElementById('pfOccupation').value,
+    marital: document.getElementById('pfMarital').value,
+    children: document.getElementById('pfChildren').value,
+    income: document.getElementById('pfIncome').value,
+    focus: foc
+  };
+  if (!p.occupation && !p.marital && !p.children && !p.income && foc.length === 0) return null;
+  return p;
+}
+function setProfileUI(p) {
+  if (!p) return;
+  if (p.occupation) document.getElementById('pfOccupation').value = p.occupation;
+  if (p.marital) document.getElementById('pfMarital').value = p.marital;
+  if (p.children) document.getElementById('pfChildren').value = p.children;
+  if (p.income) document.getElementById('pfIncome').value = p.income;
+  if (p.focus && p.focus.length) {
+    document.querySelectorAll('#pfFocusGroup .focus-chip').forEach(function(b){
+      if (p.focus.indexOf(b.getAttribute('data-v')) >= 0) b.classList.add('on');
+    });
+  }
+}
+function renderProfileTags(p) {
+  var old = document.getElementById('profileTags');
+  if (old) old.remove();
+  if (!p) return;
+  var tags = [];
+  if (p.occupation) tags.push(p.occupation);
+  if (p.marital) tags.push(p.marital);
+  if (p.children) tags.push(p.children);
+  if (p.income) tags.push('年收入' + p.income);
+  if (p.focus && p.focus.length) tags.push('关注:' + p.focus.join('/'));
+  if (!tags.length) return;
+  var div = document.createElement('div');
+  div.id = 'profileTags';
+  div.style.cssText = 'margin-bottom:14px';
+  div.innerHTML = '<span style="font-size:0.78em;color:var(--text-dim);margin-right:6px">📋 命主画像:</span>' +
+    tags.map(function(t){ return '<span class="profile-tag">' + t + '</span>'; }).join('');
+  var plate = document.getElementById('baziPlate');
+  plate.parentNode.insertBefore(div, plate);
+}
 
 function doAnalyze() {
   var year  = document.getElementById('year').value;
@@ -479,6 +604,7 @@ function doAnalyze() {
 
   var btn = document.getElementById('btnAnalyze');
   var isRefresh = document.getElementById('chkRefresh') && document.getElementById('chkRefresh').checked;
+  var profile = getProfile();  // P70: 命主画像
   btn.disabled = true;
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
@@ -486,7 +612,7 @@ function doAnalyze() {
   fetch('/api/analyze', {
     method: 'POST',
     headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
-    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh})
+    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh, profile:profile})
   })
   .then(function(resp) {
     if (!resp.ok) {
@@ -502,6 +628,7 @@ function doAnalyze() {
     __lastResult = data;
     liunianData = {};
     renderResult(data, +year);
+    renderProfileTags(data['命主画像'] || profile);  // P70: 画像标签
     // 保存生辰信息到 localStorage，供紫微斗数页面共享
     // 注意：如有真太阳时，需保存调整后的时辰，而非原始公历时间
     var saveHour = +hour, saveMin = +minute;
@@ -519,6 +646,7 @@ function doAnalyze() {
         hour: saveHour, minute: saveMin, sex: currentSex,
         birthplace: bp || '',
         solarHour: sh, solarMinute: sm, ampm: ampm,
+        profile: profile,
         savedAt: new Date().toISOString()
       }));
       // 缓存分析结果，切页回来保持显示
@@ -527,7 +655,8 @@ function doAnalyze() {
         year: +year, month: +month, day: +day,
         hour: +hour, minute: +minute, sex: currentSex,
         birthplace: bp || '',
-        solarHour: sh, solarMinute: sm, ampm: ampm
+        solarHour: sh, solarMinute: sm, ampm: ampm,
+        profile: profile
       }));
     } catch(e) {}
   })

@@ -465,7 +465,7 @@ def _get_active_patterns(natal_patterns, active_stars, active_sihua=None):
     return activations
 
 
-def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None, force_refresh=False):
+def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None, force_refresh=False, profile=None):
     """
     紫微斗数全盘分析
     输入: 公历日期 + 时辰(0-23) + 性别
@@ -473,6 +473,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     ln_weights: 可选 dict，覆盖流年评分权重。Key: dy_floor, ln_ming, ln_aux,
                 sihua_star, sihua_aux, sanfang。None 时使用默认值。
     force_refresh: True时强制重新生成所有LLM内容(勾选"强制刷新LLM")
+    profile: P70 命主画像(职业/婚姻/子女/收入/关注点),注入所有LLM prompt
     """
     # P60: 设置LLM强制刷新标志(模块级,本次请求内所有LLM调用生效)
     from . import ziwei_llm as _zllm
@@ -771,6 +772,10 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     tasks = []  # [(gen_type, target_ref, ctx), ...]
+
+    # P70: 命主画像存入result(各context构建函数从此读取注入prompt)
+    if profile:
+        result["命主画像"] = profile
 
     # 流年: 当年+未来3年
     for ln in _liunian_raw:

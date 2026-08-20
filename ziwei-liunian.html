@@ -440,11 +440,21 @@ var currentBirthYear = 1987;  // P5: 用于流年筛选
 var activeDetailIdx = -1;
 
 // 页面加载时检查是否有八字页同步的生辰信息
+var _syncedProfile = null;  // P70: 命主画像(来自八字页)
+var _profileKey = 'noprof';
 (function initSync() {
   try {
     var raw = localStorage.getItem('mingli_birth');
     if (raw) {
       _syncedBirth = JSON.parse(raw);
+      // P70: 提取画像并生成缓存key片段
+      if (_syncedBirth.profile) {
+        _syncedProfile = _syncedBirth.profile;
+        var ps = JSON.stringify(_syncedProfile);
+        var h = 0;
+        for (var i = 0; i < ps.length; i++) { h = ((h << 5) - h + ps.charCodeAt(i)) | 0; }
+        _profileKey = 'p' + Math.abs(h).toString(36);
+      }
       // 判断是否24小时内同步的
       var savedAt = _syncedBirth.savedAt ? new Date(_syncedBirth.savedAt) : null;
       var now = new Date();
@@ -545,7 +555,7 @@ function clearSyncedBirth() {
 }
 
 // ===== LLM 结果持久缓存 =====
-function _cacheKey(y,m,d,h,s) { return 'ziwei_llm_v3_' + [y,m,d,h,s].join('_'); }
+function _cacheKey(y,m,d,h,s) { return 'ziwei_llm_v3_' + [y,m,d,h,s].join('_') + '_' + _profileKey; }
 function _loadCache(y,m,d,h,s) {
   try { return JSON.parse(localStorage.getItem(_cacheKey(y,m,d,h,s))||'null'); } catch(e) { return null; }
 }
@@ -610,8 +620,8 @@ function doAnalyze() {
   // P60: 202轮询+断连重试（与ziwei.html一致: 外网链路~80s断连, single-flight算完后缓存HIT秒回）
   var _lnAttempt = 0;
   // P64: refresh仅在第1次请求生效; 轮询带refresh:true会导致服务端每次重算(死循环)
-  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh});
-  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex});
+  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:_syncedProfile});
+  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:_syncedProfile});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doLiunianFetch() {
