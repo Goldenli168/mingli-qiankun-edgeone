@@ -1749,7 +1749,7 @@ def _sizhu_llm(fp, bz, sex, birth_year, extra_gz=None, profile=None):
     profile: P70 命主画像(职业/婚姻/子女/收入/关注点)"""
     try:
         import datetime as _dt
-        from .llm_client import llm_call, _profile_text, _phash
+        from .llm_client import llm_call, _profile_text, _phash, _stable_hash
         from .ziwei_llm import _age_stage
         ss = bz["十神"]
         shensha = bz.get("神煞", [])
@@ -1796,7 +1796,7 @@ def _sizhu_llm(fp, bz, sex, birth_year, extra_gz=None, profile=None):
 6. 必须融入柱间关系叙事(伏吟/并透/合局对性格与命运走向的实际影响)
 7. 结合{age}岁真实生活场景(职场/孩子/父母/房贷/身体),严禁罗列术语,严禁"宜守不宜攻"类空话
 8. 直接输出4段,不要开场白不要总结"""
-        result = llm_call(prompt, f"bz:sizhu:{hash(bazi_str)}:{_phash(profile)}:v6", max_tokens=800, skip_cache=_FORCE_REFRESH)
+        result = llm_call(prompt, f"bz:sizhu:{_stable_hash(bazi_str)}:{_phash(profile)}:v6", max_tokens=800, skip_cache=_FORCE_REFRESH)
         if result:
             # P65: 内容级干支编造检测——只允许四柱中的干支
             _GAN = set("甲乙丙丁戊己庚辛壬癸")
@@ -1874,7 +1874,7 @@ def _aspects_llm(fp, bz, sex, birth_year, extra_gz=None, profile=None):
     """一次LLM调用生成7维度叙事解读,模板判语作参考数据保证结论不跑偏"""
     try:
         import datetime as _dt
-        from .llm_client import llm_call, _profile_text, _phash
+        from .llm_client import llm_call, _profile_text, _phash, _stable_hash
         from .ziwei_llm import _age_stage
         age = _dt.datetime.now().year - birth_year + 1
         bazi_str = f"{fp['year'][0]}{fp['year'][1]} {fp['month'][0]}{fp['month'][1]} {fp['day'][0]}{fp['day'][1]} {fp['hour'][0]}{fp['hour'][1]}"
@@ -1906,7 +1906,7 @@ def _aspects_llm(fp, bz, sex, birth_year, extra_gz=None, profile=None):
 2. 每段70-90字,先一句验证式描述命主最可能的真实经历或状态(让命主有"确实如此"的共鸣),再给一条当下{age}岁可执行的具体建议
 3. 结合{age}岁真实生活场景(职场/家庭/孩子/父母/身体),严禁"宜守不宜攻"类空话
 4. 严禁编造干支,严禁罗列术语,直接输出7段,不要开场白"""
-        result = llm_call(prompt, f"bz:aspects:{hash(bazi_str)}:{_phash(profile)}:v1", max_tokens=1000, skip_cache=_FORCE_REFRESH)
+        result = llm_call(prompt, f"bz:aspects:{_stable_hash(bazi_str)}:{_phash(profile)}:v1", max_tokens=1000, skip_cache=_FORCE_REFRESH)
         if result:
             parsed = {}
             cur = None
@@ -1954,7 +1954,7 @@ def _aspects_llm(fp, bz, sex, birth_year, extra_gz=None, profile=None):
 # ===== P68: LLM命理总论(验证→定位→展望三段式,从内联重构为函数以支持并行) =====
 def _overview_llm(bz, year, month, day, hour, sex, profile=None):
     try:
-        from .llm_client import llm_call, _profile_text, _phash
+        from .llm_client import llm_call, _profile_text, _phash, _stable_hash
         from .ziwei_llm import _age_stage
         import datetime as _dt
         fp4 = bz["四柱"]
@@ -1972,7 +1972,7 @@ def _overview_llm(bz, year, month, day, hour, sex, profile=None):
 格局:{bz.get('格局','')},喜用神:{'、'.join(bz.get('喜用神',[]))},柱间关系:{_rel_str}
 五行:金{bz['五行统计'].get('金',0)} 木{bz['五行统计'].get('木',0)} 水{bz['五行统计'].get('水',0)} 火{bz['五行统计'].get('火',0)} 土{bz['五行统计'].get('土',0)}
 严禁罗列术语,严禁编造干支,严禁"宜守不宜攻"类空话,直接输出3段不要开场白。"""
-        r = llm_call(llm_prompt, f"bz:overview:{hash(bazi_str)}:{_phash(profile)}:v2", skip_cache=_FORCE_REFRESH)
+        r = llm_call(llm_prompt, f"bz:overview:{_stable_hash(bazi_str)}:{_phash(profile)}:v2", skip_cache=_FORCE_REFRESH)
         return r.strip() if r else None
     except Exception:
         return None
@@ -1984,7 +1984,7 @@ def _dayun_llm(fp, bz, dl, dy_shensha, sex, birth_year, extra_gz=None, profile=N
     参考IMA盲派方法论: 验证式+人生阶段; 补救改运思路: 喜用神→现代行业/方位/动变解灾"""
     try:
         import datetime as _dt
-        from .llm_client import llm_call, _profile_text, _phash
+        from .llm_client import llm_call, _profile_text, _phash, _stable_hash
         from .ziwei_llm import _age_stage
         cur_age = _dt.datetime.now().year - birth_year + 1
         bazi_str = f"{fp['year'][0]}{fp['year'][1]} {fp['month'][0]}{fp['month'][1]} {fp['day'][0]}{fp['day'][1]} {fp['hour'][0]}{fp['hour'][1]}"
@@ -2024,7 +2024,7 @@ def _dayun_llm(fp, bz, dl, dy_shensha, sex, birth_year, extra_gz=None, profile=N
 3. 给出方向性建议须落地到2026年当下社会环境(如行业趋势/资产配置/家庭分工/健康管理),喜用神五行可映射现代行业(如喜水→贸易物流文旅,喜火→互联网新能源餐饮)
 4. 当前大运先用一句验证式描述命主近几年最可能的真实处境(让命主有"确实如此"感)
 5. 严禁空话套话(如"宜守不宜攻"),严禁编造干支,直接输出不要开场白"""
-        result = llm_call(prompt, f"bz:dayun:{hash(bazi_str)}:{_phash(profile)}:v2", max_tokens=1000, skip_cache=_FORCE_REFRESH)
+        result = llm_call(prompt, f"bz:dayun:{_stable_hash(bazi_str)}:{_phash(profile)}:v2", max_tokens=1000, skip_cache=_FORCE_REFRESH)
         if result:
             parsed = {}
             cur = None

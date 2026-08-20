@@ -3,7 +3,7 @@
 供 ziwei_core 调用
 版本: v1.0
 """
-from .llm_client import llm_call, _profile_text, _phash
+from .llm_client import llm_call, _profile_text, _phash, _stable_hash
 from .ziwei_data import _SIHUA_TABLE, _SIHUA_LABELS
 
 # 诊断日志（最多存10条）
@@ -296,7 +296,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{hash(str(age))}:{ctx.get('profile_phash','noprof')}:v25"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v25"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）

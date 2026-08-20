@@ -12,6 +12,13 @@ DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 
 # ===== P70: 命主画像助手(职业/婚姻/子女/收入/关注点 → prompt文本+稳定hash) =====
+def _stable_hash(s) -> str:
+    """跨进程稳定的短hash(替代内置hash——多worker下内置hash因PYTHONHASHSEED
+    随机化各进程不同,导致LLM缓存key不一致,4worker间缓存命中率仅25%)"""
+    import hashlib
+    return hashlib.md5(str(s).encode("utf-8")).hexdigest()[:12]
+
+
 def _phash(profile: dict | None) -> str:
     """画像→稳定短hash(缓存key用,md5跨进程稳定,不用内置hash)"""
     if not profile:
