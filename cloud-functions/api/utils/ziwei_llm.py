@@ -102,7 +102,32 @@ def _build_dayun_context(dy, result, patterns):
     score_str = " ".join([f"{k}{v}分" for k, v in scores.items() if not k.endswith("_llm")])
     # P58: 大运四化(用户要求:维度分析须结合四化影响)
     sihua = dy.get("大运四化", {})
-    sihua_str = " ".join([f"{k}·{v}" for k, v in sihua.items()])
+    # P71: 四化落宫(本命宫+大运盘宫)——此前只传星名,LLM不知落宫,
+    # 把化科等泛化含义强行套到无关维度(如化科落父母宫却写成利婚姻)
+    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    PALACE_SEQ = ["命宫", "兄弟", "夫妻", "子女", "财帛", "疾厄",
+                  "迁移", "交友", "官禄", "田宅", "福德", "父母"]
+    star_natal = {}  # 星曜→本命宫名
+    gong_branch = {}  # 宫名→地支索引
+    for p in result.get("十二宫", []):
+        b = p.get("宫位")
+        b = b if isinstance(b, int) else (ZHI.index(b) if b in ZHI else None)
+        if b is not None:
+            gong_branch[p.get("宫名", "")] = b
+        for s in (p.get("主星") or []) + (p.get("辅星") or []):
+            star_natal.setdefault(s, p.get("宫名", ""))
+    # 大运命宫的地支索引(大运宫名=本命某宫名,取其地支)
+    dy_branch = gong_branch.get(dy.get("大运宫名", ""))
+    sihua_parts = []
+    for k, v in sihua.items():
+        if not v:
+            continue
+        natal_p = star_natal.get(v, "?")
+        dy_p = "?"
+        if dy_branch is not None and natal_p in gong_branch:
+            dy_p = PALACE_SEQ[(dy_branch - gong_branch[natal_p]) % 12]
+        sihua_parts.append(f"{k}·{v}(本命{natal_p}宫/大运{dy_p}宫)".replace("宫宫", "宫"))
+    sihua_str = " ".join(sihua_parts) if sihua_parts else "无"
     # P59: 大运起始年龄的人生阶段(防止对小孩谈婚姻职场)
     age_stage = _age_stage(dy.get("起始年龄", 30))
     _ptext, _ph = _profile_ctx(result)  # P70
@@ -243,10 +268,11 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 要求:
 1. 输出7个维度:财富、事业、婚姻、子女、父母、健康、大运整体结论
 2. 前6维每维严格控制在80字以内,必须结合大运四化(化禄/化权/化科/化忌)分析其对该维度的具体影响
-3. 大运整体结论150字左右,详细分析这十年的整体走势、关键策略与人生建议
-4. 【重要】所有内容必须符合命主该年龄段的实际生活场景,例如对3-12岁儿童只能谈学业兴趣家庭,严禁谈婚姻职场投资;对60岁以上老人不谈跳槽晋升
-5. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
-6. 口语务实,直接输出,不要多余开场白。"""
+3. 【落宫关联-最高优先级】大运四化数据已标注每颗化曜的落宫(本命宫/大运盘宫)。引用某四化分析某维度前,必须先判断其落宫与该维度宫位(财富=财帛,事业=官禄,婚姻=夫妻,子女=子女,父母=父母,健康=疾厄)的关系:只有落入该宫、或与该宫三合/对照时才能引用;落宫与维度无关时严禁强行关联(例如化科落父母宫,绝不可写成"化科利婚姻";化忌落子女宫绝不可写成"化忌冲事业")
+4. 大运整体结论150字左右,详细分析这十年的整体走势、关键策略与人生建议
+5. 【重要】所有内容必须符合命主该年龄段的实际生活场景,例如对3-12岁儿童只能谈学业兴趣家庭,严禁谈婚姻职场投资;对60岁以上老人不谈跳槽晋升
+6. 格式:每维独立一段,开头用 **【维度名 分数】** 标记,例如 **【财富 57分】** 然后换行写内容
+7. 口语务实,直接输出,不要多余开场白。"""
 
     elif gen_type == "dayun_brief":
         sc = ctx.get('scores','')
@@ -296,7 +322,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v25"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v26"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
