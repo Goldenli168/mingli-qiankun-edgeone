@@ -114,9 +114,19 @@ def llm_call(prompt: str, cache_key: str = "", max_tokens: int = 800, retries: i
     import json, urllib.request, ssl
 
     # 缓存
-    ck = cache_key or f"generic:{hash(prompt)}"
+    ck = cache_key or f"generic:{_stable_hash(prompt)}"
     if not skip_cache and ck in _LLM_CACHE:  # P60: skip_cache=强制刷新LLM
         return _LLM_CACHE[ck]
+    # P69: 内存miss时回源磁盘文件(多worker共享)——
+    # worker A刚写入的条目,本worker内存快照没有,不回源则4worker各算各的
+    if not skip_cache:
+        try:
+            _disk = _load_cache()
+            if ck in _disk:
+                _LLM_CACHE.update(_disk)
+                return _disk[ck]
+        except Exception:
+            pass
 
     if not DEEPSEEK_API_KEY:
         return None
