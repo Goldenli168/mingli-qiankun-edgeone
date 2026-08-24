@@ -327,18 +327,58 @@
           <label>职业</label>
           <select id="pfOccupation">
             <option value="">请选择</option>
-            <option>公务员/事业单位</option>
-            <option>国企/央企职工</option>
-            <option>互联网/IT技术</option>
-            <option>金融/投资</option>
-            <option>教育/培训</option>
-            <option>医疗/健康</option>
-            <option>制造业/工程</option>
-            <option>个体经营/创业</option>
-            <option>销售/市场</option>
-            <option>自由职业</option>
-            <option>学生</option>
-            <option>退休/其他</option>
+            <optgroup label="体制内">
+              <option>公务员/事业单位</option>
+              <option>国企/央企职工</option>
+              <option>军警/安保</option>
+            </optgroup>
+            <optgroup label="商贸流通">
+              <option>采购/供应链</option>
+              <option>外贸/跨境贸易</option>
+              <option>贸易/批发零售</option>
+              <option>物流/运输/仓储</option>
+              <option>电商/直播/自媒体</option>
+            </optgroup>
+            <optgroup label="专业技术">
+              <option>互联网/IT技术</option>
+              <option>金融/投资/证券</option>
+              <option>财务/会计/审计</option>
+              <option>法律/法务</option>
+              <option>医疗/健康</option>
+              <option>教育/培训</option>
+              <option>科研/学术</option>
+              <option>制造业/工程</option>
+              <option>建筑/房地产</option>
+              <option>能源/化工/环保</option>
+              <option>设计/创意/广告</option>
+            </optgroup>
+            <optgroup label="服务与其他">
+              <option>销售/市场</option>
+              <option>人力资源/行政</option>
+              <option>咨询/顾问</option>
+              <option>保险/中介服务</option>
+              <option>餐饮/酒店/旅游</option>
+              <option>汽车/交通行业</option>
+              <option>农业/种植/养殖</option>
+              <option>文化/艺术/娱乐</option>
+              <option>美容/健身/生活服务</option>
+              <option>个体经营/创业</option>
+              <option>自由职业</option>
+              <option>学生</option>
+              <option>退休/其他</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>职级</label>
+          <select id="pfLevel">
+            <option value="">请选择</option>
+            <option>普通职员/执行岗</option>
+            <option>基层主管/组长</option>
+            <option>中层管理/经理</option>
+            <option>高层管理/总监及以上</option>
+            <option>企业主/合伙人</option>
+            <option>无职级(自由职业等)</option>
           </select>
         </div>
         <div class="form-group" style="flex:1">
@@ -542,17 +582,19 @@ function getProfile() {
   document.querySelectorAll('#pfFocusGroup .focus-chip.on').forEach(function(b){ foc.push(b.getAttribute('data-v')); });
   var p = {
     occupation: document.getElementById('pfOccupation').value,
+    level: document.getElementById('pfLevel').value,
     marital: document.getElementById('pfMarital').value,
     children: document.getElementById('pfChildren').value,
     income: document.getElementById('pfIncome').value,
     focus: foc
   };
-  if (!p.occupation && !p.marital && !p.children && !p.income && foc.length === 0) return null;
+  if (!p.occupation && !p.level && !p.marital && !p.children && !p.income && foc.length === 0) return null;
   return p;
 }
 function setProfileUI(p) {
   if (!p) return;
   if (p.occupation) document.getElementById('pfOccupation').value = p.occupation;
+  if (p.level) document.getElementById('pfLevel').value = p.level;
   if (p.marital) document.getElementById('pfMarital').value = p.marital;
   if (p.children) document.getElementById('pfChildren').value = p.children;
   if (p.income) document.getElementById('pfIncome').value = p.income;
@@ -567,7 +609,8 @@ function renderProfileTags(p) {
   if (old) old.remove();
   if (!p) return;
   var tags = [];
-  if (p.occupation) tags.push(p.occupation);
+  if (p.occupation) tags.push(p.occupation + (p.level ? '·' + p.level : ''));
+  else if (p.level) tags.push(p.level);
   if (p.marital) tags.push(p.marital);
   if (p.children) tags.push(p.children);
   if (p.income) tags.push('年收入' + p.income);

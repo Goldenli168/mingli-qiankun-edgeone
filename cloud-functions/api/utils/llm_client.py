@@ -34,7 +34,12 @@ def _profile_text(profile: dict | None) -> str:
         return ""
     parts = []
     if profile.get("occupation"):
-        parts.append(f"职业:{profile['occupation']}")
+        occ = profile["occupation"]
+        if profile.get("level"):
+            occ += f"({profile['level']})"
+        parts.append(f"职业:{occ}")
+    elif profile.get("level"):
+        parts.append(f"职级:{profile['level']}")
     if profile.get("marital"):
         parts.append(f"婚姻状况:{profile['marital']}")
     if profile.get("children"):
@@ -52,7 +57,7 @@ def _profile_text(profile: dict | None) -> str:
         "要求:①上述为命主亲口提供的真实信息,直接引用(如'您从事IT管理'),严禁再猜测或与其矛盾;"
         "②婚姻维度按其真实状态写(已婚谈经营与危机预警,未婚/恋爱谈婚恋时间窗口,离异/丧偶谈再婚机遇与重建);"
         "③财富维度对照其收入层级:判断当前收入是否已达命局上限,给出跳档路径或守成策略;"
-        "④事业/大运建议结合其所在行业展开;⑤其重点关注领域要分析得更详实。\n"
+        "④事业/大运建议结合其所在行业与职级展开(如基层员工谈技能晋升,中层管理谈团队与向上管理,企业主谈经营与用人);⑤其重点关注领域要分析得更详实。\n"
     )
 
 # ===== 磁盘缓存 =====

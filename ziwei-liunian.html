@@ -513,7 +513,23 @@ function showSyncBanner() {
     solarLine = '<br>☀ 真太阳时 ' + String(_syncedBirth.hour).padStart(2,'0') + ':' + String(_syncedBirth.minute||0).padStart(2,'0') + '（公历 ' + rawTimeStr + '）';
   }
   detail.innerHTML = '<strong>' + _syncedBirth.year + '</strong>年<strong>' + _syncedBirth.month + '</strong>月<strong>' + _syncedBirth.day + '</strong>日 ' + timeLabel(_syncedBirth.hour, _syncedBirth.minute) + ' · <strong>' + sexText + '</strong>命' + bpStr + solarLine;
+  // P72: 横幅展示已同步的命主画像(用户可确认画像与生辰同人)
+  if (_syncedProfile) {
+    var pt = [];
+    if (_syncedProfile.occupation) pt.push(_syncedProfile.occupation + (_syncedProfile.level ? '·' + _syncedProfile.level : ''));
+    if (_syncedProfile.marital) pt.push(_syncedProfile.marital);
+    if (_syncedProfile.children) pt.push(_syncedProfile.children);
+    if (_syncedProfile.income) pt.push('年收入' + _syncedProfile.income);
+    if (_syncedProfile.focus && _syncedProfile.focus.length) pt.push('关注:' + _syncedProfile.focus.join('/'));
+    if (pt.length) detail.innerHTML += '<br>📋 命主画像已同步：' + pt.join(' · ');
+  }
   card.classList.add('show');
+}
+
+// P72: 画像防串人——仅当表单生辰与同步生辰一致时才附带画像
+function _birthMatchesSync(y, m, d) {
+  if (!_syncedBirth || !_syncedProfile) return false;
+  return +y === +_syncedBirth.year && +m === +_syncedBirth.month && +d === +_syncedBirth.day;
 }
 
 function timeLabel(h, m) {
@@ -620,8 +636,8 @@ function doAnalyze() {
   // P60: 202轮询+断连重试（与ziwei.html一致: 外网链路~80s断连, single-flight算完后缓存HIT秒回）
   var _lnAttempt = 0;
   // P64: refresh仅在第1次请求生效; 轮询带refresh:true会导致服务端每次重算(死循环)
-  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:_syncedProfile});
-  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:_syncedProfile});
+  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
+  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doLiunianFetch() {
