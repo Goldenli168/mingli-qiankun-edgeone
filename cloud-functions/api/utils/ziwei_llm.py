@@ -19,6 +19,14 @@ def _profile_ctx(result):
     return _profile_text(p), _phash(p)
 
 
+def _chart_key(result):
+    """P75: 命盘唯一指纹(公历+性别)——zw缓存key此前只有age/dayun_age,
+    summary的age为空串→所有命盘共用一条summary缓存(A盘总结串到B盘),
+    liunian/dayun/feihua/monthly同理按干支/年龄段互相串盘"""
+    info = result.get("基本信息", {}) if isinstance(result, dict) else {}
+    return _stable_hash(f"{info.get('公历','')}|{info.get('性别','')}")
+
+
 def _age_stage(age):
     """人生阶段描述(P59: 用于LLM年龄约束,防止对小孩谈婚姻职场)"""
     if age < 7: return "幼儿期,只能谈:家庭环境、性格雏形、健康养育,严禁谈学业压力/感情/事业/财富"
@@ -91,6 +99,7 @@ def _build_liunian_context(ln, result, patterns, solar_year):
         "age_stage": _age_stage(ln_age),
         "profile_text": _ptext,
         "profile_phash": _ph,
+        "chart_key": _chart_key(result),
     }
 
 
@@ -142,6 +151,7 @@ def _build_dayun_context(dy, result, patterns):
         "age_stage": age_stage,
         "profile_text": _ptext,
         "profile_phash": _ph,
+        "chart_key": _chart_key(result),
     }
 
 
@@ -238,6 +248,7 @@ def _build_summary_context(result, patterns):
         "dayun_info": dayun_info,
         "profile_text": _ptext,
         "profile_phash": _ph,
+        "chart_key": _chart_key(result),
     }
 
 
@@ -256,6 +267,7 @@ def _build_feihua_context(result, solar_year):
         "age": age,
         "profile_text": _ptext,
         "profile_phash": _ph,
+        "chart_key": _chart_key(result),
     }
 
 
@@ -272,6 +284,7 @@ def _build_monthly_context(ln, result, solar_year):
         "age_stage": _age_stage(age),
         "profile_text": _ptext,
         "profile_phash": _ph,
+        "chart_key": _chart_key(result),
     }
 
 
@@ -372,7 +385,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v27"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v28"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
