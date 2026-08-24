@@ -180,6 +180,51 @@ def _build_summary_context(result, patterns):
     wealth = result.get("财富级别", {}).get("级别", "")
     ming = result.get("命宫地支", "")
     shen = result.get("身宫地支", "")
+    # P74: 当前+下一步大运真实数据注入(此前summary无任何大运数据,
+    # LLM编造"36-45文曲化忌"等——实测文曲忌属56-65己干,当前36-45为巨门忌)
+    dayun_info = ""
+    try:
+        import datetime as _dt4
+        _ZHI4 = list("子丑寅卯辰巳午未申酉戌亥")
+        _SEQ4 = ["命宫", "兄弟", "夫妻", "子女", "财帛", "疾厄",
+                 "迁移", "交友", "官禄", "田宅", "福德", "父母"]
+        _by4 = int(birth) if birth and birth.isdigit() else 0
+        _age4 = _dt4.datetime.now().year - _by4 + 1 if _by4 else 0
+        _gb4 = {}   # 宫名→地支索引
+        _sn4 = {}   # 星曜→本命宫名
+        for p in result.get("十二宫", []):
+            b = p.get("宫位")
+            b = b if isinstance(b, int) else (_ZHI4.index(b) if b in _ZHI4 else None)
+            if b is not None:
+                _gb4[p.get("宫名", "")] = b
+            for s in (p.get("主星") or []) + (p.get("辅星") or []):
+                _sn4.setdefault(s, p.get("宫名", ""))
+        _picked = []
+        for _i, _dy in enumerate(result.get("大运", [])):
+            if _dy.get("起始年龄", 0) <= _age4 <= _dy.get("结束年龄", 999):
+                _picked.append(("当前大运", _dy))
+                if _i + 1 < len(result.get("大运", [])):
+                    _picked.append(("下一步大运", result["大运"][_i + 1]))
+                break
+        _parts = []
+        for _tag, _dy in _picked:
+            _dyb = _gb4.get(_dy.get("大运宫名", ""))
+            _sh_parts = []
+            for _k, _v in (_dy.get("大运四化") or {}).items():
+                if not _v:
+                    continue
+                _np = _sn4.get(_v, "?")
+                _dp = "?"
+                if _dyb is not None and _np in _gb4:
+                    _dp = _SEQ4[(_dyb - _gb4[_np]) % 12]
+                _sh_parts.append(f"{_k}·{_v}(本命{_np}宫/大运{_dp}宫)".replace("宫宫", "宫"))
+            _stars = "、".join(_dy.get("主星", [])) or "借对宫"
+            _parts.append(
+                f"{_tag}:{_dy.get('起始年龄')}-{_dy.get('结束年龄')}岁{_dy.get('大运宫名','')}宫"
+                f"({_dy.get('天干','?')}干,主星{_stars}),四化:{' '.join(_sh_parts) if _sh_parts else '无'}")
+        dayun_info = "\n".join(_parts)
+    except Exception:
+        dayun_info = ""
     _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "birth": birth,
@@ -190,6 +235,7 @@ def _build_summary_context(result, patterns):
         "wealth": wealth,
         "ming": ming,
         "shen": shen,
+        "dayun_info": dayun_info,
         "profile_text": _ptext,
         "profile_phash": _ph,
     }
@@ -310,11 +356,15 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 5. 直接输出12条,不要开场白不要总结。"""
 
     elif gen_type == "summary":
-        prompt = f"""你是资深命理分析师。请为以下命盘写一段180字全局总结。
+        prompt = f"""你是资深命理分析师。请为以下命盘写全局总结。
 
 生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。{ctx.get('profile_text','')}
 
-从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度，直接输出。"""
+【大运数据-最高优先级,严禁编造】
+{ctx.get('dayun_info','')}
+凡涉及大运/大限的内容(年龄段、宫位、干支、四化、主星),必须逐字使用以上数据,严禁凭记忆或推测写任何大运信息(曾有模型把当前的巨门忌错写成其他大运的文曲忌)。
+
+从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③结合上方大运数据谈当前与下一步大运的关键策略 ④中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度，直接输出。"""
     else:
         return None
 
@@ -322,7 +372,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v26"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('profile_phash','noprof')}:v27"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     max_tok = 800  # P56: 保持800（用户要求，不能减少）
