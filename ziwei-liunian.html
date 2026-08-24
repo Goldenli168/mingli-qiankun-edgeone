@@ -535,7 +535,10 @@ function _birthMatchesSync(y, m, d) {
 function timeLabel(h, m) {
   var labels = ['子时','丑时','寅时','卯时','辰时','巳时','午时','未时','申时','酉时','戌时','亥时'];
   var ranges = ['(23-01)','(01-03)','(03-05)','(05-07)','(07-09)','(09-11)','(11-13)','(13-15)','(15-17)','(17-19)','(19-21)','(21-23)'];
-  var idx = Math.floor(((+h) % 24) / 2);
+  // P73: 修复奇数小时错位——floor(h/2)会把19点(戌时)错算成酉时
+  // 正确映射: 1-2点丑/3-4点寅/.../19-20点戌, 即 floor((h+1)/2), 23点特殊归子
+  var hh = +h;
+  var idx = (hh === 23) ? 0 : Math.floor((hh + 1) / 2);
   if (idx < 0 || idx > 11) idx = 0;
   var minStr = m ? ':' + String(m).padStart(2,'0') : ':00';
   return labels[idx] + ' ' + h + minStr + ranges[idx];
