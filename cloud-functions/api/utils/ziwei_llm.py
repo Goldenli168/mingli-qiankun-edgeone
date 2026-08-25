@@ -385,10 +385,13 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v28"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v29"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
-    max_tok = 800  # P56: 保持800（用户要求，不能减少）
+    # P56: 保持800（用户要求，不能减少）
+    # P76: summary例外提到1200——v9.34注入大运数据后总结变多章节,
+    # 800token写不下,实测截断在"这是您"半句话处(用户发现)
+    max_tok = 1200 if gen_type == "summary" else 800
     result = llm_call(prompt, ck, max_tokens=max_tok, skip_cache=_FORCE_REFRESH)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
