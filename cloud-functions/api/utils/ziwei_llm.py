@@ -377,7 +377,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 {ctx.get('dayun_info','')}
 凡涉及大运/大限的内容(年龄段、宫位、干支、四化、主星),必须逐字使用以上数据,严禁凭记忆或推测写任何大运信息(曾有模型把当前的巨门忌错写成其他大运的文曲忌)。
 
-从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③结合上方大运数据谈当前与下一步大运的关键策略 ④中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度，直接输出。"""
+从来因宫出发：①此生核心课题与天赋赛道 ②三方四正联动看一生转折点 ③结合上方大运数据谈当前与下一步大运的关键策略 ④中晚年生活形态建议。结合时代背景给出务实参考，语气专业有温度。
+
+【篇幅硬约束】全文严格控制在1100-1400字(每部分250-350字),四个部分必须全部写完并完整收尾——宁可每部分写得精炼,也绝不许写到一半中断(上一版曾在半句话处截断)。直接输出。"""
     else:
         return None
 
@@ -385,13 +387,13 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v29"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v30"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     # P56: 保持800（用户要求，不能减少）
-    # P76: summary例外提到1200——v9.34注入大运数据后总结变多章节,
-    # 800token写不下,实测截断在"这是您"半句话处(用户发现)
-    max_tok = 1200 if gen_type == "summary" else 800
+    # P76: summary例外——v9.34注入大运数据后总结变多章节,800token写不下截断半句;
+    # 提1200后LLM按比例写更满(1786字)仍截断 → 1500+prompt限幅1100-1400字双保险
+    max_tok = 1500 if gen_type == "summary" else 800
     result = llm_call(prompt, ck, max_tokens=max_tok, skip_cache=_FORCE_REFRESH)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug
