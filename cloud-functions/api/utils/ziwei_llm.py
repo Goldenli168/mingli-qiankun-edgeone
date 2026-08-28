@@ -233,8 +233,18 @@ def _build_summary_context(result, patterns):
                 f"{_tag}:{_dy.get('起始年龄')}-{_dy.get('结束年龄')}岁{_dy.get('大运宫名','')}宫"
                 f"({_dy.get('天干','?')}干,主星{_stars}),四化:{' '.join(_sh_parts) if _sh_parts else '无'}")
         dayun_info = "\n".join(_parts)
+        # P78: 本命四化落宫(用户发现"权忌同宫"被错写成迁移宫——
+        # ctx只有格局名无落宫,LLM只能猜;实测男命丁干天同权+巨门忌同在官禄宫)
+        _nat_sh = result.get("四化", {})
+        natal_sihua = " ".join([
+            f"{_k}·{_v}({_sn4.get(_v, '?')}宫)"
+            for _k, _v in [("化禄", _nat_sh.get("化禄")), ("化权", _nat_sh.get("化权")),
+                           ("化科", _nat_sh.get("化科")), ("化忌", _nat_sh.get("化忌"))]
+            if _v
+        ])
     except Exception:
         dayun_info = ""
+        natal_sihua = ""
     _ptext, _ph = _profile_ctx(result)  # P70
     return {
         "birth": birth,
@@ -246,6 +256,7 @@ def _build_summary_context(result, patterns):
         "ming": ming,
         "shen": shen,
         "dayun_info": dayun_info,
+        "natal_sihua": natal_sihua,
         "profile_text": _ptext,
         "profile_phash": _ph,
         "chart_key": _chart_key(result),
@@ -373,6 +384,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 
 生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。{ctx.get('profile_text','')}
 
+【本命四化落宫-最高优先级,严禁写错宫位】
+{ctx.get('natal_sihua','')}
+凡提及化禄/化权/化科/化忌(含"权忌同宫""禄忌交战"等组合)的所在宫位,必须逐字使用以上落宫数据,严禁凭格局名推测宫位(曾有模型把官禄宫的权忌同宫错写成迁移宫)。
+
 【大运数据-最高优先级,严禁编造】
 {ctx.get('dayun_info','')}
 凡涉及大运/大限的内容(年龄段、宫位、干支、四化、主星),必须逐字使用以上数据,严禁凭记忆或推测写任何大运信息(曾有模型把当前的巨门忌错写成其他大运的文曲忌)。
@@ -387,7 +402,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v30"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v31"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     # P56: 保持800（用户要求，不能减少）
