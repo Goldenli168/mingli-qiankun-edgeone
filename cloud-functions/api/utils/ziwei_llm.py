@@ -162,6 +162,8 @@ def _build_summary_context(result, patterns):
     pattern_names = "、".join([p.get("name", "") for p in patterns[:3]])
     laiyin = result.get("来因宫", {})
     laiyin_stars = "、".join(laiyin.get("主星", []))
+    # P79: 来因宫宫名必须给出(此前只传主星且本盘主星为空,LLM把来因宫错猜成财帛宫)
+    laiyin_text = f"{laiyin.get('宫名','')}宫（{laiyin_stars or '借对宫'}，{laiyin.get('辅星') and '辅星' + '、'.join(laiyin['辅星']) or '无辅星'}）"
     # 三方四正
     ming_branch = None
     for p in result.get("十二宫", []):
@@ -250,7 +252,7 @@ def _build_summary_context(result, patterns):
         "birth": birth,
         "bazi": bazi,
         "patterns": pattern_names,
-        "laiyin_stars": laiyin_stars,
+        "laiyin_stars": laiyin_text,
         "sanfang": sanfang,
         "wealth": wealth,
         "ming": ming,
@@ -383,6 +385,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         prompt = f"""你是资深命理分析师。请为以下命盘写全局总结。
 
 生于{ctx.get('birth','')}，{ctx.get('bazi','')}，格局：{ctx.get('patterns','')}，来因宫：{ctx.get('laiyin_stars','')}，三方四正：{ctx.get('sanfang','')}，财富级别：{ctx.get('wealth','')}。命宫{ctx.get('ming','')}，身宫{ctx.get('shen','')}。{ctx.get('profile_text','')}
+（来因宫宫位已明确给出,必须逐字使用,严禁改为其他宫位——曾有模型把夫妻宫的来因宫错写成财帛宫）
 
 【本命四化落宫-最高优先级,严禁写错宫位】
 {ctx.get('natal_sihua','')}
@@ -402,7 +405,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v31"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:v32"
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     # P56: 保持800（用户要求，不能减少）
