@@ -796,9 +796,16 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # ===== 流年+总结池: 先跑(150s硬上限,P61: 120→150 给大运留足时间) =====
     _pool_deadline = min(_llm_deadline, _time.time() + 150)
     if tasks and _time.time() < _pool_deadline:
-        with ThreadPoolExecutor(max_workers=1) as pool:  # P56: 3→1（串行调用，避免DeepSeek限流）
+        # P77: 1→3路并行(八字页4路并行已稳定运行3周;single-flight锁保证同一时刻
+        # 只有一个盘在算,3路并发DeepSeek无限流风险;失败/超时任务保持模板fallback)
+        with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {pool.submit(_llm_generate, t[0], t[2]): t for t in tasks if _time.time() < _pool_deadline}
-            for fut in as_completed(futures, timeout=max(1, _pool_deadline - _time.time())):
+            try:
+                _fut_iter = list(as_completed(futures, timeout=max(1, _pool_deadline - _time.time())))
+            except Exception:
+                # 超时保护:取已完成的,未完成保持模板fallback,绝不让整个排盘失败
+                _fut_iter = [f for f in futures if f.done()]
+            for fut in _fut_iter:
                 t = futures[fut]
                 try:
                     llm = fut.result()
@@ -944,25 +951,38 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             except Exception:
                 return _dy, None
 
-        # P61: 串行调用大运LLM（150s预算,覆盖当前+全部未来大运,用户硬性要求）
-        _pool_deadline = min(_llm_deadline, _time.time() + 150)  # P61: 20s→150s（此前只够1-2个大运,其余未来大运全模板fallback）
-        for _dy in _dayun_pending:
-            if _time.time() > _pool_deadline:
-                break
-            _dy, _field_map = _process_dayun_llm(_dy)
-            if not _field_map:
-                continue
-            # 写入字段
-            if "综合" in _field_map:
-                _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
-            for _f_name in ["财富", "事业", "婚姻", "子女", "父母", "健康"]:
-                if _f_name in _field_map:
-                    _v = _field_map[_f_name]
-                    for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
-                        if _v.startswith(_pfx):
-                            _v = _v[len(_pfx):].strip()
-                            break
-                    _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
+        # P77: 串行→3路并行大运LLM(150s预算,覆盖当前+全部未来大运,用户硬性要求)
+        # 结果写回在主线程逐个进行(无竞态);超时/失败的大运保持模板fallback
+        _pool_deadline = min(_llm_deadline, _time.time() + 150)
+        if _time.time() < _pool_deadline:
+            with ThreadPoolExecutor(max_workers=3) as _dypool:
+                _dy_futures = {}
+                for _dy in _dayun_pending:
+                    if _time.time() > _pool_deadline:
+                        break
+                    _dy_futures[_dypool.submit(_process_dayun_llm, _dy)] = _dy
+                try:
+                    _dy_iter = list(as_completed(_dy_futures, timeout=max(1, _pool_deadline - _time.time())))
+                except Exception:
+                    _dy_iter = [f for f in _dy_futures if f.done()]
+                for _fut in _dy_iter:
+                    try:
+                        _dy, _field_map = _fut.result()
+                    except Exception:
+                        continue
+                    if not _field_map:
+                        continue
+                    # 写入字段
+                    if "综合" in _field_map:
+                        _dy["综合解读"] = _field_map["综合"][:800]  # 7维分析需要500+字
+                    for _f_name in ["财富", "事业", "婚姻", "子女", "父母", "健康"]:
+                        if _f_name in _field_map:
+                            _v = _field_map[_f_name]
+                            for _pfx in [f"[{_f_name}]", f"【{_f_name}】", f"{_f_name}:", f"{_f_name}："]:
+                                if _v.startswith(_pfx):
+                                    _v = _v[len(_pfx):].strip()
+                                    break
+                            _dy.setdefault("评分", {})[_f_name + "_llm"] = _v[:400]
 
     return result
 
