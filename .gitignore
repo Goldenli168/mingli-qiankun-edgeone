@@ -16,3 +16,8 @@ _test_*.py
 _dump_*.py
 _verify_prod_result.json
 _ziwei_llm_head.py
+venv/
+_svc_*.py
+_venv_*.py
+_debug_*.py
+_server_pull.py
