@@ -465,7 +465,7 @@ def _get_active_patterns(natal_patterns, active_stars, active_sihua=None):
     return activations
 
 
-def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None, force_refresh=False, profile=None):
+def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=True, ln_weights=None, force_refresh=False, profile=None, feedback=None):
     """
     紫微斗数全盘分析
     输入: 公历日期 + 时辰(0-23) + 性别
@@ -679,6 +679,7 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
             "性别": sex,
             "公历": f"{solar_year}年{solar_month}月{solar_day}日",
             "农历": f"{lunar_year}年{lunar_month}月{lunar_day}日",
+            "时辰": hour,  # P80: 过三关断语需换算八字四柱
         },
         "命宫地支": ZHI[ming_branch],
         "身宫地支": ZHI[shen_branch],
@@ -776,6 +777,9 @@ def full_ziwei_analysis(solar_year, solar_month, solar_day, hour, sex, is_solar=
     # P70: 命主画像存入result(各context构建函数从此读取注入prompt)
     if profile:
         result["命主画像"] = profile
+    # P80: 验证反馈存入result(过三关:不符断语作为负样本注入后续所有LLM prompt)
+    if feedback:
+        result["验证反馈"] = feedback
 
     # 流年: 当年+未来3年
     for ln in _liunian_raw:
@@ -2846,6 +2850,99 @@ def _find_laiyin_palace(places, year_gan, year_zhi, lunar_month):
     return {"宫名":p["宫名"],"地支":p.get("地支",""),"主星":p.get("主星",[]),"辅星":p.get("辅星",[]),
             "四化":p.get("四化",{}),
             "释义":f"来因宫在{p['宫名']}(年干{year_gan}落{p.get('天干','')}{p.get('地支','')})——一生课题在于{p['宫名']}领域"}
+
+
+def light_ziwei_chart(solar_year, solar_month, solar_day, hour, sex):
+    """P80: 轻量紫微排盘(毫秒级,无LLM/无评分/无流年)——仅供过三关verify使用。
+    背景: 八字页用户可能从未访问紫微页,主排盘缓存(ml_ziwei_cache.json)为空
+    会导致 /verify 返回 chart_not_cached 而静默隐藏验证区。
+    iztro排盘本身毫秒级,轻量版只产出 verify 所需字段:
+    基本信息/十二宫(宫名+干支+主辅星+命身标记)/四化/来因宫/大运干支。
+    ⚠️ 严禁写入主排盘缓存 key——/ziwei 端点会把轻量盘当完整结果返回(缓存污染)"""
+    try:
+        from iztro_py import astro
+    except ImportError:
+        return None
+    try:
+        time_index = _hour_to_time_index(hour)
+        gender = "男" if sex == "男" else "女"
+        solar_date = f"{solar_year}-{solar_month:02d}-{solar_day:02d}"
+        chart = astro.by_solar(solar_date, time_index, gender, True, "zh-CN")
+    except Exception:
+        return None
+
+    ming_branch = _parse_branch(chart.earthly_branch_of_soul_palace)
+    shen_branch = _parse_branch(chart.earthly_branch_of_body_palace)
+    try:
+        from lunarcalendar import Converter, Solar
+        lunar = Converter.Solar2Lunar(Solar(solar_year, solar_month, solar_day))
+        lunar_year, lunar_month = lunar.year, lunar.month
+    except Exception:
+        lunar_year, lunar_month = solar_year, 1
+    year_gan = GAN[(lunar_year - 4) % 10]
+    year_zhi = ZHI[(lunar_year - 4) % 12]
+
+    from .ziwei_llm import _SIHUA_TABLE
+    sihua = _SIHUA_TABLE.get(year_gan, ["", "", "", ""])
+
+    iztro_by_branch = {}
+    for p in chart.palaces:
+        iztro_by_branch[_parse_branch(p.earthly_branch)] = p
+
+    places, dayun_gz = [], []
+    for i in range(12):
+        palace_zhi_i = (ming_branch - i) % 12
+        iztro_palace = iztro_by_branch.get(palace_zhi_i)
+        if iztro_palace:
+            p_gan = GAN[_parse_stem(iztro_palace.heavenly_stem)]
+            p_zhi = ZHI[_parse_branch(iztro_palace.earthly_branch)]
+        else:
+            WUHU = {"甲": 2, "己": 2, "乙": 4, "庚": 4,
+                     "丙": 6, "辛": 6, "丁": 8, "壬": 8,
+                     "戊": 0, "癸": 0}
+            p_gan = GAN[(WUHU.get(year_gan, 0) + (palace_zhi_i - 2) % 12) % 10]
+            p_zhi = ZHI[palace_zhi_i]
+        major_stars, minor_stars = [], []
+        if iztro_palace:
+            for s in (iztro_palace.major_stars or []):
+                cn = _star_en_to_cn(s.name)
+                if cn:
+                    major_stars.append(cn)
+            for s in (iztro_palace.minor_stars or []):
+                cn = _star_en_to_cn(s.name)
+                if cn:
+                    minor_stars.append(cn)
+            # 大限干支(供防编造白名单:断语引用大运干支视为合法)
+            if iztro_palace.decadal and iztro_palace.decadal.range:
+                if iztro_palace.decadal.range[0] <= 99:
+                    dayun_gz.append({"天干": p_gan, "地支": p_zhi})
+        # P81: 大限虚岁范围(过三关v5应期推断需要——同四化年份靠大限区分应事)
+        dx_age = ""
+        if iztro_palace and iztro_palace.decadal and iztro_palace.decadal.range:
+            _r = iztro_palace.decadal.range
+            if _r[0] <= 99:
+                dx_age = f"{_r[0]}-{_r[1]}岁"
+        places.append({
+            "宫名": PALACE_NAMES[i],
+            "天干": p_gan,
+            "地支": p_zhi,
+            "主星": major_stars,
+            "辅星": minor_stars,
+            "是否命宫": (palace_zhi_i == ming_branch),
+            "是否身宫": (palace_zhi_i == shen_branch),
+            "大限": dx_age,
+        })
+
+    return {
+        "基本信息": {"公历": f"{solar_year}年{solar_month}月{solar_day}日",
+                    "时辰": hour, "性别": gender},
+        "十二宫": places,
+        "四化": {"年干": year_gan, "化禄": sihua[0], "化权": sihua[1],
+                "化科": sihua[2], "化忌": sihua[3]},
+        "来因宫": _find_laiyin_palace(places, year_gan, year_zhi, lunar_month),
+        "大运": dayun_gz,
+        "_light": True,
+    }
 
 
 # ========== 以下是原 __main__ 测试代码 ==========

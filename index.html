@@ -442,6 +442,18 @@
 </div>
 
 <div class="result-section" id="result">
+  <!-- P80: 过三关验证(结果页顶部,先验证再看分析) 样式与逻辑在 verify.js(与紫微页共用) -->
+  <div class="vfy-section" id="verifySection" style="display:none">
+    <div class="vfy-card">
+      <div class="vfy-head">
+        <span class="vfy-title">🔮 过三关 · 先验证命盘准确度</span>
+        <span class="vfy-progress" id="vfyProgress"></span>
+      </div>
+      <div class="vfy-bar" id="vfyBarWrap" style="display:none"><i id="vfyBar" style="width:0%"></i></div>
+      <div id="vfyBody"></div>
+    </div>
+  </div>
+
   <div class="bazi-plate" id="baziPlate"></div>
   <!-- 今年运势快速卡片 — 排盘后第一眼 -->
   <div class="thisyear-card" id="thisyearCard" style="display:none">
@@ -491,10 +503,14 @@
   本系统仅供传统文化学习与娱乐参考，命理分析不能替代专业建议。人生际遇由己，切勿迷信。
 </div>
 
+<script src="verify.js"></script>
 <script>
 // ============================================================
 // 八字命理页 — 前端逻辑 (Bazi Frontend Logic)
 // ============================================================
+
+// P80: 过三关验证(逻辑在 verify.js,与紫微页共用)
+VerifyModule.init({getProfile: getProfile});
 
 // ---- 全局状态 ----
 var WX_GAN = {"甲":"木","乙":"木","丙":"火","丁":"火","戊":"土","己":"土","庚":"金","辛":"金","壬":"水","癸":"水"};
@@ -545,6 +561,7 @@ var BAZI_CACHE_VERSION = 'v3.0';
       if (cached.result && cached.result['命主画像']) renderProfileTags(cached.result['命主画像']);
     }
     renderResult(cached.result, cached.year || 0);
+    VerifyModule.start();  // P80: 恢复缓存结果时同步恢复验证区
   } catch(e) {}
 })();
 
@@ -648,6 +665,7 @@ function doAnalyze() {
   var btn = document.getElementById('btnAnalyze');
   var isRefresh = document.getElementById('chkRefresh') && document.getElementById('chkRefresh').checked;
   var profile = getProfile();  // P70: 命主画像
+  var _baziFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
   btn.disabled = true;
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
@@ -655,7 +673,7 @@ function doAnalyze() {
   fetch('/api/analyze', {
     method: 'POST',
     headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
-    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh, profile:profile})
+    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh, profile:profile, feedback:_baziFeedback})
   })
   .then(function(resp) {
     if (!resp.ok) {
@@ -672,6 +690,9 @@ function doAnalyze() {
     liunianData = {};
     renderResult(data, +year);
     renderProfileTags(data['命主画像'] || profile);  // P70: 画像标签
+    // P80: 校准完成,清除待校准标记并刷新验证区(重算后断语缓存不变,直接显示总评)
+    if (_baziFeedback) { VerifyModule.clearPending(); }
+    VerifyModule.start();
     // 保存生辰信息到 localStorage，供紫微斗数页面共享
     // 注意：如有真太阳时，需保存调整后的时辰，而非原始公历时间
     var saveHour = +hour, saveMin = +minute;

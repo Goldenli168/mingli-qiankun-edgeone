@@ -427,6 +427,7 @@
   </div>
 </div>
 
+<script src="verify.js"></script>
 <script>
 // ============================================================
 // 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
@@ -639,8 +640,9 @@ function doAnalyze() {
   // P60: 202轮询+断连重试（与ziwei.html一致: 外网链路~80s断连, single-flight算完后缓存HIT秒回）
   var _lnAttempt = 0;
   // P64: refresh仅在第1次请求生效; 轮询带refresh:true会导致服务端每次重算(死循环)
-  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
-  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
+  var _lnFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
+  var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_lnFeedback});
+  var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_lnFeedback});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doLiunianFetch() {

@@ -60,6 +60,48 @@ def _profile_text(profile: dict | None) -> str:
         "④事业/大运建议结合其所在行业与职级展开(如基层员工谈技能晋升,中层管理谈团队与向上管理,企业主谈经营与用人);⑤其重点关注领域要分析得更详实。\n"
     )
 
+# ===== P80: 验证反馈助手(过三关:用户确认/纠正的断语 → prompt负样本注入) =====
+def _fhash(feedback: dict | None) -> str:
+    """验证反馈→稳定短hash(缓存key用)。无反馈返回'nofb'。
+    key结构变化=该盘全套LLM重算一次,属设计意图(校准必须重新生成)"""
+    if not feedback or not feedback.get("answers"):
+        return "nofb"
+    import hashlib
+    s = _json.dumps(feedback, sort_keys=True, ensure_ascii=False)
+    return hashlib.md5(s.encode("utf-8")).hexdigest()[:8]
+
+
+def _feedback_text(feedback: dict | None) -> str:
+    """验证反馈→prompt注入文本。不符项作为负样本禁止延伸,符合项作为锚点。
+    隐私红线:correction原文只进prompt,不落服务端磁盘(随请求传递)"""
+    if not feedback or not feedback.get("answers"):
+        return ""
+    matched, mismatched = [], []
+    for a in feedback.get("answers", []):
+        claim = (a.get("claim") or "").strip()
+        if not claim:
+            continue
+        v = a.get("verdict")
+        if v == "match":
+            matched.append(claim)
+        elif v == "mismatch":
+            corr = (a.get("correction") or "").strip()
+            mismatched.append(f"「{claim}」" + (f"(实际情况:{corr})" if corr else ""))
+        elif v == "partial":
+            matched.append(f"{claim}(部分符合)")
+    if not matched and not mismatched:
+        return ""
+    parts = []
+    if matched:
+        parts.append("已确认符合:" + "；".join(matched[:5]))
+    if mismatched:
+        parts.append("已确认与实际不符:" + "；".join(mismatched[:5]))
+    return (
+        "\n【用户验证反馈-最高优先级】" + "。".join(parts) + "。\n"
+        "要求:①不符的推断及其延伸结论严禁再出现在分析中;②已确认符合的推断可作为分析锚点,增强相关判断的信心;"
+        "③凡涉及与不符项相同时间/宫位的推断,改用更谨慎的口径。\n"
+    )
+
 # ===== 磁盘缓存 =====
 _CACHE_DIR = os.environ.get("TMPDIR", os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__))))
 _CACHE_FILE = os.path.join(_CACHE_DIR, "ml_llm_cache.json")

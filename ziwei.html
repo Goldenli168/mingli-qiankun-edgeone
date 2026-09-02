@@ -372,6 +372,18 @@
 </div>
 
 <div class="result-section" id="result">
+  <!-- P80: 过三关验证(结果页顶部,先验证再看分析) 样式与逻辑在 verify.js(与八字页共用) -->
+  <div class="vfy-section" id="verifySection" style="display:none">
+    <div class="vfy-card">
+      <div class="vfy-head">
+        <span class="vfy-title">🔮 过三关 · 先验证命盘准确度</span>
+        <span class="vfy-progress" id="vfyProgress"></span>
+      </div>
+      <div class="vfy-bar" id="vfyBarWrap" style="display:none"><i id="vfyBar" style="width:0%"></i></div>
+      <div id="vfyBody"></div>
+    </div>
+  </div>
+
   <div class="overview-card" id="overviewCard">
     <h3>☰ 命盘总览</h3>
     <div class="overview-info" id="overviewInfo"></div>
@@ -428,6 +440,7 @@
   本系统仅供传统文化学习与娱乐参考，命理分析不能替代专业建议。人生际遇由己，切勿迷信。
 </div>
 
+<script src="verify.js"></script>
 <script>
 // ============================================================
 // 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
@@ -497,8 +510,17 @@ var ZIWEI_CACHE_VERSION = 'v7.3';
     }
     activeDetailIdx = -1;
     renderResult(cached.result);
+    VerifyModule.start();  // P80: 恢复缓存结果时同步恢复验证区
   } catch(e) {}
 })();
+
+// P80: 过三关验证(逻辑在 verify.js,与八字页共用)
+VerifyModule.init({getProfile: function() {
+  var y = document.getElementById('year').value, m = document.getElementById('month').value,
+      d = document.getElementById('day').value;
+  return _birthMatchesSync(y, m, d) ? _syncedProfile : null;
+}});
+
 
 function showSyncBanner() {
   if (!_syncedBirth) return;
@@ -639,8 +661,9 @@ function doAnalyze() {
   // P57: 202轮询+断连重试（外网链路~80s断连，服务端single-flight计算完成后缓存HIT秒回）
   var _ziweiAttempt = 0;
   // P64: refresh仅在第1次请求生效; 轮询重试带refresh:true会导致服务端每次都重新计算(死循环)
-  var _ziweiBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
-  var _ziweiBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null)});
+  var _ziweiFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
+  var _ziweiBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_ziweiFeedback});
+  var _ziweiBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_ziweiFeedback});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
 
   function _doZiweiFetch() {
@@ -685,6 +708,9 @@ function doAnalyze() {
     // 保存新缓存
     _saveCache(year, month, day, hour, currentSex, data);
     renderResult(data);
+    // P80: 校准完成,清除待校准标记并刷新验证区(重算后断语缓存不变,直接显示总评)
+    if (_ziweiFeedback) { VerifyModule.clearPending(); }
+    VerifyModule.start();
     // 缓存分析结果，切页回来保持显示
     try {
       localStorage.setItem('mingli_ziwei_result', JSON.stringify({
