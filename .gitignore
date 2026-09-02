@@ -6,3 +6,13 @@ diag.sh
 __pycache__/
 *.pyc
 mingli-qiankun.service
+ml_*.json
+ml_lock_*.lock
+_deploy*.py
+_health_check.py
+_server_git_sync.py
+_cache_*.py
+_test_*.py
+_dump_*.py
+_verify_prod_result.json
+_ziwei_llm_head.py
