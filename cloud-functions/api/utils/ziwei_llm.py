@@ -562,9 +562,10 @@ def _day_master_of(result) -> str:
         return ""
 
 
-def parse_verify(text: str, result, birth_year: int):
+def parse_verify(text: str, result, birth_year: int, reject_log=None):
     """解析+防编造过滤断语。返回 [{'claim','basis','type'}...] 或 None(<5条降级)。
-    三重白名单:年份范围 / 干支∈命盘真实集 / 宫位∈12宫"""
+    三重白名单:年份范围 / 干支∈命盘真实集 / 宫位∈12宫。
+    reject_log(P81v11):传入list则收集每条判废原因[{"claim","reason"}],供/verify构建具体化重写警告"""
     import re as _re
     import datetime as _dt
     if not text:
@@ -598,6 +599,7 @@ def parse_verify(text: str, result, birth_year: int):
         if len(claim) < 8 or len(claim) > 80:  # P80v2: prompt限40字,80作容错上限
             continue
         ok = True
+        _why0 = []  # P81v11: 本条判废原因(喂回重试prompt)
         # ① 年份白名单:断语必须断过去(出生年~当前年)
         for ym in year_re.finditer(claim + basis):
             y = int(ym.group(0))
@@ -630,11 +632,11 @@ def parse_verify(text: str, result, birth_year: int):
             if _years:
                 _age_at = min(_years) - birth_year + 1
                 if _ctype in ("marriage", "children") and _age_at < 20:
-                    ok = False
+                    ok = False; _why0.append(f"年龄不合理:{_age_at}岁婚恋/生育类须≥20岁")
                 elif _ctype in ("career", "wealth") and _age_at < 16:
-                    ok = False
+                    ok = False; _why0.append(f"年龄不合理:{_age_at}岁职业/财务类须≥16岁")
                 elif _ctype == "study" and not (6 <= _age_at <= 23):
-                    ok = False
+                    ok = False; _why0.append(f"年龄不合理:{_age_at}岁学业类限6-23岁")
         # ④b "或"字改写(P81v7第二轮):LLM"或"字惯性难禁(实测盘1单轮5/7违规,全杀→验证区为空)。
         # 改为截取首选事件(首选是LLM的第一判断,正确性由用户验证闭环仲裁,优于整条剔除);
         # "可能/大概"仍整条剔除(纯 hedging,无首选可取)
@@ -643,7 +645,7 @@ def parse_verify(text: str, result, birth_year: int):
             if len(claim) < 8:
                 ok = False
         if ok and any(w in claim for w in ("可能", "大概")):
-            ok = False
+            ok = False; _why0.append("含'可能/大概'不确定词")
         # ⑤ 化曜星曜-年份交叉校验(P81v5新增):依据中"X禄/X权/X科/X忌"的星曜必须∈该行年份四化表
         # (实测漏洞:LLM把2006丙戌的文昌科安到2008戊子头上——干支/宫位白名单查不出张冠李戴)
         _gz_m = gz_re.search(claim + basis)
@@ -665,7 +667,7 @@ def parse_verify(text: str, result, birth_year: int):
                         continue  # 与本命四化一致的引用(LLM常省略"本命"前缀),豁免
                     _idx = "禄权科忌".index(_hua)
                     if _idx >= len(_year_sh) or _year_sh[_idx] != _star:
-                        ok = False
+                        ok = False; _why0.append(f"依据引用{_star}化{_hua}与该年四化不符(张冠李戴)")
                         break
         # ⑤b 红鸾天喜/十神-年份交叉校验(P81v5第二轮):依据中"红鸾动/天喜动/X年(十神)"必须与该年实际值一致
         # (实测漏洞:LLM在巳年依据里写"红鸾动",癸巳正财年结婚写成"红鸾动"——信号虚标)
@@ -675,13 +677,14 @@ def parse_verify(text: str, result, birth_year: int):
             _tx = _ZHI_OPP.get(_hl, "")
             _yz = _gz_m.group(0)[1]
             if ("红鸾动" in basis and _yz != _hl) or ("天喜动" in basis and _yz != _tx):
-                ok = False
+                ok = False; _why0.append("红鸾/天喜动标注与该年实际不符")
         if ok and _gz_m:
             _dm = _day_master_of(result)
             if _dm:
                 for _ssm in _re.finditer(r"(正财|偏财|正官|七杀|正印|偏印|食神|伤官|比肩|劫财)年", basis):
                     if _shishen(_dm, _gz_m.group(0)[0]) != _ssm.group(1):
                         ok = False
+                        _why0.append(f"十神虚标:{_gz_m.group(0)}年为{_shishen(_dm, _gz_m.group(0)[0])}年,非{_ssm.group(1)}年——照抄信号行")
                         break
         # ⑤c-⑤f 事件类型-信号匹配校验(P81v6,第二盘4条失准的代码兜底):
         # 2017买房(该年田宅信号为零)/2023投资亏损(实为禄权入田宅的置业年)/2019剖腹产(编造分娩方式)
@@ -704,12 +707,12 @@ def parse_verify(text: str, result, birth_year: int):
                 if ok and _re.search(r"结婚|领证|订婚|相亲|恋爱|拍拖|分手|离婚|再婚", claim):
                     if not (_row0["ss"] in _spouse_ss or "夫妻" in _row0["ln_ming"]
                             or _re.search(r"[禄权科][^ ]*→夫妻", _row0["sihua_text"])):
-                        ok = False
+                        ok = False; _why0.append("该年无婚恋合格信号(配偶星年/禄权科入夫妻/命入夫妻全无)")
                 # ⑤c2 子女类:该年必须至少占1个子女信号(子女星/命入子女/四化入子女/红鸾天喜动)
                 if ok and _re.search(r"生子|添丁|怀孕|生育|得子|得女|二胎", claim):
                     if not (_row0["ss"] in _child_ss or "子女" in _row0["ln_ming"]
                             or "→子女" in _row0["sihua_text"] or _row0["hltx"]):
-                        ok = False
+                        ok = False; _why0.append("该年无子女合格信号(子女星年/命入子女/四化入子女/红鸾天喜全无)")
                 # ⑤d 置业迁居类(P81v9收紧):合格信号仅"权/忌→田宅"或"禄→田宅+限田宅双锚"——
                 # 命入田宅只是位置不是动作、化科=文书名声太轻、单化禄=财物之缘非变动动作
                 # (实测:2008戊子禄贪狼→田宅+命入田宅+红鸾动被误断搬家,命主22岁大学在读并无搬家;
@@ -718,26 +721,71 @@ def parse_verify(text: str, result, birth_year: int):
                     if not (_re.search(r"[权忌][^ ]*→田宅", _row0["sihua_text"])
                             or (_re.search(r"禄[^ ]*→田宅", _row0["sihua_text"])
                                 and "田宅" in _row0["dx"])):
-                        ok = False
+                        ok = False; _why0.append("该年无置业合格信号(须化权/化忌入田宅,或化禄入田宅+限田宅双锚)")
                 # ⑤e 亏损类:该年必须有"化忌入财帛/兄弟"(禄权入田宅的置业年严禁断亏损)
                 if ok and _re.search(r"亏损|破财|赔钱|投资失利|亏本|被坑|被骗", claim):
                     if not _re.search(r"忌[^ ]*→(财帛|兄弟)", _row0["sihua_text"]):
-                        ok = False
+                        ok = False; _why0.append("该年无化忌入财帛/兄弟,严禁断亏损")
                 # ⑤g 手术住院类(P81v8):仅限"化忌→疾厄"——命入疾厄每12年一轮太泛
                 # (实测:2019己亥仅命入疾厄被误断手术,命主并无手术住院)
                 if ok and _re.search(r"手术|住院|大病|重病|开刀", claim):
                     if not _re.search(r"忌[^ ]*→疾厄", _row0["sihua_text"]):
-                        ok = False
+                        ok = False; _why0.append("手术/住院仅限化忌入疾厄年,该年无忌入疾厄")
                 # ⑤h 职业类年龄下限(P81v8):≤20岁(大学在读期)严禁跳槽/升职类断语
                 # (实测:2006丙戌命入迁移被误断"跳槽",命主当年20岁实为升大学)
                 if ok and birth_year:
                     _age0 = min(_ys0) - birth_year + 1
                     if _age0 <= 20 and _re.search(
                             r"跳槽|升职|创业|调岗|外派|离职|加薪|晋升|上任|换工作|入职", claim):
-                        ok = False
+                        ok = False; _why0.append(f"{_age0}岁(大学在读期)严禁职业变动类断语,该年龄段变动信号只能断学业")
+                # ⑤i 依据四化落宫一致性(P81v10):依据里"星化X入Y宫/ X星→Y宫"的落宫必须与该年信号行一致——
+                # ⑤只校验星+化是否属该年四化,不校验落宫(实测:盘1 2019依据写"忌文曲入田宅宫",
+                # 文曲确为该年忌星⑤放行,但盘1文曲在交友宫——"忌文曲→田宅"是另一张盘的信号,张冠李戴)。
+                # 本命四化引用豁免(与⑤同规则:本命落宫本就不在流年信号行里)
+                if ok:
+                    _all_sh2 = {s for row in _SIHUA_TABLE.values() for s in row if s}
+                    _nsh = result.get("四化", {}) or {}
+                    _npairs = {(_nsh.get("化" + h, ""), h) for h in "禄权科忌"}
+                    _row_sh = {(m.group(2), m.group(1), m.group(3).rstrip("宫"))
+                               for m in _re.finditer(r"([禄权科忌])([一-龥]{2})→([一-龥]{1,3})宫?",
+                                                     _row0["sihua_text"])}
+                    _cites = [(m.group(1), m.group(2), m.group(3), m.start()) for m in
+                              _re.finditer(r"([一-龥]{2})化(禄|权|科|忌)[入→]([一-龥]{1,3})宫", basis)]
+                    _cites += [(m.group(2), m.group(1), m.group(3), m.start()) for m in
+                               _re.finditer(r"(?<!化)([禄权科忌])([一-龥]{2})[入→]([一-龥]{1,3})宫", basis)]
+                    for _st, _hu, _pl, _pos in _cites:
+                        if _st not in _all_sh2:
+                            continue  # 非四化星曜引用(如"流年化忌"),不校验
+                        if basis[max(0, _pos - 2):_pos] in ("本命", "生年"):
+                            continue  # 本命四化引用,落宫与流年不同,豁免
+                        if (_st, _hu) in _npairs:
+                            continue  # 与本命四化一致(省略"本命"前缀),豁免
+                        if (_st, _hu, _pl) not in _row_sh:
+                            _actual = next((p for (s2, h2, p) in _row_sh
+                                            if s2 == _st and h2 == _hu), "")
+                            ok = False
+                            _why0.append(f"依据落宫虚标:{_st}化{_hu}实际落{_actual or '?'}宫,非{_pl}宫——照抄信号行")
+                            break
+                # ⑤j 考试失利/复读类(P81v11):仅限"忌→官禄"或"文昌/文曲化忌"——
+                # 忌入福德=情绪郁闷与考试无关(实测:2005乙酉忌太阴→福德被误断高考复读,
+                # 命主当年正常高中读书,2006应届升学;且该条是"复读或考试失利"或字改写产物)
+                if ok and _re.search(r"复读|考试失利|落榜|考研失败|名落孙山", claim):
+                    if not (_re.search(r"忌[^ ]*→官禄", _row0["sihua_text"])
+                            or _re.search(r"忌(文昌|文曲)→", _row0["sihua_text"])):
+                        ok = False; _why0.append("复读/考试失利仅限化忌入官禄或文昌文曲化忌年,该年信号不符")
         if ok:
             items.append({"claim": claim, "basis": basis,
                           "type": _classify_claim(claim)})
+        elif reject_log is not None:
+            # P81v12: 附该年信号行原文——实测"十神虚标"类连两轮照犯(壬辰=偏财被写成正财/正官),
+            # 只给判废原因不够,必须把正确写法(信号行)一并喂回,LLM才有"照抄"的锚
+            _ys9 = [int(y.group(0)) for y in year_re.finditer(claim)]
+            _rw9 = _sig_rows.get(min(_ys9)) if (_ys9 and _sig_rows) else None
+            _entry = {"claim": claim, "reason": "；".join(_why0)
+                      or "白名单校验未过(年份/干支/宫位数据编造)"}
+            if _rw9:
+                _entry["signal"] = _rw9["line"]
+            reject_log.append(_entry)
     return items[:8] if len(items) >= 5 else None
 
 
@@ -857,7 +905,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【应期规则-信号分权重,严禁只看四化选年】
 - 婚恋(恋爱/结婚/领证/订婚): 权重①配偶星年(男命正财/偏财年、女命正官/七杀年) ②流年化禄/化权/化科入夫妻宫 ③流年命入夫妻宫 ④红鸾天喜动(仅辅助加分)。⚠️①②③全无的年份,即使红鸾/天喜动也严禁断任何婚恋事件(含恋爱)——红鸾天喜是"喜庆星",婚恋/添丁/庆典都可能应,不是婚恋专属铁证(实测教训:2014仅有天喜动被误断结婚,实为添丁;2008仅有红鸾动被误断恋爱,真正的恋爱年2007=化权天同入夫妻宫;真正的结婚年2012=正官年+化禄入夫妻宫)
 - 子女(怀孕/生育): 权重①子女星年(男命正官/七杀年、女命食神/伤官年) ②流年命入子女宫或四化入子女宫 ③红鸾天喜动(添丁亦主喜庆)。生育断语年份必须晚于结婚断语年份(不主动断未婚先孕)
-- 学业考试: 正印/偏印年; 化科(文昌/文曲化科分量最重)
+- 学业考试(升学/高考/考研/考公/留学): 正印/偏印年; 化科(文昌/文曲化科分量最重)。⚠️比选规则:某年同时占"印年+文昌/文曲化科"=双信号,权重高于单印年(实测教训:2006丙戌偏印+文昌化科=真实升大学年,2007丁亥仅正印年被误选,年份偏1)。⚠️首次本科入学一般在18-20岁(虚岁):断21岁及以后的"考入大学"必须有留级/复读类强证据支撑,否则优先往18-20岁的印年找(实测教训:断2007丁亥21岁考入大学,实为2006丙戌20岁正常应届升学——错误的晚一年锚点还会诱导编造出"复读"来圆场)
+- 考试失利/复读/落榜: 仅限"化忌入官禄宫"或"文昌/文曲化忌"的年份下断——忌入福德=情绪郁闷与考试无关,严禁据忌入福德/夫妻/迁移断考试失利(实测教训:2005乙酉忌太阴→福德被误断高考复读,命主当年正常高中读书,次年应届升学)
 - 置业迁居(买房/卖房/搬家/迁居/装修): 只允许在①"化权/化忌入田宅宫"或②"化禄入田宅宫且同年所在大限为田宅宫(双锚)"的年份下断。⚠️单化科入田宅分量太轻(科=文书名声,不是重资产动作),严禁据"科入田宅"断买房搬家——即使同年命入田宅也不算(实测教训:2015乙未命入田宅+紫微化科入田宅被误断买房,命主该年并未置业)。⚠️单化禄入田宅同样不够——禄=财物之缘,权/忌才是变动落实的动作四化;命入田宅+红鸾动也救不回来(实测教训:2008戊子禄贪狼→田宅+命入田宅+红鸾动被误断搬家,命主22岁大学在读并无搬家;两盘6个真实置业年全是权/忌→田宅或禄→田宅+限田宅双锚:2012权→田宅/2019忌→田宅/2023禄→田宅+限田宅)。⚠️迁移宫化忌=在外奔波受挫,严禁据此断搬家(实测教训:2005乙酉太阴化忌入迁移被误断搬家,命主该年并未搬家)
 - 事业变动: 正官/七杀/正偏财年; 化禄/化权入官禄宫; 流年命入官禄宫。⚠️22岁及以前(大学在读期)严禁断跳槽/升职/创业/调岗——该年龄段命入迁移/官禄/化禄引动只能断学业事件(升学/高考/考研/转学/毕业/留学)(实测教训:2006丙戌命入迁移被误断"跳槽",命主当年20岁实为升大学)
 - 健康伤病: 手术/住院/大病仅限"化忌入疾厄宫"的年份下断——流年命入疾厄每12年一轮太泛,单命入疾厄严禁断手术住院(实测教训:2019己亥仅命入疾厄被误断手术,命主该年并无手术住院;当年忌文曲→田宅,真实发生的是买房)
@@ -889,6 +938,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 「2013癸巳年买房置业」(与2023癸卯同为癸年、破军化禄入田宅完全相同,但2023限入田宅大限信号更重)(错:同天干年必须选有大限/命宫加持的年份)
 「2015乙未年买房置业」(该年命入田宅+紫微化科入田宅,但无禄/权/忌入田宅)(错:化科=文书名声分量太轻,命入田宅只是位置不是动作,置业必须禄/权/忌入田宅或限入田宅大限)
 「2008戊子年搬家迁居」(该年禄贪狼→田宅+命入田宅+红鸾动,但无化权/化忌入田宅、大限也不在田宅宫)(错:单化禄入田宅只是财物之缘不是变动动作,置业搬家必须权/忌入田宅或禄入田宅+限田宅双锚)
+「2007丁亥年考入大学」(命主21岁才首次入学偏晚;2006丙戌20岁偏印+文昌化科双信号,才是真实升学年)(错:升学比选先看18-20岁印年+文昌/文曲化科双信号,别被单印年吸走)
+「2005乙酉年高考复读」(该年忌太阴→福德宫,无化忌入官禄、文昌文曲也未化忌)(错:忌入福德=情绪郁闷与考试无关,复读/考试失利仅限化忌入官禄宫或文昌/文曲化忌年)
 「2006丙戌年跳槽」(命主当年20岁还在读大学)(错:22岁前变动信号只能断升学/学业事件,严禁断跳槽)
 「2019己亥年手术」(该年仅命入疾厄,无化忌入疾厄)(错:命入疾厄每12年一轮太泛,手术住院仅限化忌入疾厄年;该年忌文曲→田宅,真实发生的是买房)
 「2019己亥年剖腹产一子」(错:严禁断分娩方式,只能断"生子添丁")
@@ -913,16 +964,19 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        # P81: verify的prompt v9(置业再收紧:单化禄→田宅不算动作信号,须权/忌→田宅或禄→田宅+限田宅双锚
-        # ——实测2008戊子禄贪狼→田宅+命入田宅+红鸾被误断搬家,命主22岁大学在读并无搬家;
+        # P81: verify的prompt v10(学业比选:印年+文昌/文曲化科双信号>单印年,首入本科限18-20岁;
+        # 考试失利/复读仅限忌→官禄或文昌文曲化忌——实测2007升学偏1年(实2006)+2005复读虚标;
+        # v9=置业再收紧:单化禄→田宅不算动作信号,须权/忌→田宅或禄→田宅+限田宅双锚;
         # v8=置业信号收紧为禄权忌→田宅/限田宅,命入田宅+化科不算;职业类≤20岁禁断;
         # 手术住院仅限忌→疾厄;忌入夫妻不算婚恋吉信号;女命太阳=夫星得财优先断丈夫带来;
         # v7=⑤c红鸾天喜降为纯辅助+同天干年必须选大限/命宫加持年;v6=信号权重排序+置业/亏损/分娩方式纠偏)
         # →独立递增,不影响其他gen_type缓存
-        _ck_ver = "v42" if gen_type == "verify" else "v33"
+        _ck_ver = "v43" if gen_type == "verify" else "v33"
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{_ck_ver}"
         if ctx.get("retry_note"):
-            ck += ":r1"  # P81v6: 重试轮独立缓存key,不与首轮互相污染
+            # P81v12: key含retry_note哈希——旧版固定":r1",警告内容变了仍命中旧缓存,
+            # 实测信号行注入版重试4s"秒回"(吃的是上一版警告的旧LLM输出)
+            ck += ":r1:" + _stable_hash(ctx["retry_note"][:200])
     except:
         ck = f"zw:{gen_type}:{int(_t.time())}"
     # P56: 保持800（用户要求，不能减少）

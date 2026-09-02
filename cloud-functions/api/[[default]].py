@@ -480,14 +480,23 @@ def verify_api():
 
         # 解析+多重白名单过滤(年份/干支/宫位/年龄/或字/化曜/红鸾十神/婚恋置业亏损信号)
         birth_year = year
-        items = parse_verify(raw, chart, birth_year)
+        _rej = []  # P81v11: 逐条判废原因
+        items = parse_verify(raw, chart, birth_year, reject_log=_rej)
         if not items:
             # P81v6: 首轮存活<5条→追加重写警告重试一次(独立缓存key:r1,不污染首轮缓存)
+            # P81v11: 重写警告具体化——逐条列出判废断语+原因(实测:泛泛警告无效,LLM第2轮照犯;
+            # 2012结婚连两轮十神虚标"正财/正官年"(实为偏财)、2007恋爱无夫妻信号照断)
+            # P81v12: 再附该年信号行原文——只给原因LLM仍会自行推算错(十神连两轮虚标),
+            # 给它"照抄"的锚
+            _rej_txt = "\n".join(
+                f"·「{r['claim'][:24]}」→ {r['reason']}"
+                + (f"\n  该年正确信号行(依据只许从这里照抄):{r['signal']}" if r.get("signal") else "")
+                for r in _rej[:7]) or "·多数断语未过校验"
             ctx["retry_note"] = (
-                "\n\n【重写警告】你上一轮的断语大半被判废,原因集中在:"
-                "①断语或依据里出现\"或/可能/大概\"等不确定词;②引用的四化/红鸾天喜/十神与该年信号表不符;"
-                "③结婚/生子/买房等事件选了信号表上无对应信号的年份。"
-                "本轮必须严格逐条对照信号表下断,每条只断一件确定的事,宁缺毋滥。"
+                "\n\n【重写警告-逐条判废原因】你上一轮以下断语被判废:\n" + _rej_txt +
+                "\n本轮铁规:①被判废的[事件类型+年份]组合严禁再用,换信号更强的年份;"
+                "②依据里的十神/四化落宫/红鸾天喜必须逐字照抄该年那一行信号,一个字都不许改;"
+                "③每条只断一件确定的事,宁缺毋滥。"
             )
             _zllm._FORCE_REFRESH = bool(force_refresh)
             raw2 = _zllm._llm_generate("verify", ctx)
@@ -642,5 +651,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.46-verify-v9", "has_light_chart": True, "verify_cache_v42": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.47-verify-v10", "has_light_chart": True, "verify_cache_v43": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
