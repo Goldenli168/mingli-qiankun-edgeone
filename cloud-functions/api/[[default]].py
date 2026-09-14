@@ -515,6 +515,74 @@ def verify_api():
         return jsonify({"ok": True, "verify": None, "reason": "error"})
 
 
+@app.route("/family", methods=["POST", "OPTIONS"])
+def family_api():
+    """P82: 家庭分析(LLM):父母画像/父亲事业财富/父母健康/手足情况四段。
+    取象规则经盘3/盘4人工推演验证后沉淀(太阳=父/太阴=母/父母宫立太极财位/
+    大限干禄忌=十年气候/健康取象只到器官系统层级/禁断寿数)"""
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        return resp
+
+    data = request.get_json(force=True)
+    try:
+        year  = int(data["year"])
+        month = int(data["month"])
+        day   = int(data["day"])
+        hour  = int(data.get("hour", 12))
+        sex   = data.get("sex", "男")
+    except (KeyError, ValueError):
+        return jsonify({"error": "请输入完整的出生信息"}), 400
+
+    try:
+        profile = data.get("profile") if isinstance(data.get("profile"), dict) else None
+        force_refresh = data.get("refresh", False)
+        chart = _get_ziwei_chart(year, month, day, hour, sex, profile, force_refresh)
+        if not chart:
+            return jsonify({"ok": True, "family": None, "reason": "chart_not_cached"})
+
+        from utils import ziwei_llm as _zllm
+        from utils.ziwei_llm import _build_family_context, parse_family
+        from utils.ziwei_llm import _chart_key as _ck
+        if profile and isinstance(chart, dict) and not chart.get("命主画像"):
+            chart["命主画像"] = profile
+        _zllm._FORCE_REFRESH = bool(force_refresh)
+        ctx = _build_family_context(chart, chart.get("格局", []))
+        raw = _zllm._llm_generate("family", ctx)
+        _zllm._FORCE_REFRESH = False
+        secs = parse_family(raw, ctx.get("ctx_text", ""))
+        if not secs and raw:
+            # 首轮解析失败(段数不够/非法宫位引用/星曜编造)→注入警告重试一次(独立缓存key)
+            ctx["retry_note"] = (
+                "\n\n【重写警告】你上一轮输出未通过校验(段数不足4段,或宫位引用张冠李戴,"
+                "或提到了上下文未给出的星曜)。"
+                "本轮铁规:①严格4段,每段**【标题】**开头;"
+                "②宫位/星曜/四化只许照抄上方给出的数据行,一个字不许改;"
+                "③严禁'对宫/三合借力'自行推算;大限引用与数据行'限禄/限权/限忌'逐字一致。"
+            )
+            _zllm._FORCE_REFRESH = bool(force_refresh)
+            raw2 = _zllm._llm_generate("family", ctx)
+            _zllm._FORCE_REFRESH = False
+            secs = parse_family(raw2, ctx.get("ctx_text", ""))
+            if not secs and raw2:
+                raw = raw2
+        if not secs:
+            if raw:
+                # 降级:返回原文由前端直接展示(好过没有),标记raw让前端不加段卡样式
+                return jsonify({"ok": True, "chart_key": _ck(chart),
+                                "family": {"sections": None, "raw": raw}})
+            return jsonify({"ok": True, "family": None, "reason": "generate_failed"})
+        return jsonify({"ok": True, "chart_key": _ck(chart),
+                        "family": {"sections": secs}})
+    except Exception as e:
+        import traceback
+        sys.stderr.write("[family] %s | %s\n" % (str(e)[:200], traceback.format_exc()[:500]))
+        return jsonify({"ok": True, "family": None, "reason": "error"})
+
+
 _VERIFY_STATS_FILE = os.path.join(_CACHE_DIR, "ml_verify_stats.json")
 
 
@@ -651,5 +719,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.49-verify-v12", "has_light_chart": True, "verify_cache_v45": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.50-family-v3", "has_light_chart": True, "verify_cache_v46": True, "family_cache_v3": True, "has_family": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事

@@ -53,6 +53,22 @@ STAR_EN2CN = {
     "huagaiMin": "华盖", "xianchiMin": "咸池",
     "tiankongMin": "天空", "xunkongMin": "旬空",
     "jieluMin": "截路", "dahaoMin": "大耗",
+    # 杂曜原始拼音名(iztro-py adjective_stars 直接返回这些key,P82v3补全——
+    # 缺失时 _star_en_to_cn 原样返回拼音,曾致"yuede"泄漏进LLM上下文)
+    "enguang": "恩光", "jieshen": "解神", "kongwang": "空亡", "nianjie": "年解",
+    "tiande": "天德", "tianfuAdj": "天福", "tianguan": "天官", "yinsha": "阴煞",
+    "yuede": "月德", "tianwu": "天巫", "tianshou": "天寿", "tiancai": "天才",
+    "tianxing": "天刑", "tianyao": "天姚", "tianyue": "天月", "taifu": "台辅",
+    "fenggao": "封诰", "longchi": "龙池", "fengge": "凤阁", "tianku": "天哭",
+    "tianxu": "天虚", "feilian": "蜚廉", "posui": "破碎", "huagai": "华盖",
+    "xianchi": "咸池", "santai": "三台", "bazuo": "八座", "tiangui": "天贵",
+    "tianchu": "天厨", "tiankong": "天空", "xunkong": "旬空", "jielu": "截路",
+    "dahao": "大耗", "hongluan": "红鸾", "tianxi": "天喜", "guchen": "孤辰",
+    "guasu": "寡宿", "jiekong": "截空", "bingfu": "病符", "diaoke": "吊客",
+    "baihu": "白虎", "sangmen": "丧门", "guansuo": "贯索", "suiyi": "岁驿",
+    "xishen": "息神", "jiangxing": "将星", "panan": "攀鞍", "suijian": "岁建",
+    "huiqi": "晦气", "xiaohao": "小耗", "jiesha": "劫煞", "zaisha": "灾煞",
+    "zhibei": "指背", "tiansha": "天煞", "wangshen": "亡神", "yuesha": "月煞",
 }
 
 # iztro 宫名英文→中文映射

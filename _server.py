@@ -8,6 +8,17 @@ app = Flask(__name__)
 
 from utils.bazi_core import full_analysis
 
+# P82: 挂载紫微系端点(/api/ziwei /api/verify /api/family /api/liunian /api/ask...)
+# ——此前本地_preview只能跑八字页,ziwei.html的/api/*请求全404;
+# 用DispatcherMiddleware把[[default]].py的app挂到/api/下(与生产Nginx /api/→/ 行为一致)
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    "mq_api", os.path.join(BASE, 'cloud-functions', 'api', '[[default]].py'))
+_mq = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_mq)
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {'/api': _mq.app})
+
 # ========== API 鉴权（与 EdgeOne 云函数一致） ==========
 _API_KEY = os.environ.get("ML_API_KEY", "mingli-qiankun-v7")  # 本地开发用固定密钥
 _AUTH_WHITELIST = {"/health", "/", "/favicon.ico"}

@@ -379,9 +379,10 @@ def _classify_claim(claim: str) -> str:
 
 
 def _year_signal_rows(result, birth_year: int, day_master: str = "",
-                      hl_zhi: str = "", tx_zhi: str = "") -> list:
+                      hl_zhi: str = "", tx_zhi: str = "", end_year: int = 0) -> list:
     """结构化流年应期信号(P81v6:渲染表格与parse校验共用同一份数据,杜绝两处算法漂移)。
-    每年返回: {year,gan,zhi,gz,age,ln_ming,dx,ss,hltx,sihua_text,line}"""
+    每年返回: {year,gan,zhi,gz,age,ln_ming,dx,ss,hltx,sihua_text,line}
+    end_year(family用): >0时表格延伸到该年(未来预测锚点);默认0=到当前年为止"""
     import datetime as _dt
     import re as _re
     ZHI = list("子丑寅卯辰巳午未申酉戌亥")
@@ -394,12 +395,14 @@ def _year_signal_rows(result, birth_year: int, day_master: str = "",
         m = _re.match(r"(\d+)-(\d+)岁", p.get("大限", "") or "")
         if m:
             dx_list.append((int(m.group(1)), int(m.group(2)),
-                            f"{p.get('天干','')}{p.get('地支','')}{p.get('宫名','')}宫".replace("宫宫", "宫")))
+                            f"{p.get('天干','')}{p.get('地支','')}{p.get('宫名','')}宫".replace("宫宫", "宫"),
+                            p.get("天干", "")))
     now_y = _dt.datetime.now().year
     if not birth_year:
         return []
+    _end_y = max(now_y, end_year) if end_year else now_y
     rows = []
-    for y in range(birth_year + 6, now_y + 1):
+    for y in range(birth_year + 6, _end_y + 1):
         g, z = GAN[(y - 4) % 10], ZHI[(y - 4) % 12]
         age = y - birth_year + 1
         stars = _SIHUA_TABLE.get(g, ["", "", "", ""])
@@ -413,17 +416,34 @@ def _year_signal_rows(result, birth_year: int, day_master: str = "",
         # 所在大限——同四化年份(2012/2022同为壬年)只能靠大限区分应事
         dx = next((d for d in dx_list if d[0] <= age <= d[1]), None)
         dx_text = dx[2] if dx else ""
+        # v13: 大限干四化(禄/忌)——岁限双忌=大事应期决定性叠加(盘1父亡2026=丙午限+丙午年双廉贞忌入父母宫)
+        dx_sihua, double_ji = "", False
+        if dx and dx[3]:
+            dstars = _SIHUA_TABLE.get(dx[3], ["", "", "", ""])
+            dparts = []
+            for hi2 in (0, 3):  # 只取大限禄/忌(权科噪音大,先不上)
+                sname2 = dstars[hi2]
+                if sname2:
+                    pal2 = star_palace.get(sname2, "?")
+                    dparts.append(f"限{_SIHUA_LABELS[hi2][1]}{sname2}→{pal2}宫".replace("宫宫", "宫"))
+            dx_sihua = " ".join(dparts)
+            if dstars[3] and stars[3] and \
+                    star_palace.get(dstars[3], "") == star_palace.get(stars[3], "?"):
+                double_ji = True
         # 流年十神(对日主)——八字应期信号(2006偏印=学业/2012偏财=妻/2014七杀=子女)
         ss = _shishen(day_master, g)
         hltx = "红鸾动" if z == hl_zhi else ("天喜动" if z == tx_zhi else "")
         tags = "/".join(t for t in [f"{age}岁",
                                     f"命入{ln_ming}宫".replace("宫宫", "宫") if ln_ming else "",
                                     f"限{dx_text}" if dx_text else "",
-                                    f"{ss}年" if ss else "", hltx] if t)
+                                    f"{ss}年" if ss else "", hltx,
+                                    "⚠岁限双忌" if double_ji else ""] if t)
         rows.append({"year": y, "gan": g, "zhi": z, "gz": g + z, "age": age,
                      "ln_ming": ln_ming, "dx": dx_text, "ss": ss, "hltx": hltx,
                      "sihua_text": " ".join(parts),
-                     "line": f"{y}{g}{z}({tags}):{' '.join(parts)}"})
+                     "dx_sihua": dx_sihua, "double_ji": double_ji,
+                     "line": f"{y}{g}{z}({tags}):{' '.join(parts)}"
+                             + (f" |{dx_sihua}" if dx_sihua else "")})
     return rows
 
 
@@ -526,6 +546,227 @@ def _build_verify_context(result, patterns):
         "profile_phash": _ph,
         "chart_key": _chart_key(result),
     }
+
+
+def _build_family_context(result, patterns):
+    """P82: 家庭分析LLM上下文(父母画像/父财/父母健康/手足)。
+    取象规则来自盘3(1989-7-2辰时女:眼疾/夜场/流产三案例)与盘4(2014-1-19辰时男:
+    父母画像/父财台阶/手足妹妹2022/健康取象双锚点确认)人工推演验证,全部数据给足,
+    LLM只断不算——严禁其自行排盘或推算宫位。"""
+    import datetime as _dt
+    info = result.get("基本信息", {})
+    solar = info.get("公历", "")
+    try:
+        birth_year = int(solar[:4])
+    except Exception:
+        birth_year = 0
+    age = _dt.datetime.now().year - birth_year + 1 if birth_year else 0
+
+    star_palace, branch_palace, pal_by_name, dx_list = {}, {}, {}, []
+    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    import re as _re
+    for p in result.get("十二宫", []):
+        for s in (p.get("主星") or []) + (p.get("辅星") or []):
+            star_palace.setdefault(s, p.get("宫名", ""))
+        branch_palace[p.get("地支", "")] = p.get("宫名", "")
+        pal_by_name[p.get("宫名", "")] = p
+        m = _re.match(r"(\d+)-(\d+)岁", p.get("大限", "") or "")
+        if m:
+            dx_list.append((int(m.group(1)), int(m.group(2)),
+                            p.get("天干", ""), p.get("地支", ""), p.get("宫名", "")))
+
+    def _fmt_palace(p):
+        """宫位数据行:宫名(干支): 主星(庙旺)、辅星 小星:..."""
+        if not p:
+            return "(无此宫数据)"
+        mwd = p.get("庙旺", {}) or {}
+        parts = []
+        for s in (p.get("主星") or []) + (p.get("辅星") or []):
+            lab = mwd.get(s, "")
+            parts.append(f"{s}({lab})" if lab else s)
+        minor = (p.get("小星") or [])[:6]
+        txt = (f"{p.get('宫名','')}宫({p.get('天干','')}{p.get('地支','')}): "
+               f"{'、'.join(parts) or '无主星(借对宫)'}").replace("宫宫", "宫")
+        if minor:
+            txt += f" 小星:{'、'.join(minor)}"
+        return txt
+
+    def _sihua_of_gan(gan):
+        """某天干四化→落本命宫文本(化禄/化权/化科/化忌全称,LLM需区分吉凶)"""
+        stars = _SIHUA_TABLE.get(gan, ["", "", "", ""])
+        out = []
+        for hi, sname in enumerate(stars):
+            if sname:
+                pal = star_palace.get(sname, "?")
+                out.append(f"{_SIHUA_LABELS[hi]}{sname}→{pal}宫".replace("宫宫", "宫"))
+        return " ".join(out)
+
+    parent_p = pal_by_name.get("父母", {})
+    bro_p = pal_by_name.get("兄弟", {})
+    prop_p = pal_by_name.get("田宅", {})
+    health_p = pal_by_name.get("疾厄", {})
+    ming_p = next((p for p in result.get("十二宫", []) if p.get("是否命宫")), {})
+
+    # 父母宫干四化(宫位飞化:父母宫天干飞出的四化=父母带来的缘)
+    parent_gan = parent_p.get("天干", "")
+    parent_sihua = _sihua_of_gan(parent_gan) if parent_gan else ""
+
+    # 父之财帛位(父母宫立太极)——环向从命盘自身数据推导(命→财帛的支距),不硬编码方向
+    father_wealth_text = ""
+    ming_zhi, caibo_zhi = ming_p.get("地支", ""), pal_by_name.get("财帛", {}).get("地支", "")
+    parent_zhi = parent_p.get("地支", "")
+    if ming_zhi and caibo_zhi and parent_zhi:
+        off = (ZHI.index(ming_zhi) - ZHI.index(caibo_zhi)) % 12  # 命→财帛的环向支距(=4)
+        fw_zhi = ZHI[(ZHI.index(parent_zhi) - off) % 12]
+        fw_name = branch_palace.get(fw_zhi, "")
+        fw_p = pal_by_name.get(fw_name, {})
+        if fw_p:
+            father_wealth_text = (f"父之财帛位=本命{fw_name}宫({fw_zhi}) "
+                                  + _fmt_palace(fw_p)).replace("宫宫", "宫")
+
+    # 太阳(父星)/太阴(母星)落宫+庙旺+同宫煞星
+    def _star_line(star):
+        pal = star_palace.get(star, "")
+        p = pal_by_name.get(pal, {})
+        if not p:
+            return f"{star}: (盘中无此星)"
+        mwd = (p.get("庙旺", {}) or {}).get(star, "")
+        co = [s for s in (p.get("主星") or []) + (p.get("辅星") or []) if s != star]
+        return (f"{star}落{pal}宫({p.get('地支','')})" +
+                (f"({mwd})" if mwd else "") +
+                (f" 同宫:{'、'.join(co)}" if co else "")).replace("宫宫", "宫")
+
+    # 大限干四化(禄/权/忌落宫)——十年气候(盘4父财:限武曲禄灌父之财帛=最厚积累期)
+    dx_lines = []
+    for dx in sorted(dx_list, key=lambda d: d[0]):
+        stars = _SIHUA_TABLE.get(dx[2], ["", "", "", ""])
+        parts = []
+        for hi in (0, 1, 3):  # 禄/权/忌
+            if stars[hi]:
+                pal = star_palace.get(stars[hi], "?")
+                parts.append(f"限{_SIHUA_LABELS[hi][1]}{stars[hi]}→{pal}宫".replace("宫宫", "宫"))
+        dx_lines.append(f"{dx[0]}-{dx[1]}岁 {dx[2]}{dx[3]}限(本命{dx[4]}宫): "
+                        f"{' '.join(parts)}".replace("宫宫", "宫"))
+
+    # 八字四柱+大运(偏财=父星/正印=母星/比劫=手足 旁证)
+    sizhu_text, bazi_dayun_text, day_master = "", "", ""
+    try:
+        from . import bazi_core as _bc
+        m = _re.match(r"(\d+)年(\d+)月(\d+)日", solar)
+        hour = info.get("时辰", 12)
+        if m and birth_year:
+            y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            fp = _bc.get_four_pillars(y, mo, d, hour)
+            day_master = fp["day"][0]
+            sizhu_text = "/".join(["".join(fp["year"]), "".join(fp["month"]),
+                                   "".join(fp["day"]), "".join(fp["hour"])])
+            sex = info.get("性别", "男")
+            _qy, dy_list = _bc.calc_dayun(sex, fp["year"][0], tuple(fp["month"]), y, mo, d)
+            bazi_dayun_text = "；".join(
+                f"{y + dy['age_start']}-{y + dy['age_end']}年{dy['gan']}{dy['zhi']}"
+                f"({dy['age_start']}-{dy['age_end']}岁)" for dy in dy_list[:8])
+            bzl = result.get("八字联合", {})
+            if bzl.get("日主"):
+                sizhu_text += f"，日主{bzl['日主']}{bzl.get('身强身弱', '')}"
+    except Exception:
+        pass
+
+    # 红鸾天喜(家庭事件辅助:添丁/婚庆)
+    hl_zhi = tx_zhi = ""
+    if birth_year:
+        hl_zhi = _HONGLUAN.get(ZHI[(birth_year - 4) % 12], "")
+        tx_zhi = _ZHI_OPP.get(hl_zhi, "")
+    # 信号表延伸到现在+15年(未来大限段趋势的流年锚点,防止LLM自行推算年份)
+    now_y = _dt.datetime.now().year
+    sig_lines = [r["line"] for r in _year_signal_rows(
+        result, birth_year, day_master, hl_zhi, tx_zhi, end_year=now_y + 15)]
+
+    _sh = result.get("四化", {})
+    natal_sihua = " ".join([
+        f"{k}·{v}落{star_palace.get(v, '?')}宫".replace("宫宫", "宫")
+        for k, v in [("化禄", _sh.get("化禄")), ("化权", _sh.get("化权")),
+                     ("化科", _sh.get("化科")), ("化忌", _sh.get("化忌"))] if v
+    ])
+    _ptext, _ph = _profile_ctx(result)
+    # P82v2: 全量数据文本(parse_family星曜白名单校验用——LLM提到的星曜必须∈此文本,
+    # 实测编造:"小星天寿、天巫、yuede同宫"——轻量盘根本没有小星数据)
+    _ctx_text = "\n".join([
+        _fmt_palace(parent_p), parent_sihua, _star_line("太阳"), _star_line("太阴"),
+        _fmt_palace(bro_p), _fmt_palace(prop_p), _fmt_palace(health_p),
+        father_wealth_text, "\n".join(dx_lines), "\n".join(sig_lines), natal_sihua])
+    return {
+        "gen_type": "family",
+        "gender": info.get("性别", ""),
+        "age": age,
+        "birth_year": birth_year,
+        "sizhu": sizhu_text,
+        "bazi_dayun": bazi_dayun_text,
+        "ming_stars": "、".join((ming_p.get("主星") or []) + (ming_p.get("辅星") or [])) or "借对宫",
+        "natal_sihua": natal_sihua,
+        "parent_palace": _fmt_palace(parent_p),
+        "parent_sihua": parent_sihua,
+        "sun_line": _star_line("太阳"),
+        "moon_line": _star_line("太阴"),
+        "bro_palace": _fmt_palace(bro_p),
+        "prop_palace": _fmt_palace(prop_p),
+        "health_palace": _fmt_palace(health_p),
+        "father_wealth": father_wealth_text,
+        "dx_sihua": "\n".join(dx_lines),
+        "signal_table": "\n".join(sig_lines),
+        "profile_text": _ptext,
+        "profile_phash": _ph,
+        "chart_key": _chart_key(result),
+        "ctx_text": _ctx_text,
+    }
+
+
+# P82v2: 星曜全集(parse_family白名单校验用)。
+# 剔除与日常词同形的星名(天才/天空/晦气/破碎/天福等)防误杀;LLM正常行文不会引用这些词当星曜
+_FAMILY_KNOWN_STARS = (
+    "紫微", "天机", "太阳", "武曲", "天同", "廉贞", "天府", "太阴", "贪狼", "巨门",
+    "天相", "天梁", "七杀", "破军",
+    "文昌", "文曲", "左辅", "右弼", "天魁", "天钺", "禄存", "擎羊", "陀罗",
+    "火星", "铃星", "地空", "地劫", "天马",
+    "红鸾", "天喜", "天姚", "天刑", "天巫", "天寿", "月德", "天月", "阴煞",
+    "台辅", "封诰", "龙池", "凤阁", "天官", "天厨", "孤辰", "寡宿", "蜚廉",
+    "华盖", "咸池", "吊客", "病符", "大耗", "小耗", "劫煞", "灾煞", "指背",
+    "白虎", "丧门", "贯索", "岁驿", "息神", "将星", "攀鞍", "天哭", "天虚",
+    "解神", "恩光", "天贵", "三台", "八座", "旬空", "截空", "空亡", "天伤", "天使")
+
+
+def parse_family(text: str, ctx_text: str = ""):
+    """P82: 解析family四段输出 → [{'title','content'}...]。
+    防编造三重校验:①≥3段 ②宫位引用(→/入/限/冲/落 X宫)∈12宫(与parse_verify三判定一致)
+    ③v2星曜白名单:内容中的星曜名必须∈ctx_text(上下文全量数据文本)——
+    实测盘1手足段编造"小星天寿、天巫、yuede同宫"(轻量盘无小星数据),此类幻觉必须代码拦截。
+    判废返回None(由/family端点注入警告重试一次)"""
+    import re as _re
+    if not text:
+        return None
+    parts = _re.split(r"\*\*【(.+?)】\*\*", text)
+    secs = []
+    for i in range(1, len(parts) - 1, 2):
+        title, content = parts[i].strip(), parts[i + 1].strip()
+        if title and len(content) >= 30:
+            secs.append({"title": title, "content": content})
+    if len(secs) < 3:
+        return None
+    # 宫位引用白名单(信号位前缀才校验,与parse_verify三判定完全一致——泛化叙述中的"X宫"不算引用)
+    palace_re = _re.compile(r"(?:→|入|限|冲|落)([^\s，。、·:：→|｜/()（）「」]{1,4})宫")
+    _pal_names = sorted(_12_PALACES, key=len, reverse=True)
+    for sec in secs:
+        for tok in palace_re.findall(sec["content"]):
+            if not (any(tok.endswith(pn) for pn in _pal_names)
+                    or (tok + "宫") in _12_PALACES
+                    or tok.endswith("命")):
+                return None
+    # v2: 星曜白名单——提到的星曜必须在上下文数据文本中出现过
+    if ctx_text:
+        for sec in secs:
+            for star in _FAMILY_KNOWN_STARS:
+                if star in sec["content"] and star not in ctx_text:
+                    return None
+    return secs
 
 
 def _valid_ganzhi_set(result, birth_year: int) -> set:
@@ -775,6 +1016,14 @@ def parse_verify(text: str, result, birth_year: int, reject_log=None):
                     if not (_re.search(r"忌[^ ]*→官禄", _row0["sihua_text"])
                             or _re.search(r"忌(文昌|文曲)→", _row0["sihua_text"])):
                         ok = False; _why0.append("复读/考试失利仅限化忌入官禄或文昌文曲化忌年,该年信号不符")
+                # ⑤l 学业节点锚点(P81v14,盘3实战n=2立规):升学/考入/转学/毕业/考证类断语,
+                # 该年必须有"化科入命宫/官禄宫/父母宫"或"文昌/文曲化科"——科入兄弟/夫妻/疾厄等
+                # 与学业无关,属硬凑(实测:2004甲申科武曲→兄弟宫被断"考取资格证书"、
+                # 2000庚辰科太阴→夫妻宫被断"转学",命主仅初中毕业均无其事)
+                if ok and _re.search(r"考入|升学|录取|转学|毕业|中考|高考|考研|留学|考公|资格证书|考证", claim):
+                    if not (_re.search(r"科[^ ]*→(命宫|官禄宫|父母宫)", _row0["sihua_text"])
+                            or _re.search(r"科(文昌|文曲)→", _row0["sihua_text"])):
+                        ok = False; _why0.append("学业节点断语须化科入命/官禄/父母宫或文昌文曲化科,该年学业锚点为零")
         # ⑤k 模糊学业评价类(P81v13):"突破/进步/优异/名列前茅"无法对碰=凑数废话,
         # 整条剔除任何年龄(实测:1997丁丑正印+权入官禄被断"学业重要突破",命主11岁小学
         # 并无明显感觉;学业只断升学/考入/录取/落榜/复读/转学/毕业/留学等节点事件)
@@ -911,17 +1160,18 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【红鸾天喜】{ctx.get('hltx_text','')}
 【历年应期信号表(断语年份锚点,只允许引用下表数据)】
 {ctx.get('past_liunian','')}
-(每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 四化落本命宫位)
+(每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 四化落本命宫位 |限禄X→宫 限忌X→宫(=大限干化禄/化忌落宫,十年背景);行内标"⚠岁限双忌"=流年忌与大限忌同落一宫,是丧亲/大病/家庭重大变故等大事应期的最强结构,权重最高)
 
 【应期规则-信号分权重,严禁只看四化选年】
 ⚠️【示例年份锚定警告-最高优先级】本文所有规则/坏例/好例/实测教训中出现的年份(2005/2006/2007/2008/2012/2013/2014/2015/2016/2019/2020/2023等)全部来自【其他命盘】的实测案例,与当前命主毫无关系!严禁因为"示例里出现过该年"就选用——每个断语年份必须先从下方信号表按规则独立筛出,示例只用来理解"信号权重怎么比、什么算虚标"(实测教训:某新命盘7条断语整批照抄示例年份2012/2014/2020/2023,与该盘信号全不符,全灭)
 - 婚恋(恋爱/结婚/领证/订婚): 权重①配偶星年(男命正财/偏财年、女命正官/七杀年) ②流年化禄/化权/化科入夫妻宫 ③流年命入夫妻宫 ④红鸾天喜动(仅辅助加分)。⚠️①②③全无的年份,即使红鸾/天喜动也严禁断任何婚恋事件(含恋爱)——红鸾天喜是"喜庆星",婚恋/添丁/庆典都可能应,不是婚恋专属铁证(实测教训:2014仅有天喜动被误断结婚,实为添丁;2008仅有红鸾动被误断恋爱,真正的恋爱年2007=化权天同入夫妻宫;真正的结婚年2012=正官年+化禄入夫妻宫)
 - 子女(怀孕/生育): 权重①子女星年(男命正官/七杀年、女命食神/伤官年) ②流年命入子女宫或四化入子女宫 ③红鸾天喜动(添丁亦主喜庆)。生育断语年份必须晚于结婚断语年份(不主动断未婚先孕)。⚠️比选规则:生子添丁多个候选年时,"子女星年+红鸾/天喜动或命入子女宫"权重高于"子女星年+化曜入子女宫"——添丁=人口之喜,红鸾天喜/命入子女是最强锚(实测教训:2014甲午七杀+天喜动+命入子女=三信号齐聚=真实得子年,2015乙未正官+紫微化科入子女被误选,年份偏1)
-- 学业考试(升学/高考/考研/考公/留学): 正印/偏印年; 化科(文昌/文曲化科分量最重)。⚠️比选规则:某年同时占"印年+文昌/文曲化科"=双信号,权重高于单印年(实测教训:2006丙戌偏印+文昌化科=真实升大学年,2007丁亥仅正印年被误选,年份偏1)。⚠️首次本科入学一般在18-20岁(虚岁):断21岁及以后的"考入大学"必须有留级/复读类强证据支撑,否则优先往18-20岁的印年找(实测教训:断2007丁亥21岁考入大学,实为2006丙戌20岁正常应届升学——错误的晚一年锚点还会诱导编造出"复读"来圆场)。⚠️学业类只断节点事件(升学/考入/录取/落榜/复读/转学/毕业/留学/考研/考公),严禁断"学业突破/成绩进步/名列前茅"类模糊评价——无法对碰等于废话,且单印年(无文昌/文曲化科)分量不够(实测教训:1997丁丑正印+权天同入官禄被误断"学业重要突破",命主11岁小学并无明显感觉;该年无昌曲化科,且忌巨门同入官禄信号混杂)
+- 学业考试(升学/高考/考研/考公/留学): 正印/偏印年; 化科(文昌/文曲化科分量最重)。⚠️比选规则:某年同时占"印年+文昌/文曲化科"=双信号,权重高于单印年(实测教训:2006丙戌偏印+文昌化科=真实升大学年,2007丁亥仅正印年被误选,年份偏1)。⚠️首次本科入学一般在18-20岁(虚岁):断21岁及以后的"考入大学"必须有留级/复读类强证据支撑,否则优先往18-20岁的印年找(实测教训:断2007丁亥21岁考入大学,实为2006丙戌20岁正常应届升学——错误的晚一年锚点还会诱导编造出"复读"来圆场)。⚠️学业类只断节点事件(升学/考入/录取/落榜/复读/转学/毕业/留学/考研/考公),严禁断"学业突破/成绩进步/名列前茅"类模糊评价——无法对碰等于废话,且单印年(无文昌/文曲化科)分量不够(实测教训:1997丁丑正印+权天同入官禄被误断"学业重要突破",命主11岁小学并无明显感觉;该年无昌曲化科,且忌巨门同入官禄信号混杂)。⚠️学业节点锚点规则:升学/考入/转学/毕业/考证类断语,只允许在"化科入命宫/官禄宫/父母宫"或"文昌/文曲化科"的年份下断——化科落兄弟/夫妻/疾厄等其他宫位与学业无关,严禁拿来硬凑(实测教训:某盘科武曲→兄弟宫被断"考取资格证书"、科太阴→夫妻宫被断"转学",命主仅初中毕业,两条全假)
 - 考试失利/复读/落榜: 仅限"化忌入官禄宫"或"文昌/文曲化忌"的年份下断——忌入福德=情绪郁闷与考试无关,严禁据忌入福德/夫妻/迁移断考试失利(实测教训:2005乙酉忌太阴→福德被误断高考复读,命主当年正常高中读书,次年应届升学)
 - 置业迁居(买房/卖房/搬家/迁居/装修): 只允许在①"化权/化忌入田宅宫"或②"化禄入田宅宫且同年所在大限为田宅宫(双锚)"的年份下断。⚠️单化科入田宅分量太轻(科=文书名声,不是重资产动作),严禁据"科入田宅"断买房搬家——即使同年命入田宅也不算(实测教训:2015乙未命入田宅+紫微化科入田宅被误断买房,命主该年并未置业)。⚠️单化禄入田宅同样不够——禄=财物之缘,权/忌才是变动落实的动作四化;命入田宅+红鸾动也救不回来(实测教训:2008戊子禄贪狼→田宅+命入田宅+红鸾动被误断搬家,命主22岁大学在读并无搬家;两盘6个真实置业年全是权/忌→田宅或禄→田宅+限田宅双锚:2012权→田宅/2019忌→田宅/2023禄→田宅+限田宅)。⚠️迁移宫化忌=在外奔波受挫,严禁据此断搬家(实测教训:2005乙酉太阴化忌入迁移被误断搬家,命主该年并未搬家)
 - 事业变动: 正官/七杀/正偏财年; 化禄/化权入官禄宫; 流年命入官禄宫。⚠️22岁及以前(大学在读期)严禁断跳槽/升职/创业/调岗——该年龄段命入迁移/官禄/化禄引动只能断学业事件(升学/高考/考研/转学/毕业/留学)(实测教训:2006丙戌命入迁移被误断"跳槽",命主当年20岁实为升大学)
 - 健康伤病: 手术/住院/大病仅限"化忌入疾厄宫"的年份下断——流年命入疾厄每12年一轮太泛,单命入疾厄严禁断手术住院(实测教训:2019己亥仅命入疾厄被误断手术,命主该年并无手术住院;当年忌文曲→田宅,真实发生的是买房)
+- 家庭大事(父母伤病/丧亲/家庭重大变故): 优先看标"⚠岁限双忌"的年份——流年忌+大限忌同落一宫是最强大事结构,落父母宫=父母大事,落疾厄=自身大病,落夫妻=婚姻大事;无岁限双忌时退看大限忌落宫(该行末尾"限忌X→宫"=这十年受压的宫位)。⚠️行内同时出现天喜/红鸾与化忌时,丧病类化忌信号优先于喜庆星(实测教训:某盘2026命入子女+天喜动,表面像添丁,实际应的是岁限双忌廉贞入父母宫=父亲当年离世)
 - 财务负面(亏损/破财/投资失利): 只允许在"化忌入财帛宫或兄弟宫"的年份下断。⚠️若该年有化禄/化权入田宅宫或命入田宅宫,财务事件只能断"买房/置业/大额支出(如贷款买房)",严禁断亏损——破军化禄/化权入田宅=置业(含贷款)大喜,绝不是破财(实测教训:2023禄破军→田宅+权巨门→财帛被误断"投资亏损",实为贷款买房)
 - 财务正面(得财/进财/偏财): 女命太阳=夫星——太阳化禄/化权入命宫/财帛宫的年份得财,优先断"得偏财/进财(丈夫带来或丈夫事业进财)",比断本人投资更准(实测:2020庚子太阳化禄入命+命入财帛,命主当年得的偏财正是来自丈夫)
 ⚠️ 天干相同的年份四化完全相同(如2012与2022同为壬年),必须用流年命宫/大限/十神区分,只凭四化选年必错;同天干候选年之间,必须选有所在大限或流年命宫信号加持的那个(实测教训:2013与2023同为癸年破军化禄入田宅,2013大限在福德宫零加持被误断买房,实为2023限入田宅大限贷款买房)
@@ -966,6 +1216,53 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # P81v6: 重试警告(首轮断语被parse判废后由/verify端点注入,二轮重写)
         prompt += ctx.get("retry_note", "") or ""
 
+    elif gen_type == "family":
+        # P82: 家庭分析(父母画像/父财/父母健康/手足)。取象规则经盘3/盘4人工推演多锚点验证,
+        # 数据全部给足(含父母宫干四化/父之财帛位/大限干四化/信号表延伸到未来15年),LLM只断不算
+        prompt = f"""你是资深紫微斗数命理师,为命主做家庭分析。所有数据已给出,你只负责"断"不负责"算"——严禁自行排盘,严禁引用上方未给出的星曜、宫位、干支。
+
+【命主】{ctx.get('gender','')}，现年{ctx.get('age','')}岁(虚岁){ctx.get('profile_text','')}
+【八字四柱】{ctx.get('sizhu','')}
+【八字大运】{ctx.get('bazi_dayun','')}
+【命宫】{ctx.get('ming_stars','')}
+【本命四化】{ctx.get('natal_sihua','')}
+【父母宫】{ctx.get('parent_palace','')}
+【父母宫干四化(父母宫天干飞出,=父母带来的缘)】{ctx.get('parent_sihua','')}
+【太阳=父星】{ctx.get('sun_line','')}
+【太阴=母星】{ctx.get('moon_line','')}
+【兄弟宫(手足画像位)】{ctx.get('bro_palace','')}
+【田宅宫(家庭房产)】{ctx.get('prop_palace','')}
+【疾厄宫(命主健康,旁证家族体质)】{ctx.get('health_palace','')}
+【父之财帛位(父母宫立太极,父亲财富级别看这里)】{ctx.get('father_wealth','')}
+【大限干四化(十年气候,限禄/限权/限忌落本命宫)】
+{ctx.get('dx_sihua','')}
+【流年信号表(过去+未来15年,引用年份/干支/四化只允许查此表)】
+{ctx.get('signal_table','')}
+(每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 流年四化落宫 |限禄X→宫 限忌X→宫)
+
+【取象规则-已经多盘实测验证,必须遵守】
+- 太阳=父亲、太阴=母亲:庙旺=有能力/身体底好,落陷或与煞星(火星/铃星/地空/地劫/擎羊/陀罗)同宫=操劳偏弱
+- 父母宫主星看父母整体气质与管教方式(如紫微天相=体面规矩严管教;杀破狼=奔波忙碌)
+- 父之财帛位主星看父亲财富级别与理财风格(武曲/天府=善积累入库;太阴=细水长流;破军/贪狼=起伏大敢冒险)
+- 大限干化禄入父之财帛位=那十年父亲财运最厚;大限干化忌入父之财帛位或父母宫=收紧/操心期。趋势用"XX-XX岁大限段"表述,严禁精确到单年(除非信号表该行有明确锚点且你引用原文)
+- 健康取象只到器官系统层级:太阳+火星=血压/心脑血管倾向;太阳+地空地劫=气血亏虚/眼目;太阴+煞星=内分泌/睡眠/妇科倾向。⚠️严禁断具体病名(如"肝癌""心梗"),严禁断父母寿数/死亡年份——只能说"倾向""注意""哪个大限段偏弱"
+- 兄弟宫看手足缘分:主星明朗=有手足且得力,空宫借对宫或煞星聚集=手足缘薄或聚少离多
+- 年龄约束:命主现年{ctx.get('age','')}岁——对未成年命主,父母现状与趋势是分析主体;对成年命主,兼顾其与父母的关系互动与赡养责任
+- 八字旁证:偏财=父星、正印=母星、比劫=兄弟姐妹,与紫微互参,矛盾时以紫微宫位数据为准
+- ⚠️星曜白名单:上下文未列出的星曜=本盘无此数据,严禁提及——出现一个上下文没有的星曜名就是编造。小星/杂曜(天巫/天寿/月德/天姚等)即使上下文给出,权重也最低,只作辅助参考,严禁仅凭小星断职业/疾病等具体结论(实测:凭"天寿天巫"断"手足从事医疗玄学"过度发挥)
+- ⚠️严禁"对宫/三合借力"类自行推算——只评述数据行直接给出的落宫;宫位对冲三合关系自己算的一律算错(实测:天机落财帛宫被说成"父之财帛位对宫借力",父之财帛在午、对宫是子、天机在巳,全错)
+- ⚠️大限引用必须与数据行逐字一致:该行写"限权破军→兄弟宫"就只许说化权,严禁说成"化忌入兄弟宫"(实测:手足段把甲辰限权破军错引成"化忌入兄弟宫",自相矛盾)
+- 大限干四化只用于父母/父财/父母健康三段;手足段只评述兄弟宫主星+本命四化+父母宫干四化中落兄弟宫的信号
+
+输出4段,每段严格用 **【标题】** 开头,换行写内容:
+**【父母画像】**(150-200字:父母性格气质/管教方式/父母关系/与命主缘分深浅)
+**【父亲事业财富】**(150-200字:父亲职业类型画像/财富级别定位/未来几个大限段的趋势节奏)
+**【父母健康】**(150-200字:父亲/母亲各自需注意的器官系统+偏弱的大限段+一句养生建议)
+**【手足情况】**(100-150字:手足缘分/有无倾向/手足画像)
+
+硬约束:宫位/星曜/四化落宫必须逐字引用上方数据,张冠李戴=编造;口语务实,联系命主实际生活场景;直接输出4段,不要开场白不要总结。"""
+        prompt += ctx.get("retry_note", "") or ""
+
     else:
         return None
 
@@ -978,7 +1275,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        # P81: verify的prompt v12(示例年份锚定警告——新命盘7条整批照抄示例年2012/2014/2020/2023全灭;
+        # P81: verify的prompt v13(岁限双忌入表+大限禄忌列——盘1父亡2026双廉贞忌入父母宫实证;
+        # 学业节点锚点规则:化科入命/官禄/父母或昌曲化科——盘3科入兄弟断考证/科入夫妻断转学n=2立规;
+        # 多义信号化忌优先——天喜/命入子女并存时丧病类优先;
+        # v12=示例年份锚定警告——新命盘7条整批照抄示例年2012/2014/2020/2023全灭;
         # v11=⑤k模糊学业评价整条剔除——1997"学业突破"11岁无感;
         # 生子添丁比选:子女星+天喜/命入子女>子女星+化曜入子女——2014三信号=真实得子年,2015偏1;
         # v10=学业比选:印年+文昌/文曲化科双信号>单印年,首入本科限18-20岁;
@@ -988,7 +1288,11 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # 手术住院仅限忌→疾厄;忌入夫妻不算婚恋吉信号;女命太阳=夫星得财优先断丈夫带来;
         # v7=⑤c红鸾天喜降为纯辅助+同天干年必须选大限/命宫加持年;v6=信号权重排序+置业/亏损/分娩方式纠偏)
         # →独立递增,不影响其他gen_type缓存
-        _ck_ver = "v45" if gen_type == "verify" else "v33"
+        # P82: family独立版本(v3=STAR_EN2CN补全杂曜拼音泄漏(yuede→月德等9+40项)+
+        # 小星规则改"权重最低辅助参考"(全量盘有小星数据,轻量盘无——v2"上下文根本没给小星"表述错误);
+        # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
+        _ck_ver = ("v46" if gen_type == "verify"
+                   else ("v3" if gen_type == "family" else "v33"))
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{_ck_ver}"
         if ctx.get("retry_note"):
             # P81v12: key含retry_note哈希——旧版固定":r1",警告内容变了仍命中旧缓存,
@@ -999,7 +1303,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     # P56: 保持800（用户要求，不能减少）
     # P76: summary例外——v9.34注入大运数据后总结变多章节,800token写不下截断半句;
     # 提1200后LLM按比例写更满(1786字)仍截断 → 1500+prompt限幅1100-1400字双保险
-    max_tok = 1500 if gen_type == "summary" else (1200 if gen_type == "verify" else 800)
+    max_tok = (1500 if gen_type in ("summary", "family")
+               else (1200 if gen_type == "verify" else 800))
     result = llm_call(prompt, ck, max_tokens=max_tok, skip_cache=_FORCE_REFRESH)
     # 诊断日志(列表,最多存10条)
     global _last_llm_debug

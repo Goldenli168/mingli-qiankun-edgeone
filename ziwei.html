@@ -417,6 +417,17 @@
     <div id="summaryText" style="font-size:0.92em;line-height:1.8;color:var(--text);padding:12px 16px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border)"></div>
   </div>
 
+  <!-- P82: 家庭分析(父母画像/父财/父母健康/手足,逻辑在 family.js) -->
+  <div class="fam-section" id="familySection" style="display:none">
+    <div class="fam-card">
+      <div class="fam-head">
+        <span class="fam-title">🏠 家庭分析 · 父母与手足</span>
+        <button class="fam-refresh" onclick="FamilyModule.regenerate()">↻ 重新生成</button>
+      </div>
+      <div id="famBody"></div>
+    </div>
+  </div>
+
   <div class="feihua-section" id="patternSection" style="margin-bottom:20px;">
     <h3>☰ 命盘格局</h3>
     <div class="feihua-grid" id="patternGrid"></div>
@@ -441,6 +452,7 @@
 </div>
 
 <script src="verify.js"></script>
+<script src="family.js"></script>
 <script>
 // ============================================================
 // 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
@@ -511,11 +523,18 @@ var ZIWEI_CACHE_VERSION = 'v7.3';
     activeDetailIdx = -1;
     renderResult(cached.result);
     VerifyModule.start();  // P80: 恢复缓存结果时同步恢复验证区
+    FamilyModule.start();  // P82: 恢复缓存结果时同步恢复家庭分析区
   } catch(e) {}
 })();
 
 // P80: 过三关验证(逻辑在 verify.js,与八字页共用)
 VerifyModule.init({getProfile: function() {
+  var y = document.getElementById('year').value, m = document.getElementById('month').value,
+      d = document.getElementById('day').value;
+  return _birthMatchesSync(y, m, d) ? _syncedProfile : null;
+}});
+// P82: 家庭分析(与验证区共用画像注入规则)
+FamilyModule.init({getProfile: function() {
   var y = document.getElementById('year').value, m = document.getElementById('month').value,
       d = document.getElementById('day').value;
   return _birthMatchesSync(y, m, d) ? _syncedProfile : null;
@@ -711,6 +730,7 @@ function doAnalyze() {
     // P80: 校准完成,清除待校准标记并刷新验证区(重算后断语缓存不变,直接显示总评)
     if (_ziweiFeedback) { VerifyModule.clearPending(); }
     VerifyModule.start();
+    FamilyModule.start();  // P82: 分析完成后加载家庭分析(有缓存直接渲染,不重复消耗LLM)
     // 缓存分析结果，切页回来保持显示
     try {
       localStorage.setItem('mingli_ziwei_result', JSON.stringify({
