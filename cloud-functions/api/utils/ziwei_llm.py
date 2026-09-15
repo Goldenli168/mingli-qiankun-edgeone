@@ -329,8 +329,9 @@ _VERIFY_TYPES = [
     ("study",    ["学业", "学历", "考试", "读书", "升学", "专业", "高考", "大学", "求学"]),
     ("career",   ["职业", "工作", "跳槽", "转行", "升职", "事业", "离职", "创业", "岗位"]),
     ("marriage", ["婚恋", "恋爱", "结婚", "婚姻", "感情", "相亲", "配偶"]),
-    ("children", ["子女", "孩子", "头胎", "生育", "怀孕"]),
-    ("wealth",   ["大额", "置业", "买房", "购房", "支出", "亏损", "投资", "财务", "破财", "负债"]),
+    ("children", ["子女", "孩子", "头胎", "生育", "怀孕", "添丁", "生子", "得子", "得女", "二胎"]),
+    ("wealth",   ["大额", "置业", "买房", "购房", "支出", "亏损", "投资", "财务", "破财", "负债",
+                  "得财", "进账", "偏财", "正财", "奖金", "加薪"]),
     ("health",   ["健康", "伤病", "手术", "住院", "疾"]),
     ("family",   ["父母", "迁居", "搬家", "家庭", "长辈"]),
 ]
@@ -458,8 +459,20 @@ def _past_liunian_table(result, birth_year: int, day_master: str = "",
                      _year_signal_rows(result, birth_year, day_master, hl_zhi, tx_zhi))
 
 
+# P82v20: 候选年清单类别→断语类型映射(反馈驱动类别禁断用)
+# 一类事件可能对应多个类型桶(置业类断语会被归wealth(买房)或family(搬家))
+_TYPE_CN = {"study": "学业考试", "career": "职业变动", "marriage": "婚恋感情",
+            "children": "添丁子女", "wealth": "财运置业", "health": "健康伤病",
+            "family": "家庭大事", "other": "其他"}
+_CAT2TYPES = {"升学": ("study",), "学业节点": ("study",), "恋爱": ("marriage",),
+              "结婚": ("marriage",), "添丁": ("children",), "置业": ("wealth", "family"),
+              "职业变动": ("career",), "得财": ("wealth",), "亏损": ("wealth",),
+              "手术住院": ("health",), "家庭大事": ("family",)}
+
+
 def _eligible_years_text(result, birth_year: int, day_master: str = "",
-                         hl_zhi: str = "", tx_zhi: str = "", gender: str = "男") -> str:
+                         hl_zhi: str = "", tx_zhi: str = "", gender: str = "男",
+                         blocked=None) -> str:
     """P82v18(C方案): 候选年预筛——按事件类型用parse闸门同款规则逐年判定合格年,
     写进prompt作为LLM选年的唯一范围(选年数据化,LLM只断不算)。
     背景(盘3 12轮全灭):LLM选年被prompt示例年(其他盘案例)锚定,反锚定警告+具体化重试
@@ -530,11 +543,16 @@ def _eligible_years_text(result, birth_year: int, day_master: str = "",
     for k in ("升学", "学业节点", "恋爱", "结婚", "添丁", "置业",
               "职业变动", "得财", "亏损", "手术住院", "家庭大事"):
         v = cats[k]
-        lines.append(f"- {k}: " + (" / ".join(v) if v else f"无合格年(严禁断{k}类事件)"))
+        # P82v20: 反馈驱动类别禁断——该盘该类别被命主实锤≥2次不准,即使信号合格也严禁再断
+        if blocked and any(t in blocked for t in _CAT2TYPES.get(k, ())):
+            lines.append(f"- {k}: 无合格年(该类别已被命主反馈实锤≥2次不准,整体禁断——"
+                         f"信号合格年也不许断,这是用户事实校准,优先级高于一切信号规则)")
+        else:
+            lines.append(f"- {k}: " + (" / ".join(v) if v else f"无合格年(严禁断{k}类事件)"))
     return "\n".join(lines)
 
 
-def _build_verify_context(result, patterns):
+def _build_verify_context(result, patterns, blocked=None):
     """P80: 构建过三关断语LLM上下文(双盘数据交叉,全部给足)"""
     import datetime as _dt
     info = result.get("基本信息", {})
@@ -619,10 +637,20 @@ def _build_verify_context(result, patterns):
         "hltx_text": hltx_text,
         "past_liunian": _past_liunian_table(result, birth_year, day_master, hl_zhi, tx_zhi),
         "eligible_text": _eligible_years_text(result, birth_year, day_master,
-                                              hl_zhi, tx_zhi, info.get("性别", "男")),
+                                              hl_zhi, tx_zhi, info.get("性别", "男"),
+                                              blocked=blocked),
         "profile_text": _ptext,
         "profile_phash": _ph,
         "chart_key": _chart_key(result),
+        # P82v20: 反馈驱动类别禁断——blocked进缓存key(禁断集合变了prompt必须重算)
+        "blocked_cats": sorted(blocked) if blocked else [],
+        "blocked_phash": _stable_hash(",".join(sorted(blocked))) if blocked else "noblock",
+        "blocked_text": (
+            "⚠️【命主事实校准-类别禁断】以下类别已被命主本人反馈实锤≥2次不准:"
+            + "、".join(_TYPE_CN.get(t, t) for t in sorted(blocked))
+            + "。这些类别命主已证实不成立(与信号强弱无关),严禁再断——清单对应行已标注禁断,"
+            "把名额让给有合格年的其他类别。"
+        ) if blocked else "",
     }
 
 
@@ -881,7 +909,7 @@ def _day_master_of(result) -> str:
         return ""
 
 
-def parse_verify(text: str, result, birth_year: int, reject_log=None):
+def parse_verify(text: str, result, birth_year: int, reject_log=None, blocked=None):
     """解析+防编造过滤断语。返回 [{'claim','basis','type'}...] 或 None(<5条降级)。
     三重白名单:年份范围 / 干支∈命盘真实集 / 宫位∈12宫。
     reject_log(P81v11):传入list则收集每条判废原因[{"claim","reason"}],供/verify构建具体化重写警告"""
@@ -956,6 +984,11 @@ def parse_verify(text: str, result, birth_year: int, reject_log=None):
                     ok = False; _why0.append(f"年龄不合理:{_age_at}岁职业/财务类须≥16岁")
                 elif _ctype == "study" and not (6 <= _age_at <= 23):
                     ok = False; _why0.append(f"年龄不合理:{_age_at}岁学业类限6-23岁")
+        # ④c 反馈驱动类别禁断(P82v20):该盘同类别被命主反馈实锤≥2次不准→该类断语整体禁断
+        # (盘3实战:添丁类2012✗+2024✗连续实锤,命主至今无小孩——单年纠偏治标不治本,
+        # 候选年清单里的"信号合格年"与"命主事实"是两回事,闸门只能由反馈数据来关)
+        if ok and blocked and _classify_claim(claim) in blocked:
+            ok = False; _why0.append("该类别已被命主反馈实锤≥2次不准,整体禁断(反馈驱动类别禁断)")
         # ④b "或"字改写(P81v7第二轮):LLM"或"字惯性难禁(实测盘1单轮5/7违规,全杀→验证区为空)。
         # 改为截取首选事件(首选是LLM的第一判断,正确性由用户验证闭环仲裁,优于整条剔除);
         # "可能/大概"仍整条剔除(纯 hedging,无首选可取)
@@ -1291,6 +1324,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【本盘候选年清单-选年唯一范围,最高优先级】以下清单已按本盘信号表用应期规则逐年预筛,断语年份必须且只能来自清单中对应事件类别的年份:
 {ctx.get('eligible_text','')}
 ⚠️清单=唯一选年范围:某类别下断语的年份必须在该类清单内;清单标注"无合格年"的类别,严禁断该类事件(直接换有合格年的类别);同一类别有多个候选年时,选信号最强的1个,并把该年行内信号(十神/四化落宫/流年命宫/红鸾天喜)逐字照抄进依据。这是硬性约束——清单之外的[事件类型+年份]组合会被校验器直接判废,写了也白写
+{ctx.get('blocked_text','')}
 
 【应期规则-信号分权重,严禁只看四化选年】
 ⚠️【示例年份锚定警告-最高优先级】本文所有规则/坏例/好例/实测教训中出现的年份(2005/2006/2007/2008/2012/2013/2014/2015/2016/2019/2020/2023等)全部来自【其他命盘】的实测案例,与当前命主毫无关系!严禁因为"示例里出现过该年"就选用——每个断语年份必须先从下方信号表按规则独立筛出,示例只用来理解"信号权重怎么比、什么算虚标"(实测教训:某新命盘7条断语整批照抄示例年份2012/2014/2020/2023,与该盘信号全不符,全灭)
@@ -1409,7 +1443,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        # P81: verify的prompt v19(⑤c2v2红鸾/天喜单信号豁免废除——盘2 2014天喜年真实添丁
+        # P81: verify的prompt v20(反馈驱动类别禁断——同盘同类mismatch≥2次→清单标禁断+parse④c兜底,
+        # 盘3添丁类2012✗+2024✗实锤(命主至今无小孩);信号合格≠事实成立,闸门由反馈数据来关;
+        # v19=⑤c2v2红鸾/天喜单信号豁免废除——盘2 2014天喜年真实添丁
         # vs 盘3 2012天喜年实锤无小孩,同结构两样本冲突=无判别力,添丁必须子女星/命入子女/化曜入子女;
         # v18=C方案候选年预筛——盘3 12轮全灭结构性修复:LLM选年被示例年
         # 干支锚定,警告+重试双机制失效;预筛合格年清单注入,LLM只从清单选年,parse闸门仍兜底;
@@ -1434,9 +1470,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # P82: family独立版本(v3=STAR_EN2CN补全杂曜拼音泄漏(yuede→月德等9+40项)+
         # 小星规则改"权重最低辅助参考"(全量盘有小星数据,轻量盘无——v2"上下文根本没给小星"表述错误);
         # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
-        _ck_ver = ("v51" if gen_type == "verify"
+        _ck_ver = ("v52" if gen_type == "verify"
                    else ("v3" if gen_type == "family" else "v33"))
-        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{_ck_ver}"
+        ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{ctx.get('blocked_phash','noblock')}:{_ck_ver}"
         if ctx.get("retry_note"):
             # P81v12: key含retry_note哈希——旧版固定":r1",警告内容变了仍命中旧缓存,
             # 实测信号行注入版重试4s"秒回"(吃的是上一版警告的旧LLM输出)

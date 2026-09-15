@@ -474,14 +474,20 @@ def verify_api():
         if profile and isinstance(chart, dict) and not chart.get("命主画像"):
             chart["命主画像"] = profile
         _zllm._FORCE_REFRESH = bool(force_refresh)
-        ctx = _build_verify_context(chart, chart.get("格局", []))
+        # P82v20: 反馈驱动类别禁断——同盘同类mismatch≥2次的类别整体禁断
+        # key两种形态都查:脚本反馈用可读key(mingli_verify:Y_M_D_H_sex),前端用_chart_key哈希
+        from utils.ziwei_llm import _chart_key as _ckf
+        _stats_v = _load_verify_stats()
+        _blocked = _blocked_cats_for(
+            _stats_v, _ckf(chart), f"mingli_verify:{year}_{month}_{day}_{hour}_{sex}")
+        ctx = _build_verify_context(chart, chart.get("格局", []), blocked=_blocked)
         raw = _zllm._llm_generate("verify", ctx)
         _zllm._FORCE_REFRESH = False
 
         # 解析+多重白名单过滤(年份/干支/宫位/年龄/或字/化曜/红鸾十神/婚恋置业亏损信号)
         birth_year = year
         _rej = []  # P81v11: 逐条判废原因
-        items = parse_verify(raw, chart, birth_year, reject_log=_rej)
+        items = parse_verify(raw, chart, birth_year, reject_log=_rej, blocked=_blocked)
         if not items:
             # P81v6: 首轮存活<5条→追加重写警告重试一次(独立缓存key:r1,不污染首轮缓存)
             # P81v11: 重写警告具体化——逐条列出判废断语+原因(实测:泛泛警告无效,LLM第2轮照犯;
@@ -501,7 +507,7 @@ def verify_api():
             _zllm._FORCE_REFRESH = bool(force_refresh)
             raw2 = _zllm._llm_generate("verify", ctx)
             _zllm._FORCE_REFRESH = False
-            items = parse_verify(raw2, chart, birth_year)
+            items = parse_verify(raw2, chart, birth_year, blocked=_blocked)
         if not items:
             return jsonify({"ok": True, "verify": None, "reason": "generate_failed"})
         for i, it in enumerate(items):
@@ -604,6 +610,41 @@ def _save_verify_stats(stats: dict):
         pass
 
 
+def _update_chart_type(stats, chart_key, clean_answers):
+    """P82v20: 反馈落账——按盘累积类型级match/mismatch年份(去重;同年翻案自动迁移列表)。
+    隐私红线:只存类型桶+年份数字,不存claim/correction原文"""
+    import re as _re_ct
+    from utils.ziwei_llm import _classify_claim
+    ct = stats.setdefault("_chart_type", {}).setdefault(chart_key, {})
+    for a in clean_answers:
+        my = _re_ct.search(r"(19|20)\d{2}", a.get("claim", ""))
+        yy = my.group(0) if my else ""
+        if not yy:
+            continue
+        t, v = _classify_claim(a["claim"]), a.get("verdict")
+        rec = ct.setdefault(t, {"m": [], "mm": []})
+        for lst in ("m", "mm"):
+            if yy in rec[lst]:
+                rec[lst].remove(yy)
+        if v == "match":
+            rec["m"].append(yy)
+        elif v == "mismatch":
+            rec["mm"].append(yy)
+        rec["m"], rec["mm"] = rec["m"][-30:], rec["mm"][-30:]
+
+
+def _blocked_cats_for(stats, *chart_keys):
+    """P82v20: 汇总指定盘(可能多个key形态)被实锤≥2次mismatch的断语类型集合。
+    翻案自动解除:同年后改判match会从mm列表移除(见/verify-feedback落账逻辑)"""
+    blocked = set()
+    ct_all = stats.get("_chart_type", {})
+    for k in chart_keys:
+        for t, rec in (ct_all.get(k) or {}).items():
+            if len(rec.get("mm", [])) >= 2:
+                blocked.add(t)
+    return blocked
+
+
 @app.route("/verify-feedback", methods=["POST", "OPTIONS"])
 def verify_feedback_api():
     """验证反馈:计算命中率+匿名聚合统计+限频。
@@ -670,6 +711,8 @@ def verify_feedback_api():
         bucket = stats["by_type"].setdefault(t, {"match": 0, "partial": 0, "mismatch": 0})
         bucket[v] = bucket.get(v, 0) + 1
     stats["_latest"][chart_key] = {"verdicts": new_verdicts, "ts": now}
+    # P82v20: 反馈驱动类别禁断落账(按盘累积类型级mismatch年份)
+    _update_chart_type(stats, chart_key, clean_answers)
     # 防膨胀:最多保留200个盘的记录
     if len(stats["_latest"]) > 200:
         stats["_latest"] = dict(sorted(stats["_latest"].items(),
@@ -719,5 +762,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.55-verify-v51", "has_light_chart": True, "verify_cache_v51": True, "family_cache_v3": True, "has_family": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.56-verify-v52", "has_light_chart": True, "verify_cache_v52": True, "family_cache_v3": True, "has_family": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
