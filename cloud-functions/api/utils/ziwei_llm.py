@@ -458,6 +458,83 @@ def _past_liunian_table(result, birth_year: int, day_master: str = "",
                      _year_signal_rows(result, birth_year, day_master, hl_zhi, tx_zhi))
 
 
+def _eligible_years_text(result, birth_year: int, day_master: str = "",
+                         hl_zhi: str = "", tx_zhi: str = "", gender: str = "男") -> str:
+    """P82v18(C方案): 候选年预筛——按事件类型用parse闸门同款规则逐年判定合格年,
+    写进prompt作为LLM选年的唯一范围(选年数据化,LLM只断不算)。
+    背景(盘3 12轮全灭):LLM选年被prompt示例年(其他盘案例)锚定,反锚定警告+具体化重试
+    均压不住;同干支年四化相同,LLM分不清"示例结构"与"本盘数据"。
+    规则必须与parse_verify的⑤c/⑤c2/⑤d/⑤e/⑤g/⑤j/⑤l/⑤o/⑤p保持完全一致——
+    清单是引导,parse闸门仍全量兜底"""
+    import re as _re
+    if not birth_year:
+        return ""
+    rows = _year_signal_rows(result, birth_year, day_master, hl_zhi, tx_zhi)
+    spouse_ss = {"正财", "偏财"} if gender == "男" else {"正官", "七杀"}
+    child_ss = {"正官", "七杀"} if gender == "男" else {"食神", "伤官"}
+    cats = {k: [] for k in ("升学", "学业节点", "恋爱", "结婚", "添丁",
+                            "置业", "职业变动", "得财", "亏损", "手术住院", "家庭大事")}
+
+    for r in rows:
+        y, age = r["year"], r["age"]
+        ss, ln, sh = r["ss"], r["ln_ming"], r["sihua_text"]
+        dx, dxsh, hltx = r["dx"], r["dx_sihua"], r["hltx"]
+        tag = f"{y}{r['gz']}({age}岁)"
+        ke_changqu = _re.search(r"科(文昌|文曲)→", sh)
+        # 升学(考入大学/本科): ⑤o双信号=印年+文昌/文曲化科, 17-23岁窗口
+        if 16 <= age <= 23 and ss in ("正印", "偏印") and ke_changqu:
+            cats["升学"].append(f"{tag}{ss}+{ke_changqu.group(0).rstrip('→')}化科")
+        # 学业节点(考研/考公/毕业/转学/考证): ⑤l=化科入命/官禄/父母 或 昌曲化科
+        elif 6 <= age <= 30 and (_re.search(r"科[^ ]*→(命宫|官禄宫|父母宫)", sh) or ke_changqu):
+            anchor = ke_changqu.group(0).rstrip("→") + "化科" if ke_changqu else "化科入命/官禄/父母"
+            cats["学业节点"].append(f"{tag}{anchor}")
+        # 恋爱: ⑤c=配偶星年/[禄权科]→夫妻/命入夫妻, ≥20岁
+        if age >= 20 and (ss in spouse_ss or "夫妻" in ln
+                          or _re.search(r"[禄权科][^ ]*→夫妻", sh)):
+            why = "配偶星年" if ss in spouse_ss else ("命入夫妻" if "夫妻" in ln else "化曜入夫妻")
+            cats["恋爱"].append(f"{tag}{why}")
+        # 结婚/领证: ⑤p双锚=配偶星年+大限加持夫妻宫(限入夫妻 或 限禄/限权→夫妻)
+        if age >= 20 and ss in spouse_ss and (
+                "夫妻" in dx or _re.search(r"限[禄权][^ ]*→夫妻", dxsh)):
+            cats["结婚"].append(f"{tag}{ss}年+大限加持夫妻")
+        # 添丁: ⑤c2=子女星/命入子女/→子女/红鸾天喜(无夫妻化曜时)
+        if age >= 20:
+            child_sig = ss in child_ss or "子女" in ln or "→子女" in sh
+            if child_sig or (hltx and not _re.search(r"[禄权科][^ ]*→夫妻", sh)):
+                why = ("子女星年" if ss in child_ss else
+                       "命入子女" if "子女" in ln else
+                       "化曜入子女" if "→子女" in sh else hltx)
+                cats["添丁"].append(f"{tag}{why}")
+        # 置业: ⑤d=权/忌→田宅 或 禄→田宅+限田宅
+        if _re.search(r"[权忌][^ ]*→田宅", sh):
+            cats["置业"].append(f"{tag}化权/忌入田宅")
+        elif _re.search(r"禄[^ ]*→田宅", sh) and "田宅" in dx:
+            cats["置业"].append(f"{tag}禄入田宅+限田宅")
+        # 职业变动(跳槽/升职): >20岁, 命入官禄或化曜入官禄(忌入官禄=受挫变动)
+        if age > 20 and ("官禄" in ln or _re.search(r"[禄权科忌][^ ]*→官禄", sh)):
+            why = "命入官禄" if "官禄" in ln else "化曜入官禄"
+            cats["职业变动"].append(f"{tag}{why}")
+        # 得财: 禄→命/财帛 或 命入财帛
+        if age >= 16 and (_re.search(r"禄[^ ]*→(命宫|财帛宫)", sh) or "财帛" in ln):
+            cats["得财"].append(tag)
+        # 亏损: ⑤e=忌→财帛/兄弟
+        if _re.search(r"忌[^ ]*→(财帛|兄弟)", sh):
+            cats["亏损"].append(tag)
+        # 手术住院: ⑤g=忌→疾厄
+        if _re.search(r"忌[^ ]*→疾厄", sh):
+            cats["手术住院"].append(tag)
+        # 家庭大事: 岁限双忌
+        if r["double_ji"]:
+            cats["家庭大事"].append(f"{tag}⚠岁限双忌")
+
+    lines = []
+    for k in ("升学", "学业节点", "恋爱", "结婚", "添丁", "置业",
+              "职业变动", "得财", "亏损", "手术住院", "家庭大事"):
+        v = cats[k]
+        lines.append(f"- {k}: " + (" / ".join(v) if v else f"无合格年(严禁断{k}类事件)"))
+    return "\n".join(lines)
+
+
 def _build_verify_context(result, patterns):
     """P80: 构建过三关断语LLM上下文(双盘数据交叉,全部给足)"""
     import datetime as _dt
@@ -542,6 +619,8 @@ def _build_verify_context(result, patterns):
         "natal_sihua": natal_sihua,
         "hltx_text": hltx_text,
         "past_liunian": _past_liunian_table(result, birth_year, day_master, hl_zhi, tx_zhi),
+        "eligible_text": _eligible_years_text(result, birth_year, day_master,
+                                              hl_zhi, tx_zhi, info.get("性别", "男")),
         "profile_text": _ptext,
         "profile_phash": _ph,
         "chart_key": _chart_key(result),
@@ -1214,6 +1293,10 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 {ctx.get('past_liunian','')}
 (每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 四化落本命宫位 |限禄X→宫 限忌X→宫(=大限干化禄/化忌落宫,十年背景);行内标"⚠岁限双忌"=流年忌与大限忌同落一宫,是丧亲/大病/家庭重大变故等大事应期的最强结构,权重最高)
 
+【本盘候选年清单-选年唯一范围,最高优先级】以下清单已按本盘信号表用应期规则逐年预筛,断语年份必须且只能来自清单中对应事件类别的年份:
+{ctx.get('eligible_text','')}
+⚠️清单=唯一选年范围:某类别下断语的年份必须在该类清单内;清单标注"无合格年"的类别,严禁断该类事件(直接换有合格年的类别);同一类别有多个候选年时,选信号最强的1个,并把该年行内信号(十神/四化落宫/流年命宫/红鸾天喜)逐字照抄进依据。这是硬性约束——清单之外的[事件类型+年份]组合会被校验器直接判废,写了也白写
+
 【应期规则-信号分权重,严禁只看四化选年】
 ⚠️【示例年份锚定警告-最高优先级】本文所有规则/坏例/好例/实测教训中出现的年份(2005/2006/2007/2008/2012/2013/2014/2015/2016/2019/2020/2023等)全部来自【其他命盘】的实测案例,与当前命主毫无关系!严禁因为"示例里出现过该年"就选用——每个断语年份必须先从下方信号表按规则独立筛出,示例只用来理解"信号权重怎么比、什么算虚标"(实测教训:某新命盘7条断语整批照抄示例年份2012/2014/2020/2023,与该盘信号全不符,全灭)
 - 婚恋(恋爱/结婚/领证/订婚): 权重①配偶星年(男命正财/偏财年、女命正官/七杀年) ②流年化禄/化权/化科入夫妻宫 ③流年命入夫妻宫 ④红鸾天喜动(仅辅助加分)。⚠️①②③全无的年份,即使红鸾/天喜动也严禁断任何婚恋事件(含恋爱)——红鸾天喜是"喜庆星",婚恋/添丁/庆典都可能应,不是婚恋专属铁证(实测教训:2014仅有天喜动被误断结婚,实为添丁;2008仅有红鸾动被误断恋爱,真正的恋爱年2007=化权天同入夫妻宫;真正的结婚年2012=正官年+化禄入夫妻宫)。⚠️结婚/领证是最高门槛,必须双锚:"配偶星年"+"大限加持夫妻宫(限入夫妻宫 或 大限化禄/化权入夫妻宫)"——单流年信号即使"配偶星年+化曜入夫妻+红鸾动"三齐聚也只能断恋爱(实锤教训:某女命盘2018戊戌=正官年+权太阴化权入夫妻+红鸾动被误断"结婚领证",命主至今未婚,该年应的是恋爱——她真正的大限无夫妻加持;对比:真实结婚年=偏财年+限入夫妻宫双锚/正官年+限禄入夫妻双锚)。⚠️配偶星性别错配=整批错:男命婚恋只能引正财/偏财年——正官/七杀是男命的子女星,不是配偶星;女命反之(实测教训:某男命盘断"2015乙未年结婚"引"正官年",实际结婚2012壬辰=偏财年+限夫妻宫双锚;且2015化科入子女宫与婚恋无关,属硬凑)。⚠️婚恋断语与生子断语年份必须自洽:生子年必须晚于结婚年(不主动断未婚先孕)
@@ -1330,7 +1413,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        # P81: verify的prompt v17(⑤p结婚双锚——盘3实锤:2018正官+权太阴→夫妻+红鸾被断结婚,
+        # P81: verify的prompt v18(C方案候选年预筛——盘3 12轮全灭结构性修复:LLM选年被示例年
+        # 干支锚定,警告+重试双机制失效;预筛合格年清单注入,LLM只从清单选年,parse闸门仍兜底;
+        # v17=⑤p结婚双锚——盘3实锤:2018正官+权太阴→夫妻+红鸾被断结婚,
         # 命主至今未婚=恋爱;结婚须配偶星年+大限加持夫妻宫;v16=⑤c2精确化+⑤n+⑤o——
         # 盘3实锤:2018红鸾年被断添丁(实无怀孕)/2006单化科被断考入大学(实高中毕业直接工作);
         # v15=⑤m配偶星性别错配——盘1v46实战:男命断2015"正官年"结婚,
@@ -1351,7 +1436,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # P82: family独立版本(v3=STAR_EN2CN补全杂曜拼音泄漏(yuede→月德等9+40项)+
         # 小星规则改"权重最低辅助参考"(全量盘有小星数据,轻量盘无——v2"上下文根本没给小星"表述错误);
         # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
-        _ck_ver = ("v49" if gen_type == "verify"
+        _ck_ver = ("v50" if gen_type == "verify"
                    else ("v3" if gen_type == "family" else "v33"))
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{_ck_ver}"
         if ctx.get("retry_note"):
