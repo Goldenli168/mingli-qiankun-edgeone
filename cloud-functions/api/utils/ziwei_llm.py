@@ -464,6 +464,13 @@ def _past_liunian_table(result, birth_year: int, day_master: str = "",
 _TYPE_CN = {"study": "学业考试", "career": "职业变动", "marriage": "婚恋感情",
             "children": "添丁子女", "wealth": "财运置业", "health": "健康伤病",
             "family": "家庭大事", "other": "其他"}
+
+# P82v21: 断语5大维度(用户2026-09-18指示)——断语按维度分散,每维度挑核心年份讲透,
+# 不要扎堆同一维度(盘3 v52实战:7条里2职业+2财置,用户反馈"不要过于集中在升职或购房")
+_TYPE2DIM = {"marriage": "婚恋感情", "career": "事业职业", "wealth": "财运置业",
+             "health": "健康伤病", "study": "学业与家庭", "family": "学业与家庭",
+             "children": "学业与家庭", "other": "其他"}
+_DIM_LIST = ["婚恋感情", "事业职业", "财运置业", "健康伤病", "学业与家庭"]
 _CAT2TYPES = {"升学": ("study",), "学业节点": ("study",), "恋爱": ("marriage",),
               "结婚": ("marriage",), "添丁": ("children",), "置业": ("wealth", "family"),
               "职业变动": ("career",), "得财": ("wealth",), "亏损": ("wealth",),
@@ -938,6 +945,7 @@ def parse_verify(text: str, result, birth_year: int, reject_log=None, blocked=No
             result, birth_year, _day_master_of(result), _hl0, _tx0)}
     _gender0 = result.get("基本信息", {}).get("性别", "男")
     items = []
+    _dim_counts = {}  # P82v21: ④d维度分散——同维度断语计数
     for line in text.split("\n"):
         m = line_re.search(line)
         if not m:
@@ -1192,6 +1200,16 @@ def parse_verify(text: str, result, birth_year: int, reject_log=None, blocked=No
                 not _re.search(r"考入|升学|录取|上榜|落榜|复读|毕业|转学|留学|考研|考公|中考|高考", claim):
             ok = False
             _why0.append("学业突破/进步类模糊评价无法对碰,只断升学/考入/落榜等节点事件")
+        # ④d 维度分散(P82v21,用户指示):同一维度最多2条——7条断语在cap=2约束下
+        # 数学上必然覆盖≥4个维度,强制LLM把名额分给不同人生面向,不扎堆升职/购房
+        if ok:
+            _dim0 = _TYPE2DIM.get(_classify_claim(claim), "其他")
+            if _dim_counts.get(_dim0, 0) >= 2:
+                ok = False
+                _why0.append(f"维度分散结构:「{_dim0}」维度已有2条,同维度最多2条——"
+                             "请换其他维度(婚恋感情/事业职业/财运置业/健康伤病/学业与家庭)信号最强的年份")
+            else:
+                _dim_counts[_dim0] = _dim_counts.get(_dim0, 0) + 1
         if ok:
             items.append({"claim": claim, "basis": basis,
                           "type": _classify_claim(claim)})
@@ -1325,6 +1343,12 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 {ctx.get('eligible_text','')}
 ⚠️清单=唯一选年范围:某类别下断语的年份必须在该类清单内;清单标注"无合格年"的类别,严禁断该类事件(直接换有合格年的类别);同一类别有多个候选年时,选信号最强的1个,并把该年行内信号(十神/四化落宫/流年命宫/红鸾天喜)逐字照抄进依据。这是硬性约束——清单之外的[事件类型+年份]组合会被校验器直接判废,写了也白写
 {ctx.get('blocked_text','')}
+【断语结构-5大维度分散,最高优先级】7条断语必须按以下5个维度分散布局,同一维度最多2条:
+①婚恋感情(恋爱/结婚) ②事业职业(跳槽/升职/创业) ③财运置业(得财/亏损/买房/搬家)
+④健康伤病(手术/住院/大病) ⑤学业与家庭(升学/考试/添丁/父母大事)
+每个维度只挑该维度信号最强的1-2个核心年份,把"哪一年+发生了什么事"描述清楚、讲透(谁/什么事/什么结果),
+严禁在同一维度堆3条以上(实测:某盘7条里2条跳槽升职+2条买房得财,用户反馈维度太集中、信息量少)——
+某维度清单标"无合格年"或被禁断时,该维度直接跳过,名额给其他维度。
 
 【应期规则-信号分权重,严禁只看四化选年】
 ⚠️【示例年份锚定警告-最高优先级】本文所有规则/坏例/好例/实测教训中出现的年份(2005/2006/2007/2008/2012/2013/2014/2015/2016/2019/2020/2023等)全部来自【其他命盘】的实测案例,与当前命主毫无关系!严禁因为"示例里出现过该年"就选用——每个断语年份必须先从下方信号表按规则独立筛出,示例只用来理解"信号权重怎么比、什么算虚标"(实测教训:某新命盘7条断语整批照抄示例年份2012/2014/2020/2023,与该盘信号全不符,全灭)
@@ -1380,7 +1404,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 「2016丙申年跳槽换了工作」
 「2019己亥年买房,有置业大额支出」
 「2013癸巳年升职,职位上了一个台阶」
-直接输出7行,不要开场白。"""
+直接输出7行(同一维度最多2条,覆盖至少4个维度),不要开场白。"""
         # P81v6: 重试警告(首轮断语被parse判废后由/verify端点注入,二轮重写)
         prompt += ctx.get("retry_note", "") or ""
 
@@ -1443,7 +1467,9 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     import time as _t
     try:
         age = ctx.get('dayun_age', ctx.get('ln_gz', ''))
-        # P81: verify的prompt v20(反馈驱动类别禁断——同盘同类mismatch≥2次→清单标禁断+parse④c兜底,
+        # P81: verify的prompt v21(5大维度分散结构——用户指示:断语按维度分散每维度挑核心年讲透,
+        # 不扎堆升职/购房;parse④d同维度≤2条,cap=2数学上强制7条覆盖≥4维度;
+        # v20=反馈驱动类别禁断——同盘同类mismatch≥2次→清单标禁断+parse④c兜底,
         # 盘3添丁类2012✗+2024✗实锤(命主至今无小孩);信号合格≠事实成立,闸门由反馈数据来关;
         # v19=⑤c2v2红鸾/天喜单信号豁免废除——盘2 2014天喜年真实添丁
         # vs 盘3 2012天喜年实锤无小孩,同结构两样本冲突=无判别力,添丁必须子女星/命入子女/化曜入子女;
@@ -1470,7 +1496,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # P82: family独立版本(v3=STAR_EN2CN补全杂曜拼音泄漏(yuede→月德等9+40项)+
         # 小星规则改"权重最低辅助参考"(全量盘有小星数据,轻量盘无——v2"上下文根本没给小星"表述错误);
         # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
-        _ck_ver = ("v52" if gen_type == "verify"
+        _ck_ver = ("v53" if gen_type == "verify"
                    else ("v3" if gen_type == "family" else "v33"))
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{ctx.get('blocked_phash','noblock')}:{_ck_ver}"
         if ctx.get("retry_note"):
