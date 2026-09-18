@@ -539,6 +539,12 @@ FamilyModule.init({getProfile: function() {
       d = document.getElementById('day').value;
   return _birthMatchesSync(y, m, d) ? _syncedProfile : null;
 }});
+// P83: 夫妻分析(同款画像注入;婚姻状态由版面录入区并入profile)
+SpouseModule.init({getProfile: function() {
+  var y = document.getElementById('year').value, m = document.getElementById('month').value,
+      d = document.getElementById('day').value;
+  return _birthMatchesSync(y, m, d) ? _syncedProfile : null;
+}});
 
 
 function showSyncBanner() {
@@ -731,6 +737,7 @@ function doAnalyze() {
     if (_ziweiFeedback) { VerifyModule.clearPending(); }
     VerifyModule.start();
     FamilyModule.start();  // P82: 分析完成后加载家庭分析(有缓存直接渲染,不重复消耗LLM)
+    SpouseModule.start();  // P83: 分析完成后加载夫妻分析(未填婚姻状态时只展示录入区)
     // 缓存分析结果，切页回来保持显示
     try {
       localStorage.setItem('mingli_ziwei_result', JSON.stringify({

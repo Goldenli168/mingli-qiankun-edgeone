@@ -882,6 +882,232 @@ def parse_family(text: str, ctx_text: str = ""):
     return secs
 
 
+def _build_spouse_context(result, patterns, spouse_chart=None):
+    """P83: 夫妻分析LLM上下文(配偶画像/婚恋应期/婚姻互动)。镜像P82 family架构:
+    数据全部给足,LLM只断不算——严禁其自行排盘或推算宫位。
+    spouse_chart=配偶本盘(轻量直排,可选):有则配偶画像以本盘命宫为准(隔层→本盘精度升级,
+    用户指示2026-09-18:夫妻与手足同规,能直排就直排),无则走命主夫妻宫隔层只断类型倾向。
+    marital称谓红线:盘3"钱来自丈夫"补洞教训——非已婚严禁"丈夫/妻子"称谓(parse_spouse兜底)"""
+    import datetime as _dt
+    info = result.get("基本信息", {})
+    solar = info.get("公历", "")
+    try:
+        birth_year = int(solar[:4])
+    except Exception:
+        birth_year = 0
+    age = _dt.datetime.now().year - birth_year + 1 if birth_year else 0
+
+    star_palace, pal_by_name, dx_list = {}, {}, []
+    ZHI = list("子丑寅卯辰巳午未申酉戌亥")
+    import re as _re
+    for p in result.get("十二宫", []):
+        for s in (p.get("主星") or []) + (p.get("辅星") or []):
+            star_palace.setdefault(s, p.get("宫名", ""))
+        pal_by_name[p.get("宫名", "")] = p
+        m = _re.match(r"(\d+)-(\d+)岁", p.get("大限", "") or "")
+        if m:
+            dx_list.append((int(m.group(1)), int(m.group(2)),
+                            p.get("天干", ""), p.get("地支", ""), p.get("宫名", "")))
+
+    def _fmt_palace(p):
+        """宫位数据行:宫名(干支): 主星(庙旺)、辅星 小星:..."""
+        if not p:
+            return "(无此宫数据)"
+        mwd = p.get("庙旺", {}) or {}
+        parts = []
+        for s in (p.get("主星") or []) + (p.get("辅星") or []):
+            lab = mwd.get(s, "")
+            parts.append(f"{s}({lab})" if lab else s)
+        minor = (p.get("小星") or [])[:6]
+        txt = (f"{p.get('宫名','')}宫({p.get('天干','')}{p.get('地支','')}): "
+               f"{'、'.join(parts) or '无主星(借对宫)'}").replace("宫宫", "宫")
+        if minor:
+            txt += f" 小星:{'、'.join(minor)}"
+        return txt
+
+    def _sihua_of_gan(gan):
+        stars = _SIHUA_TABLE.get(gan, ["", "", "", ""])
+        out = []
+        for hi, sname in enumerate(stars):
+            if sname:
+                pal = star_palace.get(sname, "?")
+                out.append(f"{_SIHUA_LABELS[hi]}{sname}→{pal}宫".replace("宫宫", "宫"))
+        return " ".join(out)
+
+    spouse_p = pal_by_name.get("夫妻", {})
+    fude_p = pal_by_name.get("福德", {})
+    ming_p = next((p for p in result.get("十二宫", []) if p.get("是否命宫")), {})
+    spouse_gan = spouse_p.get("天干", "")
+    spouse_sihua = _sihua_of_gan(spouse_gan) if spouse_gan else ""
+
+    # 配偶星: 男命太阴=妻星 / 女命太阳=夫星(v8规则)
+    gender = info.get("性别", "男")
+    spouse_star = "太阴" if gender == "男" else "太阳"
+
+    def _star_line(star):
+        pal = star_palace.get(star, "")
+        p = pal_by_name.get(pal, {})
+        if not p:
+            return f"{star}: (盘中无此星)"
+        mwd = (p.get("庙旺", {}) or {}).get(star, "")
+        co = [s for s in (p.get("主星") or []) + (p.get("辅星") or []) if s != star]
+        return (f"{star}落{pal}宫({p.get('地支','')})" +
+                (f"({mwd})" if mwd else "") +
+                (f" 同宫:{'、'.join(co)}" if co else "")).replace("宫宫", "宫")
+
+    # 大限干四化(成婚双锚之一:大限命宫入夫妻宫)
+    dx_lines = []
+    for dx in sorted(dx_list, key=lambda d: d[0]):
+        stars = _SIHUA_TABLE.get(dx[2], ["", "", "", ""])
+        parts = []
+        for hi in (0, 1, 3):
+            if stars[hi]:
+                pal = star_palace.get(stars[hi], "?")
+                parts.append(f"限{_SIHUA_LABELS[hi][1]}{stars[hi]}→{pal}宫".replace("宫宫", "宫"))
+        dx_lines.append(f"{dx[0]}-{dx[1]}岁 {dx[2]}{dx[3]}限(本命{dx[4]}宫): "
+                        f"{' '.join(parts)}".replace("宫宫", "宫"))
+
+    # 八字四柱+大运(男命财星=妻星/女命官星=夫星 旁证)
+    sizhu_text, bazi_dayun_text, day_master = "", "", ""
+    try:
+        from . import bazi_core as _bc
+        m = _re.match(r"(\d+)年(\d+)月(\d+)日", solar)
+        hour = info.get("时辰", 12)
+        if m and birth_year:
+            y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            fp = _bc.get_four_pillars(y, mo, d, hour)
+            day_master = fp["day"][0]
+            sizhu_text = "/".join(["".join(fp["year"]), "".join(fp["month"]),
+                                   "".join(fp["day"]), "".join(fp["hour"])])
+            sex = info.get("性别", "男")
+            _qy, dy_list = _bc.calc_dayun(sex, fp["year"][0], tuple(fp["month"]), y, mo, d)
+            bazi_dayun_text = "；".join(
+                f"{y + dy['age_start']}-{y + dy['age_end']}年{dy['gan']}{dy['zhi']}"
+                f"({dy['age_start']}-{dy['age_end']}岁)" for dy in dy_list[:8])
+            bzl = result.get("八字联合", {})
+            if bzl.get("日主"):
+                sizhu_text += f"，日主{bzl['日主']}{bzl.get('身强身弱', '')}"
+    except Exception:
+        pass
+
+    # 红鸾天喜(婚恋应期核心信号)
+    hl_zhi = tx_zhi = ""
+    if birth_year:
+        hl_zhi = _HONGLUAN.get(ZHI[(birth_year - 4) % 12], "")
+        tx_zhi = _ZHI_OPP.get(hl_zhi, "")
+    now_y = _dt.datetime.now().year
+    sig_lines = [r["line"] for r in _year_signal_rows(
+        result, birth_year, day_master, hl_zhi, tx_zhi, end_year=now_y + 15)]
+
+    _sh = result.get("四化", {})
+    natal_sihua = " ".join([
+        f"{k}·{v}落{star_palace.get(v, '?')}宫".replace("宫宫", "宫")
+        for k, v in [("化禄", _sh.get("化禄")), ("化权", _sh.get("化权")),
+                     ("化科", _sh.get("化科")), ("化忌", _sh.get("化忌"))] if v
+    ])
+    _ptext, _ph = _profile_ctx(result)
+    marital = (result.get("命主画像") or {}).get("marital", "") if isinstance(result.get("命主画像"), dict) else ""
+
+    # 配偶本盘(直排,可选):命宫/夫妻宫/本命四化
+    sp_hash = "noself"
+    sp_block = ""
+    sp_ctx_lines = []
+    if spouse_chart:
+        try:
+            si = spouse_chart.get("基本信息", {})
+            sp_hash = _stable_hash(f"{si.get('公历','')}|{si.get('性别','')}")
+            sp_pal, sp_ming, sp_star_palace = {}, {}, {}
+            for p in spouse_chart.get("十二宫", []):
+                sp_pal[p.get("宫名", "")] = p
+                if p.get("是否命宫"):
+                    sp_ming = p
+                for s in (p.get("主星") or []) + (p.get("辅星") or []):
+                    sp_star_palace.setdefault(s, p.get("宫名", ""))
+            sp_sh = spouse_chart.get("四化", {})
+            sp_sihua_txt = " ".join([
+                f"{k}·{v}落{sp_star_palace.get(v, '?')}宫".replace("宫宫", "宫")
+                for k, v in [("化禄", sp_sh.get("化禄")), ("化权", sp_sh.get("化权")),
+                             ("化科", sp_sh.get("化科")), ("化忌", sp_sh.get("化忌"))] if v
+            ])
+            sp_ctx_lines = [
+                f"配偶生辰:{si.get('公历','')} {si.get('性别','')}",
+                "配偶命宫: " + _fmt_palace(sp_ming),
+                "配偶夫妻宫: " + _fmt_palace(sp_pal.get("夫妻", {})),
+                "配偶本命四化: " + sp_sihua_txt,
+            ]
+            sp_block = "【配偶本盘(已录入配偶生辰直排,本盘精度最高)】\n" + "\n".join(sp_ctx_lines)
+        except Exception:
+            sp_block, sp_ctx_lines, sp_hash = "", [], "noself"
+
+    _ctx_text = "\n".join([
+        _fmt_palace(spouse_p), spouse_sihua, _star_line(spouse_star),
+        _fmt_palace(fude_p), _fmt_palace(ming_p),
+        "\n".join(dx_lines), "\n".join(sig_lines), natal_sihua] + sp_ctx_lines)
+    return {
+        "gen_type": "spouse",
+        "gender": gender,
+        "age": age,
+        "birth_year": birth_year,
+        "marital": marital,
+        "sizhu": sizhu_text,
+        "bazi_dayun": bazi_dayun_text,
+        "ming_stars": "、".join((ming_p.get("主星") or []) + (ming_p.get("辅星") or [])) or "借对宫",
+        "natal_sihua": natal_sihua,
+        "spouse_palace": _fmt_palace(spouse_p),
+        "spouse_sihua": spouse_sihua,
+        "spouse_star": spouse_star,
+        "spouse_star_line": _star_line(spouse_star),
+        "fude_palace": _fmt_palace(fude_p),
+        "dx_sihua": "\n".join(dx_lines),
+        "signal_table": "\n".join(sig_lines),
+        "spouse_block": sp_block,
+        "profile_text": _ptext,
+        # 配偶生辰hash并入画像hash位→直排输入变化自动换缓存key
+        "profile_phash": f"{_ph}.{sp_hash}",
+        "chart_key": _chart_key(result),
+        "ctx_text": _ctx_text,
+    }
+
+
+def parse_spouse(text: str, ctx_text: str = "", marital: str = ""):
+    """P83: 解析spouse三段输出 → [{'title','content'}...]。
+    校验与parse_family同源(≥3段/宫位引用白名单/星曜白名单)+婚姻状态称谓闸门:
+    非"已婚/再婚"时严禁"丈夫/妻子/老公/老婆"占有式称谓(盘3教训:LLM会给未婚盘补洞
+    "钱来自丈夫"——画像未注入或未婚时,出现占有式称谓=编造,判废由端点注入警告重试)"""
+    import re as _re
+    if not text:
+        return None
+    parts = _re.split(r"\*\*【(.+?)】\*\*", text)
+    secs = []
+    for i in range(1, len(parts) - 1, 2):
+        title, content = parts[i].strip(), parts[i + 1].strip()
+        if title and len(content) >= 30:
+            secs.append({"title": title, "content": content})
+    if len(secs) < 3:
+        return None
+    # 宫位引用白名单(与parse_family/parse_verify三判定一致)
+    palace_re = _re.compile(r"(?:→|入|限|冲|落)([^\s，。、·:：→|｜/()（）「」]{1,4})宫")
+    _pal_names = sorted(_12_PALACES, key=len, reverse=True)
+    for sec in secs:
+        for tok in palace_re.findall(sec["content"]):
+            if not (any(tok.endswith(pn) for pn in _pal_names)
+                    or (tok + "宫") in _12_PALACES
+                    or tok.endswith("命")):
+                return None
+    # 星曜白名单:提到的星曜必须在上下文数据文本中出现过
+    if ctx_text:
+        for sec in secs:
+            for star in _FAMILY_KNOWN_STARS:
+                if star in sec["content"] and star not in ctx_text:
+                    return None
+    # 婚姻状态称谓闸门(非已婚严禁占有式称谓)
+    if marital not in ("已婚", "再婚"):
+        for sec in secs:
+            if _re.search(r"(您|你)的?(丈夫|妻子)|老公|老婆", sec["content"]):
+                return None
+    return secs
+
+
 def _valid_ganzhi_set(result, birth_year: int) -> set:
     """命盘真实干支全集:四柱+八字大运+流年(出生→当前+4)。
     断语/依据中出现的干支必须∈此集合(60甲子合法但非本盘数据的也算编造)"""
@@ -1455,6 +1681,66 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 硬约束:宫位/星曜/四化落宫必须逐字引用上方数据,张冠李戴=编造;口语务实,联系命主实际生活场景;直接输出4段,不要开场白不要总结。"""
         prompt += ctx.get("retry_note", "") or ""
 
+    elif gen_type == "spouse":
+        # P83: 夫妻分析(配偶画像/婚恋应期/婚姻互动)。镜像P82 family架构,数据全给LLM只断不算;
+        # 支持配偶生辰直排(有【配偶本盘】时画像以配偶本盘命宫为准=本盘精度,
+        # 无则夫妻宫隔层只断类型倾向);marital称谓红线:盘3"钱来自丈夫"补洞教训——
+        # 非已婚严禁"丈夫/妻子"称谓(parse_spouse称谓闸门兜底)
+        _mar = ctx.get('marital', '')
+        if _mar in ("已婚", "再婚"):
+            _mar_rule = (
+                f"【婚姻状态】{_mar}(命主亲口提供,铁的事实)——可直称配偶为"
+                f"{'丈夫' if ctx.get('gender') == '女' else '妻子'};"
+                "婚恋应期段先回顾成婚/恋爱的关键年份(从信号表找依据并讲清信号),再讲未来婚姻经营的节点")
+        elif _mar:
+            _mar_rule = (
+                f"【婚姻状态】{_mar}(命主亲口提供,铁的事实)——命主现在没有配偶,"
+                "严禁使用「丈夫/妻子/老公/老婆」称谓,一律说「未来配偶/伴侣/对象」;"
+                "婚恋应期段讲未来婚恋时间窗口")
+        else:
+            _mar_rule = (
+                "【婚姻状态】未提供——严禁假定已婚,严禁「丈夫/妻子/老公/老婆」称谓,"
+                "一律说「未来配偶/伴侣/对象」;婚恋应期段讲未来婚恋时间窗口")
+        prompt = f"""你是资深紫微斗数命理师,为命主做夫妻分析。所有数据已给出,你只负责"断"不负责"算"——严禁自行排盘,严禁引用上方未给出的星曜、宫位、干支。
+
+【命主】{ctx.get('gender','')}，现年{ctx.get('age','')}岁(虚岁){ctx.get('profile_text','')}
+{_mar_rule}
+【八字四柱】{ctx.get('sizhu','')}
+【八字大运】{ctx.get('bazi_dayun','')}
+【命宫】{ctx.get('ming_stars','')}
+【本命四化】{ctx.get('natal_sihua','')}
+【夫妻宫(配偶画像位+婚姻关系)】{ctx.get('spouse_palace','')}
+【夫妻宫干四化(夫妻宫天干飞出,=配偶带来的缘/婚姻互动)】{ctx.get('spouse_sihua','')}
+【{ctx.get('spouse_star','')}·配偶星】{ctx.get('spouse_star_line','')}
+【福德宫(婚姻生活质量/精神契合)】{ctx.get('fude_palace','')}
+【大限干四化(十年气候,成婚双锚之一看大限命宫)】
+{ctx.get('dx_sihua','')}
+【流年信号表(过去+未来15年,引用年份/干支/四化只允许查此表)】
+{ctx.get('signal_table','')}
+(每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 流年四化落宫 |限禄X→宫 限忌X→宫)
+{ctx.get('spouse_block','')}
+
+【取象规则-必须遵守】
+- 夫妻宫主星看配偶类型画像与婚姻关系基调(如紫微=配偶体面有能力;机月同梁=温和稳定;杀破狼=配偶强势能干但婚姻变动性大)
+- {ctx.get('spouse_star','')}为配偶星:庙旺=配偶能力强/条件好,落陷或与煞星(火星/铃星/地空/地劫/擎羊/陀罗)同宫=配偶操劳或身体偏弱
+- 福德宫看婚姻的精神层面:主星吉=精神契合,煞忌多=内心孤独感/精神压力大
+- 婚恋应期规则(已多盘实测验证):恋爱=红鸾/天喜年、流年命宫入夫妻、化曜入夫妻(单信号即可断);成婚必须双锚——配偶星年(男命=正财/偏财年,女命=正官年;⚠️男命正官=子女星非配偶星,严禁拿正官年给男命断结婚) + 大限命宫或流年命宫入夫妻宫,单红鸾/天喜年只能断恋爱严禁断结婚
+- 若给了【配偶本盘】:配偶画像以配偶本盘命宫主星为准(本盘直排,精度最高),命主夫妻宫只用于"两人相处互动";成婚年常在双方红鸾/天喜引动之年,但年份必须出现在命主信号表中
+- 若没给【配偶本盘】:画像从命主夫妻宫主星+配偶星取象,开头注明"从命主夫妻宫看的配偶类型倾向"
+- ⚠️措辞红线(盘4手足段同款教训):夫妻宫主星无煞时,孤辰/天刑/咸池等小星最多支持"偶尔口角/需要各自空间"级表述,严禁"缘薄/克配偶/婚姻不幸/二婚"重判词;即使煞忌同宫,也只断"磨合多/需注意沟通方式"——严禁断"克夫/克妻/必离婚/配偶有灾",严禁断配偶寿数
+- 年龄约束:命主现年{ctx.get('age','')}岁——未满20岁时,应期段只讲20岁以后的婚恋窗口
+- 八字旁证:男命财星=妻星、女命官星=夫星,与紫微互参,矛盾时以紫微宫位数据为准
+- ⚠️星曜白名单:上下文未列出的星曜=本盘无此数据,严禁提及;小星/杂曜即使给出权重也最低,严禁仅凭小星断具体结论
+- ⚠️严禁"对宫/三合借力"类自行推算——只评述数据行直接给出的落宫;大限引用必须与数据行"限禄/限权/限忌"逐字一致
+
+输出3段,每段严格用 **【标题】** 开头,换行写内容:
+**【配偶画像】**(150-200字:配偶性格气质/能力/职业类型倾向/与命主的缘分基调)
+**【婚恋应期】**(150-200字)
+**【婚姻互动】**(100-150字:相处模式/摩擦点/经营建议)
+
+硬约束:宫位/星曜/四化落宫必须逐字引用上方数据,张冠李戴=编造;口语务实,联系命主实际生活场景;直接输出3段,不要开场白不要总结。"""
+        prompt += ctx.get("retry_note", "") or ""
+
     else:
         return None
 
@@ -1508,7 +1794,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
     # P56: 保持800（用户要求，不能减少）
     # P76: summary例外——v9.34注入大运数据后总结变多章节,800token写不下截断半句;
     # 提1200后LLM按比例写更满(1786字)仍截断 → 1500+prompt限幅1100-1400字双保险
-    max_tok = (1500 if gen_type in ("summary", "family")
+    max_tok = (1500 if gen_type in ("summary", "family", "spouse")
                else (1200 if gen_type == "verify" else 800))
     result = llm_call(prompt, ck, max_tokens=max_tok, skip_cache=_FORCE_REFRESH)
     # 诊断日志(列表,最多存10条)

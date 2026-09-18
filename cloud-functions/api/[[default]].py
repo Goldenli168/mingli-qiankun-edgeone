@@ -589,6 +589,111 @@ def family_api():
         return jsonify({"ok": True, "family": None, "reason": "error"})
 
 
+@app.route("/spouse", methods=["POST", "OPTIONS"])
+def spouse_api():
+    """P83: 夫妻分析(LLM):配偶画像/婚恋应期/婚姻互动三段。
+    镜像P82 family端点;支持录入配偶生辰直排(spouse:{year,month,day,hour,sex}→
+    轻量排盘入光缓存,画像以配偶本盘命宫为准);marital可经profile或顶层字段注入,
+    非已婚严禁"丈夫/妻子"称谓(parse_spouse称谓闸门兜底,盘3"钱来自丈夫"补洞教训)"""
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Key"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        return resp
+
+    data = request.get_json(force=True)
+    try:
+        year  = int(data["year"])
+        month = int(data["month"])
+        day   = int(data["day"])
+        hour  = int(data.get("hour", 12))
+        sex   = data.get("sex", "男")
+    except (KeyError, ValueError):
+        return jsonify({"error": "请输入完整的出生信息"}), 400
+
+    try:
+        profile = data.get("profile") if isinstance(data.get("profile"), dict) else None
+        force_refresh = data.get("refresh", False)
+        # marital注入:顶层字段优先,其次profile自带;有则合并进profile(画像通道=事实前提)
+        _marital = data.get("marital") or (profile or {}).get("marital") or ""
+        if _marital:
+            profile = dict(profile or {})
+            profile["marital"] = _marital
+        chart = _get_ziwei_chart(year, month, day, hour, sex, profile, force_refresh)
+        if not chart:
+            return jsonify({"ok": True, "spouse": None, "reason": "chart_not_cached"})
+
+        from utils import ziwei_llm as _zllm
+        from utils.ziwei_llm import _build_spouse_context, parse_spouse
+        from utils.ziwei_llm import _chart_key as _ck
+        if profile and isinstance(chart, dict) and not chart.get("命主画像"):
+            chart["命主画像"] = profile
+        elif profile and isinstance(chart, dict) and _marital:
+            # 已有画像但缺marital→补入(称谓闸门依赖,不覆盖其他画像字段)
+            _cp = dict(chart.get("命主画像") or {})
+            if not _cp.get("marital"):
+                _cp["marital"] = _marital
+                chart["命主画像"] = _cp
+
+        # 配偶生辰直排(可选):轻量排盘+光缓存(与analyze路径同一份缓存)
+        spouse_chart = None
+        sp = data.get("spouse") if isinstance(data.get("spouse"), dict) else None
+        if sp:
+            try:
+                sy, sm, sd = int(sp["year"]), int(sp["month"]), int(sp["day"])
+                sh = int(sp.get("hour", 12))
+                ssex = sp.get("sex") or ("女" if sex == "男" else "男")
+                from utils.ziwei_core import light_ziwei_chart
+                _lk = f"ziwei:{sy}:{sm}:{sd}:{sh}:{ssex}"
+                spouse_chart = _ZIWEI_LIGHT_CACHE.get(_lk)
+                if not spouse_chart:
+                    _ZIWEI_LIGHT_CACHE.update(_load_light_cache())
+                    spouse_chart = _ZIWEI_LIGHT_CACHE.get(_lk)
+                if not spouse_chart:
+                    spouse_chart = light_ziwei_chart(sy, sm, sd, sh, ssex)
+                    _ZIWEI_LIGHT_CACHE[_lk] = spouse_chart
+                    _save_light_cache(_lk, spouse_chart)
+            except Exception as _spe:
+                sys.stderr.write("[spouse] spouse_chart fail: %s\n" % str(_spe)[:120])
+                spouse_chart = None
+
+        _zllm._FORCE_REFRESH = bool(force_refresh)
+        ctx = _build_spouse_context(chart, chart.get("格局", []), spouse_chart=spouse_chart)
+        raw = _zllm._llm_generate("spouse", ctx)
+        _zllm._FORCE_REFRESH = False
+        _mar = ctx.get("marital", "")
+        secs = parse_spouse(raw, ctx.get("ctx_text", ""), marital=_mar)
+        if not secs and raw:
+            # 首轮解析失败(段数不够/非法宫位引用/星曜编造/非已婚用占有式称谓)→注入警告重试一次
+            ctx["retry_note"] = (
+                "\n\n【重写警告】你上一轮输出未通过校验(段数不足3段,或宫位引用张冠李戴,"
+                "或提到了上下文未给出的星曜,或婚姻状态不允许却用了「丈夫/妻子/老公/老婆」称谓)。"
+                "本轮铁规:①严格3段,每段**【标题】**开头;"
+                "②宫位/星曜/四化只许照抄上方给出的数据行,一个字不许改;"
+                "③婚姻状态不是「已婚/再婚」时一律说「未来配偶/伴侣/对象」;"
+                "④严禁'对宫/三合借力'自行推算;大限引用与数据行'限禄/限权/限忌'逐字一致。"
+            )
+            _zllm._FORCE_REFRESH = bool(force_refresh)
+            raw2 = _zllm._llm_generate("spouse", ctx)
+            _zllm._FORCE_REFRESH = False
+            secs = parse_spouse(raw2, ctx.get("ctx_text", ""), marital=_mar)
+            if not secs and raw2:
+                raw = raw2
+        if not secs:
+            if raw:
+                return jsonify({"ok": True, "chart_key": _ck(chart),
+                                "spouse": {"sections": None, "raw": raw,
+                                           "direct_chart": bool(spouse_chart)}})
+            return jsonify({"ok": True, "spouse": None, "reason": "generate_failed"})
+        return jsonify({"ok": True, "chart_key": _ck(chart),
+                        "spouse": {"sections": secs, "direct_chart": bool(spouse_chart)}})
+    except Exception as e:
+        import traceback
+        sys.stderr.write("[spouse] %s | %s\n" % (str(e)[:200], traceback.format_exc()[:500]))
+        return jsonify({"ok": True, "spouse": None, "reason": "error"})
+
+
 _VERIFY_STATS_FILE = os.path.join(_CACHE_DIR, "ml_verify_stats.json")
 
 
@@ -762,5 +867,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.58-family-v4", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.59-spouse-v1", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v1": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
