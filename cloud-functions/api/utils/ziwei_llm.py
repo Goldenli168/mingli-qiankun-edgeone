@@ -1735,6 +1735,18 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
                 f"【婚姻状态】{_mar}(命主亲口提供,铁的事实)——可直称配偶为"
                 f"{'丈夫' if ctx.get('gender') == '女' else '妻子'};"
                 "婚恋应期段先回顾成婚/恋爱的关键年份(从信号表找依据并讲清信号),再讲未来婚姻经营的节点")
+        elif _mar in ("恋爱中", "恋爱", "交往中", "同居"):
+            # P83v3: 恋爱中≠单身(盘3实锤:按"未婚=单身"写"扩大社交/接受介绍/新恋情窗口",
+            # 命主实际有稳定对象——信号引动应解读为现有关系深化,不是新恋爱)
+            _mar_rule = (
+                f"【婚姻状态】恋爱中(命主有稳定恋爱对象,铁的事实)——"
+                "严禁「丈夫/妻子/老公/老婆」称谓,直称「对象/伴侣」;"
+                "配偶画像段断的是现任对象的类型画像;"
+                "婚恋应期段讲【现有关系的推进节奏】(感情升温年/磨合节点/成婚窗口)——"
+                "流年红鸾天喜、化曜入夫妻、禄权入夫妻等引动=现有关系深化或推进节点的信号,"
+                "严禁解读为新恋情,严禁给「扩大社交/接受介绍/认识新人/别错过」类单身建议;"
+                "成婚年份仍只许从【成婚双锚合格年】清单选并举证两锚,清单无未来合格年就说"
+                "「本阶段无双锚成婚年,关系以深化为主,领证顺势而为」")
         elif _mar:
             _mar_rule = (
                 f"【婚姻状态】{_mar}(命主亲口提供,铁的事实)——命主现在没有配偶,"
@@ -1830,7 +1842,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
         _ck_ver = ("v53" if gen_type == "verify"
                    else ("v4" if gen_type == "family"
-                   else ("v2" if gen_type == "spouse" else "v33")))
+                   else ("v3" if gen_type == "spouse" else "v33")))
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{ctx.get('blocked_phash','noblock')}:{_ck_ver}"
         if ctx.get("retry_note"):
             # P81v12: key含retry_note哈希——旧版固定":r1",警告内容变了仍命中旧缓存,

@@ -70,7 +70,7 @@ var SpouseModule = (function () {
   function _spousePayload() {
     var m = document.getElementById('spoMarital').value;
     var sp = null;
-    if (m === '已婚' || m === '再婚') {
+    if (m === '已婚' || m === '再婚' || m === '恋爱中') {
       var y = document.getElementById('spoYear').value,
           mo = document.getElementById('spoMonth').value,
           d = document.getElementById('spoDay').value;
@@ -97,11 +97,11 @@ var SpouseModule = (function () {
       var hv = (sp.hour !== undefined && sp.hour !== '' && +sp.hour === HOURS[j][0]);
       hHtml += '<option value="' + HOURS[j][0] + '"' + (hv ? ' selected' : '') + '>' + HOURS[j][1] + '</option>';
     }
-    var show = (inp.marital === '已婚' || inp.marital === '再婚');
+    var show = (inp.marital === '已婚' || inp.marital === '再婚' || inp.marital === '恋爱中');
     var html =
       '<label>婚姻状态</label><select id="spoMarital" onchange="SpouseModule.onInputChange()">' + mHtml + '</select>' +
       '<div class="spo-birth" id="spoBirth" style="display:' + (show ? 'block' : 'none') + '">' +
-        '<label>配偶生辰(选填,录入后按配偶本盘直排,精度更高)</label><br>' +
+        '<label>对象生辰(选填,录入后按对象本盘直排,精度更高)</label><br>' +
         '<input type="number" id="spoYear" placeholder="年" min="1930" max="2026" style="width:70px" value="' + (sp.year || '') + '" onchange="SpouseModule.onInputChange()"> ' +
         '<input type="number" id="spoMonth" placeholder="月" min="1" max="12" style="width:52px" value="' + (sp.month || '') + '" onchange="SpouseModule.onInputChange()"> ' +
         '<input type="number" id="spoDay" placeholder="日" min="1" max="31" style="width:52px" value="' + (sp.day || '') + '" onchange="SpouseModule.onInputChange()"> ' +
@@ -111,7 +111,7 @@ var SpouseModule = (function () {
           '<option value="' + currentSex + '"' + (sp.sex === currentSex ? ' selected' : '') + '>' + currentSex + '</option>' +
         '</select>' +
       '</div>' +
-      '<div class="spo-hint">填写婚姻状态后点「生成」——已婚可继续录配偶生辰走双盘直排；未录则按命主夫妻宫推断配偶类型。</div>';
+      '<div class="spo-hint">填写婚姻状态后点「生成」——已婚/恋爱中可继续录对象生辰走双盘直排；未录则按命主夫妻宫推断对象类型。</div>';
     document.getElementById('spoInput').innerHTML = html;
   }
 
@@ -205,7 +205,7 @@ var SpouseModule = (function () {
     onInputChange: function () {
       var m = document.getElementById('spoMarital').value;
       document.getElementById('spoBirth').style.display =
-        (m === '已婚' || m === '再婚') ? 'block' : 'none';
+        (m === '已婚' || m === '再婚' || m === '恋爱中') ? 'block' : 'none';
       _saveInput();
     }
   };
