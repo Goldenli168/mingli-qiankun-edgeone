@@ -663,21 +663,24 @@ def spouse_api():
         raw = _zllm._llm_generate("spouse", ctx)
         _zllm._FORCE_REFRESH = False
         _mar = ctx.get("marital", "")
-        secs = parse_spouse(raw, ctx.get("ctx_text", ""), marital=_mar)
+        _myears = ctx.get("marriage_years")
+        secs = parse_spouse(raw, ctx.get("ctx_text", ""), marital=_mar, marriage_years=_myears)
         if not secs and raw:
-            # 首轮解析失败(段数不够/非法宫位引用/星曜编造/非已婚用占有式称谓)→注入警告重试一次
+            # 首轮解析失败(段数不够/非法宫位引用/星曜编造/非已婚用占有式称谓/成婚年份无双锚)→注入警告重试一次
             ctx["retry_note"] = (
                 "\n\n【重写警告】你上一轮输出未通过校验(段数不足3段,或宫位引用张冠李戴,"
-                "或提到了上下文未给出的星曜,或婚姻状态不允许却用了「丈夫/妻子/老公/老婆」称谓)。"
+                "或提到了上下文未给出的星曜,或婚姻状态不允许却用了「丈夫/妻子/老公/老婆」称谓,"
+                "或成婚/结婚年份不在【成婚双锚合格年】清单内)。"
                 "本轮铁规:①严格3段,每段**【标题】**开头;"
                 "②宫位/星曜/四化只许照抄上方给出的数据行,一个字不许改;"
                 "③婚姻状态不是「已婚/再婚」时一律说「未来配偶/伴侣/对象」;"
-                "④严禁'对宫/三合借力'自行推算;大限引用与数据行'限禄/限权/限忌'逐字一致。"
+                "④成婚/结婚/领证年份只许从【成婚双锚合格年】清单选,且逐一举证两锚(十神+大限加持夫妻宫);"
+                "⑤严禁'对宫/三合借力'自行推算;大限引用与数据行'限禄/限权/限忌'逐字一致。"
             )
             _zllm._FORCE_REFRESH = bool(force_refresh)
             raw2 = _zllm._llm_generate("spouse", ctx)
             _zllm._FORCE_REFRESH = False
-            secs = parse_spouse(raw2, ctx.get("ctx_text", ""), marital=_mar)
+            secs = parse_spouse(raw2, ctx.get("ctx_text", ""), marital=_mar, marriage_years=_myears)
             if not secs and raw2:
                 raw = raw2
         if not secs:
@@ -867,5 +870,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.59-spouse-v1", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v1": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.60-spouse-v2", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v2": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事

@@ -996,8 +996,33 @@ def _build_spouse_context(result, patterns, spouse_chart=None):
         hl_zhi = _HONGLUAN.get(ZHI[(birth_year - 4) % 12], "")
         tx_zhi = _ZHI_OPP.get(hl_zhi, "")
     now_y = _dt.datetime.now().year
-    sig_lines = [r["line"] for r in _year_signal_rows(
-        result, birth_year, day_master, hl_zhi, tx_zhi, end_year=now_y + 15)]
+    sig_rows = _year_signal_rows(
+        result, birth_year, day_master, hl_zhi, tx_zhi, end_year=now_y + 15)
+    sig_lines = [r["line"] for r in sig_rows]
+
+    # P83v2: 成婚双锚合格年预筛(盘1实锤:LLM拿2015乙未正官年断"最标准成婚应期"——
+    # 男命正官=子女星非配偶星,实际成婚2012壬辰=偏财年+丁未限命宫入夫妻宫才是真双锚)
+    # 双锚(与verify⑤p完全一致,4样本完美区分)=配偶星年(男:正财/偏财,女:正官/七杀)
+    # + 大限加持夫妻宫(大限命宫=夫妻宫 或 限化禄/化权→夫妻宫);流年命宫入夫妻宫也列示(辅助锚)
+    _sp_ss = ("正财", "偏财") if gender == "男" else ("正官", "七杀")
+    marriage_rows = []
+    for r in sig_rows:
+        if r["ss"] not in _sp_ss or r["age"] < 18:
+            continue
+        _dx_hit = ("夫妻" in (r["dx"] or ""))
+        _dxs_hit = bool(_re.search(r"限[禄权][^ ]*→夫妻", r.get("dx_sihua", "")))
+        if _dx_hit or _dxs_hit:
+            r = dict(r)
+            r["_anchors"] = ("/命入夫妻宫" if r["ln_ming"] == "夫妻" else "") + \
+                            ("/限命宫=夫妻宫" if _dx_hit else "") + \
+                            ("/限禄权→夫妻宫" if _dxs_hit else "")
+            marriage_rows.append(r)
+    if marriage_rows:
+        mel_text = "；".join(
+            f"{r['year']}{r['gz']}({r['age']}岁/{r['ss']}年{r['_anchors']})"
+            for r in marriage_rows)
+    else:
+        mel_text = "无合格年(本盘无双锚年,严禁断成婚,只能断恋爱窗口)"
 
     _sh = result.get("四化", {})
     natal_sihua = " ".join([
@@ -1060,6 +1085,8 @@ def _build_spouse_context(result, patterns, spouse_chart=None):
         "fude_palace": _fmt_palace(fude_p),
         "dx_sihua": "\n".join(dx_lines),
         "signal_table": "\n".join(sig_lines),
+        "marriage_eligible": mel_text,
+        "marriage_years": [r["year"] for r in marriage_rows],
         "spouse_block": sp_block,
         "profile_text": _ptext,
         # 配偶生辰hash并入画像hash位→直排输入变化自动换缓存key
@@ -1069,11 +1096,13 @@ def _build_spouse_context(result, patterns, spouse_chart=None):
     }
 
 
-def parse_spouse(text: str, ctx_text: str = "", marital: str = ""):
+def parse_spouse(text: str, ctx_text: str = "", marital: str = "", marriage_years=None):
     """P83: 解析spouse三段输出 → [{'title','content'}...]。
     校验与parse_family同源(≥3段/宫位引用白名单/星曜白名单)+婚姻状态称谓闸门:
     非"已婚/再婚"时严禁"丈夫/妻子/老公/老婆"占有式称谓(盘3教训:LLM会给未婚盘补洞
-    "钱来自丈夫"——画像未注入或未婚时,出现占有式称谓=编造,判废由端点注入警告重试)"""
+    "钱来自丈夫"——画像未注入或未婚时,出现占有式称谓=编造,判废由端点注入警告重试)
+    P83v2: 成婚双锚闸门——"成婚/结婚/嫁娶/领证/办酒"±12字内的年份必须∈预筛合格年
+    (盘1实锤:LLM拿2015乙未正官年(男命=子女星)断"最标准成婚应期",实际2012壬辰偏财年)"""
     import re as _re
     if not text:
         return None
@@ -1105,6 +1134,15 @@ def parse_spouse(text: str, ctx_text: str = "", marital: str = ""):
         for sec in secs:
             if _re.search(r"(您|你)的?(丈夫|妻子)|老公|老婆", sec["content"]):
                 return None
+    # P83v2: 成婚双锚闸门——成婚类断言±12字内的年份必须∈预筛合格年
+    if marriage_years is not None:
+        _my = set(int(y) for y in marriage_years)
+        for sec in secs:
+            for mm in _re.finditer(r"(成婚|结婚|嫁娶|领证|办酒|办喜)", sec["content"]):
+                win = sec["content"][max(0, mm.start() - 12): mm.end() + 12]
+                for ym in _re.finditer(r"((?:19|20)\d{2})", win):
+                    if int(ym.group(1)) not in _my:
+                        return None
     return secs
 
 
@@ -1718,6 +1756,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 【流年信号表(过去+未来15年,引用年份/干支/四化只允许查此表)】
 {ctx.get('signal_table','')}
 (每行格式: 年份干支(虚岁/流年命宫/所在大限/流年十神/红鸾天喜): 流年四化落宫 |限禄X→宫 限忌X→宫)
+【成婚双锚合格年(代码预筛:配偶星年+大限/流年命宫入夫妻宫,成婚断语只许从这里选年)】
+{ctx.get('marriage_eligible','')}
 {ctx.get('spouse_block','')}
 
 【取象规则-必须遵守】
@@ -1725,6 +1765,7 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
 - {ctx.get('spouse_star','')}为配偶星:庙旺=配偶能力强/条件好,落陷或与煞星(火星/铃星/地空/地劫/擎羊/陀罗)同宫=配偶操劳或身体偏弱
 - 福德宫看婚姻的精神层面:主星吉=精神契合,煞忌多=内心孤独感/精神压力大
 - 婚恋应期规则(已多盘实测验证):恋爱=红鸾/天喜年、流年命宫入夫妻、化曜入夫妻(单信号即可断);成婚必须双锚——配偶星年(男命=正财/偏财年,女命=正官年;⚠️男命正官=子女星非配偶星,严禁拿正官年给男命断结婚) + 大限命宫或流年命宫入夫妻宫,单红鸾/天喜年只能断恋爱严禁断结婚
+- ⚠️成婚断语逐一举证(盘1实锤教训,最高优先级):成婚/结婚/领证年份只允许从上方【成婚双锚合格年】清单里选,且每个成婚年份必须当场举证两锚——①该年十神(照抄清单)②大限命宫或流年命宫入夫妻宫(照抄清单);清单外的年份、单锚年份只能断"恋爱/感情进展",断成婚=编造。实测坏例:某男命盘被断"2015乙未年最标准成婚应期",2015乙未=正官年(男命子女星)且该年无双锚,实际成婚2012壬辰(偏财年+大限命宫入夫妻宫,正在清单中)——合格年清单存在的意义就是防止这种错;清单显示"无合格年"时严禁断成婚,只能讲恋爱窗口
 - 若给了【配偶本盘】:配偶画像以配偶本盘命宫主星为准(本盘直排,精度最高),命主夫妻宫只用于"两人相处互动";成婚年常在双方红鸾/天喜引动之年,但年份必须出现在命主信号表中
 - 若没给【配偶本盘】:画像从命主夫妻宫主星+配偶星取象,开头注明"从命主夫妻宫看的配偶类型倾向"
 - ⚠️措辞红线(盘4手足段同款教训):夫妻宫主星无煞时,孤辰/天刑/咸池等小星最多支持"偶尔口角/需要各自空间"级表述,严禁"缘薄/克配偶/婚姻不幸/二婚"重判词;即使煞忌同宫,也只断"磨合多/需注意沟通方式"——严禁断"克夫/克妻/必离婚/配偶有灾",严禁断配偶寿数
@@ -1783,7 +1824,8 @@ def _llm_generate(gen_type: str, ctx: dict) -> str | None:
         # 小星规则改"权重最低辅助参考"(全量盘有小星数据,轻量盘无——v2"上下文根本没给小星"表述错误);
         # v2=星曜白名单+禁对宫三合自推+大限引用逐字一致——盘1"天机对宫借力"错/甲辰限权破军误为化忌)
         _ck_ver = ("v53" if gen_type == "verify"
-                   else ("v4" if gen_type == "family" else "v33"))
+                   else ("v4" if gen_type == "family"
+                   else ("v2" if gen_type == "spouse" else "v33")))
         ck = f"zw:{gen_type}:{_stable_hash(str(age))}:{ctx.get('chart_key','')}:{ctx.get('profile_phash','noprof')}:{ctx.get('feedback_fhash','nofb')}:{ctx.get('blocked_phash','noblock')}:{_ck_ver}"
         if ctx.get("retry_note"):
             # P81v12: key含retry_note哈希——旧版固定":r1",警告内容变了仍命中旧缓存,
