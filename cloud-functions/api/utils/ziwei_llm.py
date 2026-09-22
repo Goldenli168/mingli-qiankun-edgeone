@@ -1135,10 +1135,15 @@ def parse_spouse(text: str, ctx_text: str = "", marital: str = "", marriage_year
             if _re.search(r"(您|你)的?(丈夫|妻子)|老公|老婆", sec["content"]):
                 return None
     # P83v2: 成婚双锚闸门——成婚类断言±12字内的年份必须∈预筛合格年
+    # v2b: 否定语境豁免——"不能/并非/严禁…断成婚"是合规的反面举证(盘1生产实锤:
+    # LLM照清单写"2015乙未只能断感情进展,不能断成婚。2027…"反被闸门误杀两轮降级raw)
     if marriage_years is not None:
         _my = set(int(y) for y in marriage_years)
         for sec in secs:
             for mm in _re.finditer(r"(成婚|结婚|嫁娶|领证|办酒|办喜)", sec["content"]):
+                _pre = sec["content"][max(0, mm.start() - 8): mm.start()]
+                if _re.search(r"不能|不可|不得|不许|不宜|不应|严禁|禁止|并非|不是|不算|未可|勿|莫", _pre):
+                    continue  # 否定/禁止语境=合规表述,不参与闸门("未婚"不在此列防逃逸)
                 win = sec["content"][max(0, mm.start() - 12): mm.end() + 12]
                 for ym in _re.finditer(r"((?:19|20)\d{2})", win):
                     if int(ym.group(1)) not in _my:
