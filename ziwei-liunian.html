@@ -659,10 +659,16 @@ function doAnalyze() {
         return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
       }
       if (!resp.ok) {
+        // P84: CDN边缘断链(502/503/504/520-524)或限流(429)≠服务端失败——
+        // 服务端仍在计算并会写缓存,按202同通道30s后轮询;仅401/500立即报错
+        if (resp.status !== 401 && resp.status !== 500) {
+          if (_lnAttempt > 12) throw new Error('分析超时');
+          if (_loadingText) _loadingText.textContent = '链路波动，自动重试中（服务端持续计算）...';
+          return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
+        }
         var errTitle = '分析超时', errMsg = 'AI 分析耗时过长，建议稍后重试或查看缓存结果';
         if (resp.status === 401) { errTitle = '服务认证失败'; errMsg = '密钥验证不通过，请刷新页面后重试'; }
         else if (resp.status === 500) { errTitle = '服务器错误'; errMsg = '服务器内部处理异常，请稍后重试'; }
-        else if (resp.status === 504) { errTitle = '分析超时'; errMsg = 'AI 正在全力运算中，请稍后重试'; }
         document.getElementById('errorTitle').textContent = errTitle;
         document.getElementById('errorMsg').textContent = errMsg;
         throw new Error(errTitle);
