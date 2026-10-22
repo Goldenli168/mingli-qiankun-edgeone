@@ -639,6 +639,7 @@ function doAnalyze() {
 
   // P60: 202轮询+断连重试（与ziwei.html一致: 外网链路~80s断连, single-flight算完后缓存HIT秒回）
   var _lnAttempt = 0;
+  var _lnFailReason = '';  // P85
   // P64: refresh仅在第1次请求生效; 轮询带refresh:true会导致服务端每次重算(死循环)
   var _lnFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
   var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_lnFeedback});
@@ -654,7 +655,7 @@ function doAnalyze() {
     })
     .then(function(resp) {
       if (resp.status === 202) {
-        if (_lnAttempt > 12) throw new Error('分析超时');
+        if (_lnAttempt > 20) { _lnFailReason = 'slow'; throw new Error('分析超时'); }
         if (_loadingText) _loadingText.textContent = '深度分析进行中（约2-4分钟），请稍候...';
         return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
       }
@@ -662,7 +663,7 @@ function doAnalyze() {
         // P84: CDN边缘断链(502/503/504/520-524)或限流(429)≠服务端失败——
         // 服务端仍在计算并会写缓存,按202同通道30s后轮询;仅401/500立即报错
         if (resp.status !== 401 && resp.status !== 500) {
-          if (_lnAttempt > 12) throw new Error('分析超时');
+          if (_lnAttempt > 20) { _lnFailReason = 'slow'; throw new Error('分析超时'); }
           if (_loadingText) _loadingText.textContent = '链路波动，自动重试中（服务端持续计算）...';
           return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
         }
@@ -676,7 +677,7 @@ function doAnalyze() {
       return resp.json();
     }, function(netErr) {
       // 网络断开(链路idle超时): 服务端仍继续算完写缓存, 30s后重试即可HIT
-      if (_lnAttempt > 12) throw netErr;
+      if (_lnAttempt > 20) { _lnFailReason = 'network'; throw netErr; }
       if (_loadingText) _loadingText.textContent = '分析时间较长，自动重试中（服务端持续计算）...';
       return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
     });
@@ -705,6 +706,13 @@ function doAnalyze() {
     } catch(e) {}
   })
   .catch(function(e) {
+    if (_lnFailReason === 'network') {
+      document.getElementById('errorTitle').textContent = '网络连接中断';
+      document.getElementById('errorMsg').textContent = '多次重试均无法连到服务器（请求未送达）。请检查网络/切换 WiFi 或手机流量后重试；服务器上的计算结果会保留，网络恢复后重试可秒出。';
+    } else if (_lnFailReason === 'slow') {
+      document.getElementById('errorTitle').textContent = '分析超时';
+      document.getElementById('errorMsg').textContent = '服务端计算超过10分钟未完成（AI 繁忙）。结果算完会自动缓存，稍后点「重试分析」可秒出。';
+    }
     document.getElementById('errorSection').style.display = 'block';
     document.getElementById('loading').classList.remove('show');
     btn.disabled = false;
