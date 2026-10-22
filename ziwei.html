@@ -368,6 +368,7 @@
     <div id="errorTitle" style="font-size:1.2em;color:var(--red-light);margin-bottom:8px">分析超时</div>
     <div id="errorMsg" style="font-size:0.88em;color:var(--text-dim);margin-bottom:14px">AI 分析耗时过长，建议稍后重试或查看缓存结果</div>
     <button onclick="doAnalyze()" style="padding:8px 24px;background:var(--gold);color:#1a1a1a;border:none;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:2px">重试分析</button>
+    <button id="btnCacheFallback" onclick="_renderCacheFallback()" style="display:none;padding:8px 24px;background:transparent;color:var(--gold);border:1px solid var(--gold);border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:2px;margin-left:10px">查看缓存结果</button>
   </div>
 </div>
 
@@ -685,6 +686,7 @@ function doAnalyze() {
 
   // P57: 202轮询+断连重试（外网链路~80s断连，服务端single-flight计算完成后缓存HIT秒回）
   var _ziweiAttempt = 0;
+  var _ziweiFailReason = '';  // P85: network=请求未达服务器 / slow=计算超时 / httpNNN=具体状态码
   // P64: refresh仅在第1次请求生效; 轮询重试带refresh:true会导致服务端每次都重新计算(死循环)
   var _ziweiFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
   var _ziweiBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_ziweiFeedback});
@@ -701,18 +703,26 @@ function doAnalyze() {
     .then(function(resp) {
       // 202: 服务端正在计算(single-flight), 30s后重试
       if (resp.status === 202) {
-        if (_ziweiAttempt > 12) throw new Error('分析超时');
-        if (_loadingText) _loadingText.textContent = '深度分析进行中（约2-4分钟），请稍候...';
+        // P85: 上限12→20次(~10分钟),覆盖冷盘最坏计算400s+网络抖动
+        if (_ziweiAttempt > 20) {
+          _ziweiFailReason = 'slow';
+          throw new Error('分析超时');
+        }
+        if (_loadingText) _loadingText.textContent = '深度分析进行中（约2-4分钟），请稍候...（' + _ziweiAttempt + '/20）';
         return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
       }
       if (!resp.ok) {
         // P84: CDN边缘断链(502/503/504/520-524)或限流(429)≠服务端失败——
         // 服务端仍在计算并会写缓存,按202同通道30s后轮询;仅401/500立即报错
         if (resp.status !== 401 && resp.status !== 500) {
-          if (_ziweiAttempt > 12) throw new Error('分析超时');
-          if (_loadingText) _loadingText.textContent = '链路波动，自动重试中（服务端持续计算）...';
+          if (_ziweiAttempt > 20) {
+            _ziweiFailReason = 'slow';
+            throw new Error('分析超时');
+          }
+          if (_loadingText) _loadingText.textContent = '链路波动，自动重试中（服务端持续计算）...（' + _ziweiAttempt + '/20）';
           return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
         }
+        _ziweiFailReason = 'http' + resp.status;
         var errTitle = '分析超时', errMsg = 'AI 分析耗时过长，建议稍后重试或查看缓存结果';
         if (resp.status === 401) { errTitle = '服务认证失败'; errMsg = '密钥验证不通过，请刷新页面后重试'; }
         else if (resp.status === 500) { errTitle = '服务器错误'; errMsg = '服务器内部处理异常，请稍后重试'; }
@@ -723,8 +733,12 @@ function doAnalyze() {
       return resp.json();
     }, function(netErr) {
       // 网络断开(链路idle超时): 服务端仍会继续算完并写缓存, 30s后重试即可HIT
-      if (_ziweiAttempt > 12) throw netErr;
-      if (_loadingText) _loadingText.textContent = '分析时间较长，自动重试中（服务端持续计算）...';
+      // P85: 区分"请求根本没到服务器"(网络层断连)与"服务器在算"(202轮询)
+      if (_ziweiAttempt > 20) {
+        _ziweiFailReason = 'network';
+        throw netErr;
+      }
+      if (_loadingText) _loadingText.textContent = '网络波动，自动重试中（如持续失败请切换网络）...（' + _ziweiAttempt + '/20）';
       return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
     });
   }
@@ -757,6 +771,16 @@ function doAnalyze() {
     } catch(e) {}
   })
   .catch(function(e) {
+    // P85: 按失败原因给出可分辨的提示(截图即可定位),有缓存时提供兜底按钮
+    if (_ziweiFailReason === 'network') {
+      document.getElementById('errorTitle').textContent = '网络连接中断';
+      document.getElementById('errorMsg').textContent = '多次重试均无法连到服务器（请求未送达）。请检查网络/切换 WiFi 或手机流量后重试；服务器上的计算结果会保留，网络恢复后重试可秒出。';
+    } else if (_ziweiFailReason === 'slow') {
+      document.getElementById('errorTitle').textContent = '分析超时';
+      document.getElementById('errorMsg').textContent = '服务端计算超过10分钟未完成（AI 繁忙）。结果算完会自动缓存，稍后点「重试分析」可秒出；也可先看缓存结果。';
+    }
+    var _fb = document.getElementById('btnCacheFallback');
+    if (_fb) _fb.style.display = cache ? 'inline-block' : 'none';
     document.getElementById('errorSection').style.display = 'block';
     document.getElementById('loading').classList.remove('show');
     btn.disabled = false;
@@ -766,6 +790,21 @@ function doAnalyze() {
     document.getElementById('loading').classList.remove('show');
     document.getElementById('loadingStages').style.display = 'none';
   });
+}
+
+// P85: 失败兜底——直接渲染本盘缓存结果(服务器计算完成但网络断时可立即出结果)
+function _renderCacheFallback() {
+  var year = document.getElementById('year').value, month = document.getElementById('month').value,
+      day = document.getElementById('day').value, hour = document.getElementById('hour').value;
+  var c = _loadCache(year, month, day, hour, currentSex);
+  if (!c) { alert('暂无本盘缓存结果'); return; }
+  document.getElementById('errorSection').style.display = 'none';
+  currentResult = c;
+  activeDetailIdx = -1;
+  renderResult(c);
+  VerifyModule.start();
+  FamilyModule.start();
+  SpouseModule.start();
 }
 
 function renderResult(data) {
