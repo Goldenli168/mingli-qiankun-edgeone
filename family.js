@@ -11,7 +11,7 @@ var FamilyModule = (function () {
   (function injectStyle() {
     var s = document.createElement('style');
     s.textContent =
-      '.fam-section{max-width:720px;margin:0 auto 20px;padding:0 20px}' +
+      '.fam-section{max-width:1100px;margin:0 auto 20px;padding:0 20px}' +  // P88: 720→1100与主结果区对齐(家庭/夫妻共用此类)
       '.fam-card{background:linear-gradient(135deg,rgba(212,175,55,0.08),rgba(212,175,55,0.02));border:1px solid var(--border);border-radius:12px;padding:18px 20px}' +
       '.fam-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}' +
       '.fam-title{color:var(--gold);font-size:1.02em;letter-spacing:2px}' +
