@@ -61,6 +61,44 @@ def _save_ziwei_cache(key: str, data: dict):
 
 _ZIWEI_CACHE = _load_ziwei_cache()
 
+# P89: 八字分析结果缓存(与紫微同款:文件共享+24h TTL+LRU)——/api/analyze此前无endpoint级缓存,
+# 每次请求都重跑管道(~20s+),冷启全量LLM更达数分钟
+_BAZI_CACHE_FILE = os.path.join(_CACHE_DIR, "ml_bazi_cache.json")
+_BAZI_CACHE_TTL = 86400
+_BAZI_CACHE_MAX = 100
+
+def _load_bazi_cache() -> dict:
+    if not os.path.exists(_BAZI_CACHE_FILE):
+        return {}
+    try:
+        with open(_BAZI_CACHE_FILE, 'r', encoding='utf-8') as f:
+            raw = _json.load(f)
+        now = _time.time()
+        return {k: v['data'] for k, v in raw.items()
+                if isinstance(v, dict) and v.get('ts', 0) > now - _BAZI_CACHE_TTL}
+    except Exception:
+        return {}
+
+def _save_bazi_cache(key: str, data: dict):
+    merged = {}
+    if os.path.exists(_BAZI_CACHE_FILE):
+        try:
+            with open(_BAZI_CACHE_FILE, 'r', encoding='utf-8') as f:
+                merged = _json.load(f)
+        except Exception:
+            pass
+    merged[key] = {'data': data, 'ts': _time.time()}
+    if len(merged) > _BAZI_CACHE_MAX:
+        sorted_items = sorted(merged.items(), key=lambda x: x[1].get('ts', 0))
+        merged = dict(sorted_items[-_BAZI_CACHE_MAX:])
+    try:
+        with open(_BAZI_CACHE_FILE, 'w', encoding='utf-8') as f:
+            _json.dump(merged, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+_BAZI_CACHE = _load_bazi_cache()
+
 # P80: 轻量紫微排盘缓存(供过三关verify;八字页用户无主排盘缓存时兜底)
 # ⚠️ 与主缓存严格隔离:/ziwei端点只读主缓存,轻量盘绝不被当完整结果返回
 _ZIWEI_LIGHT_CACHE_FILE = os.path.join(_CACHE_DIR, "ml_ziwei_light_cache.json")
@@ -162,7 +200,69 @@ def analyze():
     force_refresh = data.get("refresh", False)  # P66: 强制刷新LLM
     profile = data.get("profile") if isinstance(data.get("profile"), dict) else None  # P70: 命主画像
     feedback = data.get("feedback") if isinstance(data.get("feedback"), dict) else None  # P80: 验证反馈
-    result = full_analysis(year, month, day, hour, sex, birthplace, minute, force_refresh=force_refresh, profile=profile, feedback=feedback)
+
+    # P89: 结果缓存 + single-flight(与/api/ziwei同款P57模式)
+    # key含minute/birthplace(真太阳时)/画像/反馈hash,防"换出生地命中旧缓存"串号
+    from utils.llm_client import _phash as _ph_b, _fhash as _fh_b
+    import hashlib as _hl_b
+    _bp_h = _hl_b.md5(birthplace.encode('utf-8')).hexdigest()[:8] if birthplace else ""
+    cache_key = (f"bazi:{year}:{month}:{day}:{hour}:{minute}:{sex}"
+                 + (f":{_bp_h}" if _bp_h else "")
+                 + (f":{_ph_b(profile)}" if profile else "")
+                 + (f":{_fh_b(feedback)}" if feedback else ""))
+    try:
+        if not force_refresh and cache_key not in _BAZI_CACHE:
+            try:
+                _BAZI_CACHE.update(_load_bazi_cache())  # 内存miss回源文件(多worker共享)
+            except Exception:
+                pass
+        if not force_refresh and cache_key in _BAZI_CACHE:
+            result = _BAZI_CACHE[cache_key]
+            result["_from_cache"] = True
+            response = jsonify(result)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["X-Cache"] = "HIT"
+            return response
+
+        # single-flight 文件锁:计算中返回202,前端轮询至缓存HIT
+        _lock_file = os.path.join(_CACHE_DIR, "ml_lock_" + _hl_b.md5(cache_key.encode()).hexdigest()[:16] + ".lock")
+        if os.path.exists(_lock_file):
+            try:
+                _lock_age = _time.time() - os.path.getmtime(_lock_file)
+            except Exception:
+                _lock_age = 999
+            if _lock_age < 400:  # 锁400s有效(覆盖八字全量LLM计算时长)
+                resp = jsonify({"status": "computing", "message": "深度分析进行中，请稍后重试", "retry_after": 30})
+                resp.status_code = 202
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Retry-After"] = "30"
+                return resp
+            else:
+                try: os.remove(_lock_file)
+                except Exception: pass
+
+        try:
+            with open(_lock_file, 'w') as _lf:
+                _lf.write(str(_time.time()))
+        except Exception:
+            pass
+
+        try:
+            result = full_analysis(year, month, day, hour, sex, birthplace, minute, force_refresh=force_refresh, profile=profile, feedback=feedback)
+            if isinstance(result, dict) and not result.get("error"):
+                _BAZI_CACHE[cache_key] = result
+                _save_bazi_cache(cache_key, result)
+        finally:
+            try: os.remove(_lock_file)
+            except Exception: pass
+    except Exception as e:
+        import traceback
+        err_msg = "分析异常: %s" % str(e)[:200]
+        try:
+            sys.stderr.write("[analyze] %s | %s\n" % (err_msg, traceback.format_exc()[:500]))
+        except: pass
+        return jsonify({"error": err_msg}), 500
+
     # P80: 顺带产出轻量紫微排盘(毫秒级,无LLM)——过三关verify需要排盘数据,
     # 八字页用户可能从未访问紫微页,主排盘缓存为空会导致verify静默隐藏
     try:
@@ -179,6 +279,7 @@ def analyze():
         pass  # 轻量排盘失败绝不阻塞八字主流程
     response = jsonify(result)
     response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["X-Cache"] = "MISS"
     return response
 
 
@@ -870,5 +971,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.62-spouse-v3", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.63-bazi-v1", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
