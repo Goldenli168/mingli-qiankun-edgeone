@@ -671,20 +671,49 @@ function doAnalyze() {
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
 
-  fetch('/api/analyze', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
-    body: JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh, profile:profile, feedback:_baziFeedback})
-  })
-  .then(function(resp) {
-    if (!resp.ok) {
-      if (resp.status === 401) throw new Error('服务认证失败，请刷新页面后重试');
-      if (resp.status === 500) throw new Error('服务器内部错误，请稍后重试');
-      if (resp.status === 504) throw new Error('分析超时，AI 正在全力运算中，请稍后重试');
-      throw new Error('服务异常(' + resp.status + ')，请稍后重试');
-    }
-    return resp.json();
-  })
+  // P89: 202轮询+断连/截断重试(与紫微页P57/P84-P86同款)——冷计算超CDN/链路超时时,
+  // 服务端single-flight继续算完写缓存,前端30s轮询至缓存HIT
+  var _bzBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, refresh:!!isRefresh, profile:profile, feedback:_baziFeedback});
+  var _bzBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, minute:+minute, sex:currentSex, birthplace:bp, profile:profile, feedback:_baziFeedback});
+  var _bzAttempt = 0, _bzFailReason = '';
+  var _bzLoading = document.querySelector('#loading .loading-text') || document.getElementById('loading');
+
+  function _doBaziFetch() {
+    _bzAttempt++;
+    return fetch('/api/analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-API-Key':'mingli-qiankun-v7'},
+      body: _bzAttempt === 1 ? _bzBody1 : _bzBody2
+    })
+    .then(function(resp) {
+      if (resp.status === 202) {
+        if (_bzAttempt > 20) { _bzFailReason = 'slow'; throw new Error('分析超时'); }
+        if (_bzLoading && _bzLoading.textContent !== undefined) _bzLoading.textContent = '深度分析进行中，请稍候...（' + _bzAttempt + '/20）';
+        return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doBaziFetch);
+      }
+      if (!resp.ok) {
+        if (resp.status === 401) { _bzFailReason = 'http401'; throw new Error('服务认证失败，请刷新页面后重试'); }
+        if (resp.status === 500) { _bzFailReason = 'http500'; throw new Error('服务器内部错误，请稍后重试'); }
+        // 其余5xx/429=CDN边缘断链或限流:服务端仍在计算,按202同通道重试
+        if (_bzAttempt > 20) { _bzFailReason = 'slow'; throw new Error('分析超时'); }
+        if (_bzLoading && _bzLoading.textContent !== undefined) _bzLoading.textContent = '链路波动，自动重试中（服务端持续计算）...（' + _bzAttempt + '/20）';
+        return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doBaziFetch);
+      }
+      return resp.json().catch(function(je) {
+        // 大JSON在弱网/VPN链路截断→服务端已写缓存,重试即HIT
+        if (_bzAttempt > 20) { _bzFailReason = 'truncated'; throw je; }
+        if (_bzLoading && _bzLoading.textContent !== undefined) _bzLoading.textContent = '数据传输不完整，自动重试中（服务端结果已就绪）...（' + _bzAttempt + '/20）';
+        return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doBaziFetch);
+      });
+    }, function(netErr) {
+      // 网络断开:服务端继续算完写缓存,30s后重试即可HIT
+      if (_bzAttempt > 20) { _bzFailReason = 'network'; throw netErr; }
+      if (_bzLoading && _bzLoading.textContent !== undefined) _bzLoading.textContent = '网络波动，自动重试中（如持续失败请切换网络）...（' + _bzAttempt + '/20）';
+      return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doBaziFetch);
+    });
+  }
+
+  _doBaziFetch()
   .then(function(data) {
     if (data.error) { alert(data.error); return; }
     __lastResult = data;
@@ -726,7 +755,12 @@ function doAnalyze() {
     } catch(e) {}
   })
   .catch(function(e) {
+    // P89: 失败原因可分辨(截图即可定位)
+    console.error('[bazi] failed, reason=', _bzFailReason, 'attempts=', _bzAttempt, e);
     var msg = e.message || '网络连接失败，请检查网络后重试';
+    if (_bzFailReason === 'network') msg = '多次重试均无法连到服务器（请求未送达）。请检查网络/切换 WiFi 或手机流量后重试；服务器上的计算结果会保留，网络恢复后重试可秒出。';
+    else if (_bzFailReason === 'slow') msg = '服务端计算超过10分钟未完成（AI 繁忙）。结果算完会自动缓存，稍后重试可秒出。';
+    else if (_bzFailReason === 'truncated') msg = '服务器已算出结果，但传输多次被截断（常见于 VPN/代理链路）。请关闭 VPN 或切换网络后重试，秒出。';
     alert('分析失败：' + msg);
   })
   .finally(function() {
