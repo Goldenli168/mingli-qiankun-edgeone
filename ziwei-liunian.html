@@ -641,7 +641,7 @@ function doAnalyze() {
   var _lnAttempt = 0;
   var _lnFailReason = '';  // P85
   // P64: refresh仅在第1次请求生效; 轮询带refresh:true会导致服务端每次重算(死循环)
-  var _lnFeedback = VerifyModule.pendingFeedback();  // P80: 验证反馈(仅校准/强制刷新时提交)
+  var _lnFeedback = (typeof VerifyModule !== 'undefined') ? VerifyModule.pendingFeedback() : null;  // P87 守卫
   var _lnBody1 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, refresh:!!isRefresh, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_lnFeedback});
   var _lnBody2 = JSON.stringify({year:+year, month:+month, day:+day, hour:+hour, sex:currentSex, profile:(_birthMatchesSync(year,month,day) ? _syncedProfile : null), feedback:_lnFeedback});
   var _loadingText = document.querySelector('#loading .loading-text') || document.querySelector('#loading');
