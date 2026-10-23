@@ -429,6 +429,17 @@
     </div>
   </div>
 
+  <!-- P83: 夫妻分析(配偶画像/婚恋应期/婚姻互动,逻辑在 spouse.js) -->
+  <div class="fam-section" id="spouseSection" style="display:none">
+    <div class="fam-card">
+      <div class="fam-head">
+        <span class="fam-title">💑 夫妻分析 · 配偶与婚姻</span>
+        <button class="fam-refresh" onclick="SpouseModule.regenerate()">↻ 重新生成</button>
+      </div>
+      <div id="spoBody"></div>
+    </div>
+  </div>
+
   <div class="feihua-section" id="patternSection" style="margin-bottom:20px;">
     <h3>☰ 命盘格局</h3>
     <div class="feihua-grid" id="patternGrid"></div>
@@ -454,6 +465,7 @@
 
 <script src="verify.js"></script>
 <script src="family.js"></script>
+<script src="spouse.js"></script>
 <script>
 // ============================================================
 // 紫微斗数页 — 前端逻辑 (Ziwei Frontend Logic)
