@@ -674,7 +674,12 @@ function doAnalyze() {
         document.getElementById('errorMsg').textContent = errMsg;
         throw new Error(errTitle);
       }
-      return resp.json();
+      return resp.json().catch(function(je) {
+        // P86: 响应体被中间链路截断(VPN/弱网)→可重试,服务端已写缓存,重试即HIT
+        if (_lnAttempt > 20) { _lnFailReason = 'truncated'; throw je; }
+        if (_loadingText) _loadingText.textContent = '数据传输不完整，自动重试中（服务端结果已就绪）...（' + _lnAttempt + '/20）';
+        return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doLiunianFetch);
+      });
     }, function(netErr) {
       // 网络断开(链路idle超时): 服务端仍继续算完写缓存, 30s后重试即可HIT
       if (_lnAttempt > 20) { _lnFailReason = 'network'; throw netErr; }
@@ -712,6 +717,11 @@ function doAnalyze() {
     } else if (_lnFailReason === 'slow') {
       document.getElementById('errorTitle').textContent = '分析超时';
       document.getElementById('errorMsg').textContent = '服务端计算超过10分钟未完成（AI 繁忙）。结果算完会自动缓存，稍后点「重试分析」可秒出。';
+    }
+    console.error('[liunian] failed, reason=', _lnFailReason, 'attempts=', _lnAttempt);
+    if (_lnFailReason === 'truncated') {
+      document.getElementById('errorTitle').textContent = '数据传输中断';
+      document.getElementById('errorMsg').textContent = '服务器已算出结果，但传输多次被截断（常见于 VPN/代理链路）。请关闭 VPN 或切换网络后点「重试分析」，秒出。';
     }
     document.getElementById('errorSection').style.display = 'block';
     document.getElementById('loading').classList.remove('show');
