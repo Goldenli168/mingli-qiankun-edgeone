@@ -730,7 +730,13 @@ function doAnalyze() {
         document.getElementById('errorMsg').textContent = errMsg;
         throw new Error(errTitle);
       }
-      return resp.json();
+      return resp.json().catch(function(je) {
+        // P86: 响应体被中间链路截断(VPN/弱网下350KB+大JSON易断)→按可重试处理
+        // 服务端已完成计算并写缓存,重试即HIT秒回
+        if (_ziweiAttempt > 20) { _ziweiFailReason = 'truncated'; throw je; }
+        if (_loadingText) _loadingText.textContent = '数据传输不完整，自动重试中（服务端结果已就绪）...（' + _ziweiAttempt + '/20）';
+        return new Promise(function(resolve) { setTimeout(resolve, 30000); }).then(_doZiweiFetch);
+      });
     }, function(netErr) {
       // 网络断开(链路idle超时): 服务端仍会继续算完并写缓存, 30s后重试即可HIT
       // P85: 区分"请求根本没到服务器"(网络层断连)与"服务器在算"(202轮询)
@@ -746,41 +752,56 @@ function doAnalyze() {
   _doZiweiFetch()
   .then(function(data) {
     if (data.error) { alert(data.error); return; }
-    currentResult = data;
-    activeDetailIdx = -1;
-    // 合并缓存（优先API新数据）
-    _mergeCache(data, cache);
-    // 保存新缓存
-    _saveCache(year, month, day, hour, currentSex, data);
-    renderResult(data);
-    // P80: 校准完成,清除待校准标记并刷新验证区(重算后断语缓存不变,直接显示总评)
-    if (_ziweiFeedback) { VerifyModule.clearPending(); }
-    VerifyModule.start();
-    FamilyModule.start();  // P82: 分析完成后加载家庭分析(有缓存直接渲染,不重复消耗LLM)
-    SpouseModule.start();  // P83: 分析完成后加载夫妻分析(未填婚姻状态时只展示录入区)
-    // 缓存分析结果，切页回来保持显示
+    // P86: 渲染段整体try包裝——任何前端异常都在错误框显示真实报错(可截图定位)
     try {
-      localStorage.setItem('mingli_ziwei_result', JSON.stringify({
-        result: data,
-        year: document.getElementById('year').value,
-        month: document.getElementById('month').value,
-        day: document.getElementById('day').value,
-        hour: document.getElementById('hour').value,
-        sex: currentSex
-      }));
-    } catch(e) {}
+      currentResult = data;
+      activeDetailIdx = -1;
+      // 合并缓存（优先API新数据）
+      _mergeCache(data, cache);
+      // 保存新缓存
+      _saveCache(year, month, day, hour, currentSex, data);
+      renderResult(data);
+      // P80: 校准完成,清除待校准标记并刷新验证区(重算后断语缓存不变,直接显示总评)
+      if (_ziweiFeedback) { VerifyModule.clearPending(); }
+      VerifyModule.start();
+      FamilyModule.start();  // P82: 分析完成后加载家庭分析(有缓存直接渲染,不重复消耗LLM)
+      SpouseModule.start();  // P83: 分析完成后加载夫妻分析(未填婚姻状态时只展示录入区)
+      // 缓存分析结果，切页回来保持显示
+      try {
+        localStorage.setItem('mingli_ziwei_result', JSON.stringify({
+          result: data,
+          year: document.getElementById('year').value,
+          month: document.getElementById('month').value,
+          day: document.getElementById('day').value,
+          hour: document.getElementById('hour').value,
+          sex: currentSex
+        }));
+      } catch(e) {}
+    } catch (renderErr) {
+      _ziweiFailReason = 'render';
+      console.error('[ziwei] render error:', renderErr);
+      throw renderErr;
+    }
   })
   .catch(function(e) {
     // P85: 按失败原因给出可分辨的提示(截图即可定位),有缓存时提供兜底按钮
+    console.error('[ziwei] fetch chain failed, reason=', _ziweiFailReason, 'attempts=', _ziweiAttempt, e);
     if (_ziweiFailReason === 'network') {
       document.getElementById('errorTitle').textContent = '网络连接中断';
       document.getElementById('errorMsg').textContent = '多次重试均无法连到服务器（请求未送达）。请检查网络/切换 WiFi 或手机流量后重试；服务器上的计算结果会保留，网络恢复后重试可秒出。';
     } else if (_ziweiFailReason === 'slow') {
       document.getElementById('errorTitle').textContent = '分析超时';
       document.getElementById('errorMsg').textContent = '服务端计算超过10分钟未完成（AI 繁忙）。结果算完会自动缓存，稍后点「重试分析」可秒出；也可先看缓存结果。';
+    } else if (_ziweiFailReason === 'truncated') {
+      document.getElementById('errorTitle').textContent = '数据传输中断';
+      document.getElementById('errorMsg').textContent = '服务器已算出结果，但传输多次被截断（常见于 VPN/代理链路）。请关闭 VPN 或切换网络后点「重试分析」，秒出。';
+    } else if (_ziweiFailReason === 'render') {
+      // P86: 服务器成功但前端渲染异常——把真实报错亮出来
+      document.getElementById('errorTitle').textContent = '页面渲染异常';
+      document.getElementById('errorMsg').textContent = '服务器已正常返回数据，但页面渲染出错：' + (e && e.message ? e.message : String(e)) + '。请截图此框反馈；可点「查看缓存结果」先看缓存。';
     }
     var _fb = document.getElementById('btnCacheFallback');
-    if (_fb) _fb.style.display = cache ? 'inline-block' : 'none';
+    if (_fb) _fb.style.display = (cache || _ziweiFailReason === 'render' || _ziweiFailReason === 'truncated') ? 'inline-block' : 'none';
     document.getElementById('errorSection').style.display = 'block';
     document.getElementById('loading').classList.remove('show');
     btn.disabled = false;
