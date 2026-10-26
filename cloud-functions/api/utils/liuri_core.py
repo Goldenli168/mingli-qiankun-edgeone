@@ -2,9 +2,10 @@
 """P90: 流月/流日 六维度命理分析模块（事业/财运/健康/夫妻/父母/儿女）
 数据层: iztro_py horoscope(流月/流日干支+宫名映射+四化) + 本命盘宫星
 分析层: llm_call(prompt, cache_key) 复用现有 DeepSeek 缓存
-缓存命名空间: liuri-v3:{chart}:{profile_hash}:{YYYY-MM-DD} / liuyue-v3:{chart}:{profile_hash}:{YYYY-MM}
+缓存命名空间: liuri-v4:{chart}:{profile_hash}:{couple_hash}:{YYYY-MM-DD} / liuyue-v4:{chart}:{profile_hash}::{YYYY-MM}
 v2: 事件化断语(具体场景+动作) + 总运指数 + 定调金句(headline)
 v3: 命主档案接入(职业/婚姻/子女/关注领域定制场景) + 昨日回顾(peek_daily) + 一键应验反馈(fb_token/record_feedback)
+v4: 开运元素(色/方位/数字, 规则推导零LLM) + 双盘合参(couple参数) + 月度应验统计(fb_stats)
 """
 import os
 import json
@@ -20,7 +21,7 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v3"
+_LIURI_VER = "v4"
 
 # 六维度: (中文名, iztro宫名en, 本命宫位中文)
 _DIMS = [
@@ -96,13 +97,14 @@ def peek_daily(solar_year, solar_month, solar_day, hour, sex, target: datetime.d
     前缀扫描兼容历史版本(v2/v3 均可被回顾)"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
     ph = _profile_hash(profile)
-    prefix = f":{chart_key}:{ph}:{target.isoformat()}" if ph else f":{chart_key}::{target.isoformat()}"
+    suffix = f":{target.isoformat()}"
     prefix_legacy = f":{chart_key}:{target.isoformat()}"  # v1/v2 无档案段
+    mid_v3 = f":{chart_key}:{ph}:"  # v3: chart:ph:date / v4: chart:ph:couple:date
     raw = _load_liuri_cache()
     for k, v in raw.items():
         if not k.startswith("liuri-"):
             continue
-        if k.endswith(prefix) or (not ph and k.endswith(prefix_legacy)):
+        if (mid_v3 in k and k.endswith(suffix)) or (not ph and k.endswith(prefix_legacy)):
             d = v.get("data") or {}
             return {"date": d.get("date"), "day_ganzhi": d.get("day_ganzhi"),
                     "score": d.get("score"), "headline": d.get("headline"),
@@ -136,6 +138,88 @@ def record_feedback(solar_year, solar_month, solar_day, hour, sex, date_str: str
         return True
     except Exception:
         return False
+
+
+# ============ v4: 开运元素 / 应验统计 / 双盘合参 ============
+
+# 日干五行 → 开运元素(规则推导, 零 LLM 成本)
+# 开运色=日干五行本色(同气相扶); 助运方位=生日干之五行方位(印星护身); 幸运数字=日干五行河图数
+_WUXING_OF_GAN = {"甲": "木", "乙": "木", "丙": "火", "丁": "火", "戊": "土",
+                  "己": "土", "庚": "金", "辛": "金", "壬": "水", "癸": "水"}
+_LUCKY = {
+    "木": {"color": "青/绿", "direction": "北", "number": "3、8"},   # 水生木
+    "火": {"color": "红/紫", "direction": "东", "number": "2、7"},   # 木生火
+    "土": {"color": "黄/咖", "direction": "南", "number": "5、0"},   # 火生土
+    "金": {"color": "白/金", "direction": "西南", "number": "4、9"},  # 土生金
+    "水": {"color": "黑/蓝", "direction": "西", "number": "1、6"},   # 金生水
+}
+
+
+def lucky_elements(day_gan: str) -> dict:
+    """流日天干 → 开运色/助运方位/幸运数字"""
+    wx = _WUXING_OF_GAN.get(day_gan, "土")
+    d = _LUCKY[wx]
+    return {"wuxing": wx, "color": d["color"], "direction": d["direction"], "number": d["number"]}
+
+
+def fb_stats(solar_year, solar_month, solar_day, hour, sex, year: int, month: int) -> dict:
+    """读反馈文件, 统计指定月份(YYYY-MM)的应验率, 无数据返回 None"""
+    if not os.path.exists(_FB_FILE):
+        return None
+    try:
+        with open(_FB_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        ck = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
+        entries = raw.get(ck, {})
+        prefix = f"{year}-{month:02d}-"
+        hit = sum(1 for d, v in entries.items() if d.startswith(prefix) and v.get("v") == "hit")
+        miss = sum(1 for d, v in entries.items() if d.startswith(prefix) and v.get("v") == "miss")
+        total = hit + miss
+        if total == 0:
+            return None
+        return {"month": f"{year}-{month:02d}", "hit": hit, "miss": miss,
+                "total": total, "rate": round(hit * 100 / total)}
+    except Exception:
+        return None
+
+
+def _couple_hash(couple) -> str:
+    if not couple:
+        return ""
+    return hashlib.md5(",".join(map(str, couple)).encode()).hexdigest()[:8]
+
+
+def couple_analysis(main_params, couple_params, target: datetime.date, main_day_ctx: dict) -> str:
+    """双盘合参: 双方当日信号交叉 → 一段互动提示(40-70字)。失败返回空串(不拖垮主流程)"""
+    try:
+        cy, cm, cd, ch, csex = couple_params
+        c_chart = _build_chart(cy, cm, cd, ch, csex)
+        _, c_h = _decadal_yearly_ctx(c_chart, target, cy)
+        c_day = _scope_ctx(c_h.daily, c_chart)
+        c_sihua = c_day["sihua"]
+        # 双方夫妻宫落点星曜(合参核心)
+        def _spouse_line(ctx):
+            d = ctx["dims"].get("夫妻", {})
+            stars = "、".join(d.get("major", []) or ["无正曜"])
+            hits = "、".join(d.get("sihua_hits", [])) or "无"
+            return f"{d.get('host_ganzhi', '?')}宫 主星{stars} 引动{hits}"
+        s = main_day_ctx["sihua"]
+        ck = f"llm:couple-v1:{main_params}:{couple_params}:{target.isoformat()}"
+        prompt = f"""你是紫微斗数分析师, 为一对伴侣写"今日双盘合参"。
+目标日期: {target.isoformat()}
+
+甲方: 流日{main_day_ctx['ganzhi']}, 日四化 化禄{s['禄']} 化权{s['权']} 化科{s['科']} 化忌{s['忌']}
+甲方夫妻宫: {_spouse_line(main_day_ctx)}
+乙方: 流日{c_day['ganzhi']}, 日四化 化禄{c_sihua['禄']} 化权{c_sihua['权']} 化科{c_sihua['科']} 化忌{c_sihua['忌']}
+乙方夫妻宫: {_spouse_line(c_day)}
+
+要求:
+1. 输出一段40-70字的互动提示: 点明今日两人相处的一个具体场景(如晚餐沟通/家务分工/财务商量/亲子安排), 给出"谁宜主动、谁宜让步"的明确动作
+2. 紧扣双方四化引动, 禁止编造星曜; 不夸大吉凶, 不写"相克/注定"式断语
+3. 只输出这一段话, 无任何标记与说明"""
+        return (llm_call(prompt, cache_key=ck, max_tokens=200) or "").strip()[:120]
+    except Exception:
+        return ""
 
 
 # ============ 排盘数据层 ============
@@ -263,11 +347,12 @@ def _parse_sections(text: str, keys) -> dict:
 
 
 def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: datetime.date,
-                   force_refresh=False, profile=None) -> dict:
-    """流日六维度分析(轻量版)"""
+                   force_refresh=False, profile=None, couple=None) -> dict:
+    """流日六维度分析(轻量版)。couple=(年,月,日,时,性别) 时附双盘合参段"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
     ph = _profile_hash(profile)
-    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{ph}:{target.isoformat()}"
+    ch = _couple_hash(couple)
+    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{ph}:{ch}:{target.isoformat()}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_DAILY)
         if hit:
@@ -318,8 +403,12 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
         "yi": [x for x in sec.get("宜", "").replace("，", "、").split("、") if x][:3],
         "ji": [x for x in sec.get("忌", "").replace("，", "、").split("、") if x][:3],
         "score": score, "headline": sec.get("定调", "")[:20],
+        "lucky": lucky_elements(day["gan"]),
         "_ver": _LIURI_VER,
     }
+    if couple:
+        main_params = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
+        result["couple"] = couple_analysis(main_params, couple, target, day)
     if any(result["dims"].values()):
         _save_liuri_cache(rkey, result)
     return result
@@ -391,6 +480,11 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, m
         "score": score, "headline": sec.get("定调", "")[:20],
         "_ver": _LIURI_VER,
     }
+    # 上月应验统计(有反馈数据才附)
+    py, pm = (year - 1, 12) if month == 1 else (year, month - 1)
+    stats = fb_stats(solar_year, solar_month, solar_day, hour, sex, py, pm)
+    if stats:
+        result["fb_stats"] = stats
     if any(result["dims"].values()):
         _save_liuri_cache(rkey, result)
     return result
