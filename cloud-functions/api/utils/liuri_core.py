@@ -2,11 +2,13 @@
 """P90: 流月/流日 六维度命理分析模块（事业/财运/健康/夫妻/父母/儿女）
 数据层: iztro_py horoscope(流月/流日干支+宫名映射+四化) + 本命盘宫星
 分析层: llm_call(prompt, cache_key) 复用现有 DeepSeek 缓存
-缓存命名空间: liuri-v2:{chart}:{YYYY-MM-DD} / liuyue-v2:{chart}:{YYYY-MM}
+缓存命名空间: liuri-v3:{chart}:{profile_hash}:{YYYY-MM-DD} / liuyue-v3:{chart}:{profile_hash}:{YYYY-MM}
 v2: 事件化断语(具体场景+动作) + 总运指数 + 定调金句(headline)
+v3: 命主档案接入(职业/婚姻/子女/关注领域定制场景) + 昨日回顾(peek_daily) + 一键应验反馈(fb_token/record_feedback)
 """
 import os
 import json
+import hashlib
 import datetime
 
 from .llm_client import llm_call
@@ -18,7 +20,7 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v2"
+_LIURI_VER = "v3"
 
 # 六维度: (中文名, iztro宫名en, 本命宫位中文)
 _DIMS = [
@@ -68,6 +70,72 @@ def _get_liuri_cache(key: str, ttl: int):
     if isinstance(v, dict) and v.get("ts", 0) > datetime.datetime.now().timestamp() - ttl:
         return v["data"]
     return None
+
+
+# ============ 命主档案 / 昨日回顾 / 应验反馈 ============
+
+def _profile_text(profile) -> str:
+    """命主档案 → prompt 行。profile 为 dict, 如 {职业:..., 婚姻:..., 子女:..., 关注:...}"""
+    if not profile or not isinstance(profile, dict):
+        return ""
+    parts = [f"{k}={v}" for k, v in profile.items() if v]
+    return " | ".join(parts)
+
+
+def _profile_hash(profile) -> str:
+    """档案参与缓存 key, 防换档案串号(同 bazi 缓存 key 隔离原则)"""
+    if not profile:
+        return ""
+    raw = json.dumps(profile, ensure_ascii=False, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+
+
+def peek_daily(solar_year, solar_month, solar_day, hour, sex, target: datetime.date,
+               profile=None) -> dict:
+    """只读缓存取某日流日摘要(昨日回顾用), 不触发 LLM 生成。
+    前缀扫描兼容历史版本(v2/v3 均可被回顾)"""
+    chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
+    ph = _profile_hash(profile)
+    prefix = f":{chart_key}:{ph}:{target.isoformat()}" if ph else f":{chart_key}::{target.isoformat()}"
+    prefix_legacy = f":{chart_key}:{target.isoformat()}"  # v1/v2 无档案段
+    raw = _load_liuri_cache()
+    for k, v in raw.items():
+        if not k.startswith("liuri-"):
+            continue
+        if k.endswith(prefix) or (not ph and k.endswith(prefix_legacy)):
+            d = v.get("data") or {}
+            return {"date": d.get("date"), "day_ganzhi": d.get("day_ganzhi"),
+                    "score": d.get("score"), "headline": d.get("headline"),
+                    "dims": d.get("dims", {}), "ver": d.get("_ver", "")}
+    return None
+
+
+_FB_FILE = os.path.join(_CACHE_DIR, "ml_liuri_feedback.json")
+
+
+def fb_token(solar_year, solar_month, solar_day, hour, sex, date_str: str) -> str:
+    """一键反馈链接的防伪 token(无需 API key, 但不可伪造)"""
+    secret = os.environ.get("ML_API_KEY", "mingli-qiankun-v7")
+    raw = f"fb:{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}:{date_str}:{secret}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def record_feedback(solar_year, solar_month, solar_day, hour, sex, date_str: str, value: str) -> bool:
+    """记录应验反馈 hit/miss 到 ml_liuri_feedback.json"""
+    if value not in ("hit", "miss"):
+        return False
+    try:
+        raw = {}
+        if os.path.exists(_FB_FILE):
+            with open(_FB_FILE, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        ck = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
+        raw.setdefault(ck, {})[date_str] = {"v": value, "ts": datetime.datetime.now().timestamp()}
+        with open(_FB_FILE, "w", encoding="utf-8") as f:
+            json.dump(raw, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
 
 
 # ============ 排盘数据层 ============
@@ -165,7 +233,8 @@ _STYLE_RULES = """要求:
 2. 事件化: 每条必须落到具体场景——点明具体事务(如签约/报销/汇报/聚餐/转账)、给出明确动作(做什么/避开什么), 可验证可执行, 禁止"易有波动""需注意"式空泛描述
 3. 语气: 专业直白, 像军师对命主当面进言, 不模板化, 不堆术语
 4. 信号只讲"引动/应象", 不夸大吉凶; 健康维度只提醒作息与检查, 只许用"注意/关注/宜检查"句式, 严禁断病
-5. 严格按格式输出, 不要输出任何额外说明"""
+5. 若给出命主档案, 场景必须贴合档案: 管理层写团队/汇报/决策场景, 已婚已育写伴侣与孩子互动; 严禁错位场景(给已婚者写相亲桃花、给管理层写求职面试)
+6. 严格按格式输出, 不要输出任何额外说明"""
 
 
 def _dims_text(dims: dict) -> str:
@@ -194,10 +263,11 @@ def _parse_sections(text: str, keys) -> dict:
 
 
 def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: datetime.date,
-                   force_refresh=False) -> dict:
+                   force_refresh=False, profile=None) -> dict:
     """流日六维度分析(轻量版)"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
-    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{target.isoformat()}"
+    ph = _profile_hash(profile)
+    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{ph}:{target.isoformat()}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_DAILY)
         if hit:
@@ -211,8 +281,10 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
     except Exception as e:
         return {"error": f"排盘失败: {str(e)[:150]}"}
 
+    ptext = _profile_text(profile)
+    profile_line = f"命主档案: {ptext}\n" if ptext else ""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
-当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']} | 流月{mon['ganzhi']}
+{profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']} | 流月{mon['ganzhi']}
 目标日期: {target.isoformat()} 流日{day['ganzhi']}, 日四化: 化禄{day['sihua']['禄']} 化权{day['sihua']['权']} 化科{day['sihua']['科']} 化忌{day['sihua']['忌']}
 
 流日六维度落宫:
@@ -254,10 +326,11 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
 
 
 def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, month: int,
-                     force_refresh=False) -> dict:
+                     force_refresh=False, profile=None) -> dict:
     """流月六维度分析(深度版, 含当月重点日)"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
-    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{year}-{month:02d}"
+    ph = _profile_hash(profile)
+    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{ph}:{year}-{month:02d}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_MONTHLY)
         if hit:
@@ -272,8 +345,10 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, m
         return {"error": f"排盘失败: {str(e)[:150]}"}
     day_table = _day_ganzhi_table(year, month)
 
+    ptext = _profile_text(profile)
+    profile_line = f"命主档案: {ptext}\n" if ptext else ""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
-当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']}
+{profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']}
 目标月份: {year}年{month}月 流月{mon['ganzhi']}, 月四化: 化禄{mon['sihua']['禄']} 化权{mon['sihua']['权']} 化科{mon['sihua']['科']} 化忌{mon['sihua']['忌']}
 
 流月六维度落宫:
