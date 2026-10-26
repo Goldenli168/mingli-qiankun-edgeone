@@ -504,6 +504,47 @@ def liunian_api():
     return response
 
 
+# ========== P90: 流月/流日六维度分析 API ==========
+
+@app.route("/liuri", methods=["GET", "OPTIONS"])
+def liuri_api():
+    """流日(daily)/流月(monthly) 六维度分析(事业/财运/健康/夫妻/父母/儿女)。
+    参数: mode=daily|monthly, year/month/day/hour/sex(命主), date=YYYY-MM-DD(daily可选,默认今天)"""
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    import datetime as _dt_lr
+    mode = request.args.get("mode", "daily")
+    try:
+        year  = int(request.args.get("year"))
+        month = int(request.args.get("month"))
+        day   = int(request.args.get("day"))
+        hour  = int(request.args.get("hour", 12))
+        sex   = request.args.get("sex", "男")
+    except (TypeError, ValueError):
+        return jsonify({"error": "参数不完整(year/month/day必填)"}), 400
+    refresh = request.args.get("refresh") == "1"
+    try:
+        from utils.liuri_core import daily_analysis, monthly_analysis
+        if mode == "monthly":
+            t = _dt_lr.date.today()
+            result = monthly_analysis(year, month, day, hour, sex, t.year, t.month, force_refresh=refresh)
+        else:
+            dstr = request.args.get("date")
+            target = _dt_lr.date.fromisoformat(dstr) if dstr else _dt_lr.date.today()
+            result = daily_analysis(year, month, day, hour, sex, target, force_refresh=refresh)
+    except Exception as e:
+        return jsonify({"error": f"流月/流日分析异常: {str(e)[:150]}"}), 500
+    status = 200 if not result.get("error") else 500
+    resp = jsonify(result)
+    resp.status_code = status
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["X-Cache"] = "HIT" if result.get("_from_cache") else "MISS"
+    return resp
+
+
+
 # ========== 过三关验证 API（P80） ==========
 
 def _get_ziwei_chart(year, month, day, hour, sex, profile, force_refresh=False):
@@ -971,5 +1012,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.63-bazi-v1", "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.64-liuri-v1", "has_liuri": True, "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
