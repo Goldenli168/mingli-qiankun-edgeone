@@ -2,7 +2,8 @@
 """P90: 流月/流日 六维度命理分析模块（事业/财运/健康/夫妻/父母/儿女）
 数据层: iztro_py horoscope(流月/流日干支+宫名映射+四化) + 本命盘宫星
 分析层: llm_call(prompt, cache_key) 复用现有 DeepSeek 缓存
-缓存命名空间: liuri-v1:{chart}:{YYYY-MM-DD} / liuyue-v1:{chart}:{YYYY-MM}
+缓存命名空间: liuri-v2:{chart}:{YYYY-MM-DD} / liuyue-v2:{chart}:{YYYY-MM}
+v2: 事件化断语(具体场景+动作) + 总运指数 + 定调金句(headline)
 """
 import os
 import json
@@ -17,7 +18,7 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v1"
+_LIURI_VER = "v2"
 
 # 六维度: (中文名, iztro宫名en, 本命宫位中文)
 _DIMS = [
@@ -161,9 +162,10 @@ def _day_ganzhi_table(year: int, month: int) -> str:
 
 _STYLE_RULES = """要求:
 1. 每条紧扣给出的宫位星曜与四化引动, 禁止编造未列出的星曜
-2. 语气: 专业直白, 验证式+可操作建议, 不模板化, 不堆术语
-3. 信号只讲"引动/应象", 不夸大吉凶; 健康维度只提醒作息与检查, 不下断语
-4. 严格按格式输出, 不要输出任何额外说明"""
+2. 事件化: 每条必须落到具体场景——点明具体事务(如签约/报销/汇报/聚餐/转账)、给出明确动作(做什么/避开什么), 可验证可执行, 禁止"易有波动""需注意"式空泛描述
+3. 语气: 专业直白, 像军师对命主当面进言, 不模板化, 不堆术语
+4. 信号只讲"引动/应象", 不夸大吉凶; 健康维度只提醒作息与检查, 只许用"注意/关注/宜检查"句式, 严禁断病
+5. 严格按格式输出, 不要输出任何额外说明"""
 
 
 def _dims_text(dims: dict) -> str:
@@ -216,20 +218,25 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
 流日六维度落宫:
 {_dims_text(day['dims'])}
 
-请输出当日六维度提醒, 每维度1-2句(30-60字), 格式:
+请输出当日六维度提醒, 每维度1-2句(35-65字), 格式:
 【事业】...
 【财运】...
 【健康】...
 【夫妻】...
 【父母】...
 【儿女】...
-【宜】3件当日适宜做的事(用、分隔)
-【忌】3件当日应回避的事(用、分隔)
+【宜】3件当日适宜做的具体事(用、分隔)
+【忌】3件当日应回避的具体事(用、分隔)
+【指数】当日总运指数(0-100整数, 综合六维度吉凶与四化引动强弱评分, 只输出数字)
+【定调】当日一句话定调(15字内, 点出当日最强信号与核心策略, 如"财星化禄, 宜谈薪签约")
 {_STYLE_RULES}"""
-    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=900, skip_cache=force_refresh)
+    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1000, skip_cache=force_refresh)
     if not content:
         return {"error": "LLM 生成失败"}
-    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["宜", "忌"])
+    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["宜", "忌", "指数", "定调"])
+    import re as _re
+    m = _re.search(r"\d+", sec.get("指数", ""))
+    score = max(0, min(100, int(m.group()))) if m else None
     result = {
         "mode": "daily", "date": target.isoformat(),
         "day_ganzhi": day["ganzhi"], "month_ganzhi": mon["ganzhi"],
@@ -238,6 +245,7 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
         "dims": {d[0]: sec.get(d[0], "") for d in _DIMS},
         "yi": [x for x in sec.get("宜", "").replace("，", "、").split("、") if x][:3],
         "ji": [x for x in sec.get("忌", "").replace("，", "、").split("、") if x][:3],
+        "score": score, "headline": sec.get("定调", "")[:20],
         "_ver": _LIURI_VER,
     }
     if any(result["dims"].values()):
@@ -280,20 +288,32 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, m
 【夫妻】...
 【父母】...
 【儿女】...
-【重点日】每行一条: M月D日 事项(12字内)
+【重点日】每行一条: M月D日 具体事项(12字内, 点明做什么, 如"3月8日 宜提交晋升申请")
 【总纲】本月一句话总策略(30字内)
+【指数】本月总运指数(0-100整数, 综合六维度吉凶与月四化引动强弱评分, 只输出数字)
+【定调】本月一句话定调(15字内, 点出本月最强信号, 如"太阴化权, 事业进取月")
 {_STYLE_RULES}"""
-    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1600, skip_cache=force_refresh)
+    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1700, skip_cache=force_refresh)
     if not content:
         return {"error": "LLM 生成失败"}
-    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["重点日", "总纲"])
-    key_days = [ln.strip() for ln in sec.get("重点日", "").splitlines() if ln.strip()][:5]
+    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["重点日", "总纲", "指数", "定调"])
+    key_days = []
+    for ln in sec.get("重点日", "").splitlines():
+        for item in ln.replace(";", "；").split("；"):
+            item = item.strip()
+            if item:
+                key_days.append(item)
+    key_days = key_days[:5]
+    import re as _re
+    m = _re.search(r"\d+", sec.get("指数", ""))
+    score = max(0, min(100, int(m.group()))) if m else None
     result = {
         "mode": "monthly", "month": f"{year}-{month:02d}",
         "month_ganzhi": mon["ganzhi"], "yearly_ganzhi": frame["yearly_ganzhi"],
         "decadal_ganzhi": frame["decadal_ganzhi"], "sihua": mon["sihua"],
         "dims": {d[0]: sec.get(d[0], "") for d in _DIMS},
         "key_days": key_days, "summary": sec.get("总纲", ""),
+        "score": score, "headline": sec.get("定调", "")[:20],
         "_ver": _LIURI_VER,
     }
     if any(result["dims"].values()):
