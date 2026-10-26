@@ -153,7 +153,7 @@ def _get_api_key():
 API_KEY = _get_api_key()
 
 # 白名单路由: 不需要鉴权
-_AUTH_WHITELIST = {"/health"}
+_AUTH_WHITELIST = {"/health", "/liuri_fb"}
 
 @app.before_request
 def require_api_key():
@@ -525,15 +525,41 @@ def liuri_api():
     except (TypeError, ValueError):
         return jsonify({"error": "参数不完整(year/month/day必填)"}), 400
     refresh = request.args.get("refresh") == "1"
+    # P91-v3: 命主档案(格式: 职业:职场管理层;婚姻:已婚有子女;关注:事业财运)
+    profile = None
+    praw = request.args.get("profile", "").strip()
+    if praw:
+        profile = {}
+        for seg in praw.replace("；", ";").split(";"):
+            if ":" in seg:
+                k, v = seg.split(":", 1)
+            elif "：" in seg:
+                k, v = seg.split("：", 1)
+            else:
+                continue
+            k, v = k.strip(), v.strip()
+            if k and v:
+                profile[k] = v[:30]
+        profile = profile or None
     try:
-        from utils.liuri_core import daily_analysis, monthly_analysis
+        from utils.liuri_core import daily_analysis, monthly_analysis, peek_daily, fb_token
         if mode == "monthly":
             t = _dt_lr.date.today()
-            result = monthly_analysis(year, month, day, hour, sex, t.year, t.month, force_refresh=refresh)
+            result = monthly_analysis(year, month, day, hour, sex, t.year, t.month,
+                                      force_refresh=refresh, profile=profile)
         else:
             dstr = request.args.get("date")
             target = _dt_lr.date.fromisoformat(dstr) if dstr else _dt_lr.date.today()
-            result = daily_analysis(year, month, day, hour, sex, target, force_refresh=refresh)
+            result = daily_analysis(year, month, day, hour, sex, target,
+                                    force_refresh=refresh, profile=profile)
+            # 昨日回顾 + 一键反馈 token(只对 daily 有意义)
+            if not result.get("error"):
+                yd = target - _dt_lr.timedelta(days=1)
+                yb = peek_daily(year, month, day, hour, sex, yd, profile=profile)
+                if yb:
+                    yb["fb_token"] = fb_token(year, month, day, hour, sex, yd.isoformat())
+                    yb["fb_date"] = yd.isoformat()
+                    result["yesterday"] = yb
     except Exception as e:
         return jsonify({"error": f"流月/流日分析异常: {str(e)[:150]}"}), 500
     status = 200 if not result.get("error") else 500
@@ -541,6 +567,43 @@ def liuri_api():
     resp.status_code = status
     resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["X-Cache"] = "HIT" if result.get("_from_cache") else "MISS"
+    return resp
+
+
+@app.route("/liuri_fb", methods=["GET", "OPTIONS"])
+def liuri_feedback_api():
+    """流日应验一键反馈(白名单免鉴权, 用 fb_token 防伪)。
+    参数: year/month/day/hour/sex(命主), date=YYYY-MM-DD(被反馈的日期), v=hit|miss, t=token"""
+    if request.method == "OPTIONS":
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    import datetime as _dt_fb
+    try:
+        year  = int(request.args.get("year"))
+        month = int(request.args.get("month"))
+        day   = int(request.args.get("day"))
+        hour  = int(request.args.get("hour", 12))
+        sex   = request.args.get("sex", "男")
+        dstr  = request.args.get("date", "")
+        value = request.args.get("v", "")
+        token = request.args.get("t", "")
+        _dt_fb.date.fromisoformat(dstr)  # 校验日期格式
+    except (TypeError, ValueError):
+        return jsonify({"error": "参数不完整或格式错误"}), 400
+    from utils.liuri_core import fb_token, record_feedback
+    if token != fb_token(year, month, day, hour, sex, dstr):
+        return jsonify({"error": "token 无效"}), 403
+    ok = record_feedback(year, month, day, hour, sex, dstr, value)
+    if not ok:
+        return jsonify({"error": "反馈记录失败"}), 500
+    mark = "✅ 已记录：昨日提醒应验" if value == "hit" else "❌ 已记录：昨日提醒未应验"
+    html = (f"<html><body style='font-family:Microsoft YaHei;text-align:center;padding:60px 20px'>"
+            f"<h2 style='color:#8a6d2f'>{mark}</h2>"
+            f"<p style='color:#666'>{dstr} · 感谢反馈，这将用于持续校准断语精度</p>"
+            f"<p style='color:#999;font-size:12px'>命理乾坤 mingli-qiankun.com</p></body></html>")
+    resp = app.response_class(html, mimetype="text/html")
+    resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
 
 
@@ -1012,5 +1075,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.65-liuri-v2", "has_liuri": True, "liuri_v2": True, "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.66-liuri-v3", "has_liuri": True, "liuri_v2": True, "liuri_v3": True, "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
