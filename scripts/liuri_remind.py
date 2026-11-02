@@ -125,7 +125,7 @@ def main():
 
     if mode == "monthly":
         r = monthly_analysis(OWNER["year"], OWNER["month"], OWNER["day"], OWNER["hour"],
-                             OWNER["sex"], today.year, today.month)
+                             OWNER["sex"], today)  # v5: 传公历日期, 内部按农历月锚定
         if r.get("error"):
             _log("ERROR: " + r["error"])
             sys.exit(1)
