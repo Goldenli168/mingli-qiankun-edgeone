@@ -6,6 +6,8 @@
 v2: 事件化断语(具体场景+动作) + 总运指数 + 定调金句(headline)
 v3: 命主档案接入(职业/婚姻/子女/关注领域定制场景) + 昨日回顾(peek_daily) + 一键应验反馈(fb_token/record_feedback)
 v4: 开运元素(色/方位/数字, 规则推导零LLM) + 双盘合参(couple参数) + 月度应验统计(fb_stats)
+v5: 流月按农历月锚定(取代公历月) — 农历初一~晦日为分析周期, 农历十五取流月四化;
+    响应附 month_start/month_end 公历区间, 发送时机由调用方按农历初一触发
 """
 import os
 import json
@@ -21,7 +23,7 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v4"
+_LIURI_VER = "v5"
 
 # 六维度: (中文名, iztro宫名en, 本命宫位中文)
 _DIMS = [
@@ -284,6 +286,21 @@ def _scope_ctx(h_item, chart):
     return {"ganzhi": gan + zhi, "gan": gan, "zhi": zhi, "sihua": sihua, "dims": dims}
 
 
+def _lunar_month_range(ref: datetime.date):
+    """公历日期 → 所在农历月 (初一公历日期, 月末公历日期, 农历年, 农历月, 是否闰月)。
+    流月以农历月为准(与 iztro horoscope monthly 口径一致)。"""
+    from lunarcalendar import Converter, Solar
+    l = Converter.Solar2Lunar(Solar(ref.year, ref.month, ref.day))
+    first = ref - datetime.timedelta(days=l.day - 1)
+    d = first + datetime.timedelta(days=28)  # 农历月29或30天, +28必在月内
+    while True:
+        l2 = Converter.Solar2Lunar(Solar(d.year, d.month, d.day))
+        if l2.day == 1:  # 下一个农历月初一
+            break
+        d += datetime.timedelta(days=1)
+    return first, d - datetime.timedelta(days=1), l.year, l.month, l.isleap
+
+
 def _decadal_yearly_ctx(chart, target: datetime.date, birth_year):
     """大限+流年上下文(让流月流日分析有高层框架锚定)"""
     h = chart.horoscope(target.isoformat())
@@ -294,18 +311,18 @@ def _decadal_yearly_ctx(chart, target: datetime.date, birth_year):
     }, h
 
 
-def _day_ganzhi_table(year: int, month: int) -> str:
-    """当月每日干支表(八字法), 供月度分析挑重点日"""
+def _day_ganzhi_table_range(d_start: datetime.date, d_end: datetime.date) -> str:
+    """指定公历区间每日干支表(八字法), 供月度分析挑重点日"""
     from .bazi_core import get_four_pillars
     lines = []
-    d0 = datetime.date(year, month, 1)
-    while d0.month == month:
+    d0 = d_start
+    while d0 <= d_end:
         try:
             fp = get_four_pillars(d0.year, d0.month, d0.day, 12)
             gz = "".join(fp["day"])
         except Exception:
             gz = "?"
-        lines.append(f"{d0.day}日{gz}")
+        lines.append(f"{d0.month}月{d0.day}日{gz}")  # 跨公历月区间须带月份消歧
         d0 += datetime.timedelta(days=1)
     return "、".join(lines)
 
@@ -414,45 +431,49 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
     return result
 
 
-def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, month: int,
+def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetime.date,
                      force_refresh=False, profile=None) -> dict:
-    """流月六维度分析(深度版, 含当月重点日)"""
+    """流月六维度分析(深度版, 含当月重点日)。
+    v5: 按农历月锚定 — ref(公历)落在哪个农历月就分析哪个农历月,
+        周期=农历初一~晦日, 与 daily 的 month_ganzhi(iztro lunar)严格一致。"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
     ph = _profile_hash(profile)
-    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{ph}:{year}-{month:02d}"
+    first, last, lyear, lmonth, isleap = _lunar_month_range(ref)
+    month_label = f"农历{lyear}年{'闰' if isleap else ''}{lmonth}月"
+    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{ph}:{lyear}-{lmonth:02d}{'r' if isleap else ''}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_MONTHLY)
         if hit:
             hit["_from_cache"] = True
             return hit
-    target = datetime.date(year, month, 15)  # 月中取流月四化(整月不变)
+    target = first + datetime.timedelta(days=14)  # 农历十五取流月四化(整月不变)
     try:
         chart = _build_chart(solar_year, solar_month, solar_day, hour, sex)
         frame, h = _decadal_yearly_ctx(chart, target, solar_year)
         mon = _scope_ctx(h.monthly, chart)
     except Exception as e:
         return {"error": f"排盘失败: {str(e)[:150]}"}
-    day_table = _day_ganzhi_table(year, month)
+    day_table = _day_ganzhi_table_range(first, last)
 
     ptext = _profile_text(profile)
     profile_line = f"命主档案: {ptext}\n" if ptext else ""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
 {profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']}
-目标月份: {year}年{month}月 流月{mon['ganzhi']}, 月四化: 化禄{mon['sihua']['禄']} 化权{mon['sihua']['权']} 化科{mon['sihua']['科']} 化忌{mon['sihua']['忌']}
+目标月份: {month_label}（公历{first.isoformat()}至{last.isoformat()}）流月{mon['ganzhi']}, 月四化: 化禄{mon['sihua']['禄']} 化权{mon['sihua']['权']} 化科{mon['sihua']['科']} 化忌{mon['sihua']['忌']}
 
 流月六维度落宫:
 {_dims_text(mon['dims'])}
 
-当月每日流日干支: {day_table}
+本农历月每日流日干支(公历日期): {day_table}
 
-请输出本月六维度分析, 每维度2-3句(60-110字), 并结合每日干支挑出3-5个该维度相关或整体重要的日期, 格式:
+请输出本农历月六维度分析, 每维度2-3句(60-110字), 并结合每日干支挑出3-5个该维度相关或整体重要的日期, 格式:
 【事业】...
 【财运】...
 【健康】...
 【夫妻】...
 【父母】...
 【儿女】...
-【重点日】每行一条: M月D日 具体事项(12字内, 点明做什么, 如"3月8日 宜提交晋升申请")
+【重点日】每行一条: M月D日 具体事项(12字内, 点明做什么; 日期为公历且必须在{first.isoformat()}至{last.isoformat()}范围内, 如"3月8日 宜提交晋升申请")
 【总纲】本月一句话总策略(30字内)
 【指数】本月总运指数(0-100整数, 综合六维度吉凶与月四化引动强弱评分, 只输出数字)
 【定调】本月一句话定调(15字内, 点出本月最强信号, 如"太阴化权, 事业进取月")
@@ -472,7 +493,9 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, m
     m = _re.search(r"\d+", sec.get("指数", ""))
     score = max(0, min(100, int(m.group()))) if m else None
     result = {
-        "mode": "monthly", "month": f"{year}-{month:02d}",
+        "mode": "monthly", "month": month_label,
+        "month_start": first.isoformat(), "month_end": last.isoformat(),
+        "lunar_year": lyear, "lunar_month": lmonth, "is_leap": isleap,
         "month_ganzhi": mon["ganzhi"], "yearly_ganzhi": frame["yearly_ganzhi"],
         "decadal_ganzhi": frame["decadal_ganzhi"], "sihua": mon["sihua"],
         "dims": {d[0]: sec.get(d[0], "") for d in _DIMS},
@@ -480,9 +503,9 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, year: int, m
         "score": score, "headline": sec.get("定调", "")[:20],
         "_ver": _LIURI_VER,
     }
-    # 上月应验统计(有反馈数据才附)
-    py, pm = (year - 1, 12) if month == 1 else (year, month - 1)
-    stats = fb_stats(solar_year, solar_month, solar_day, hour, sex, py, pm)
+    # 上个农历月应验统计(有反馈数据才附; fb_stats 按公历月扫描, 取初一前一天所在公历月)
+    prev_day = first - datetime.timedelta(days=1)
+    stats = fb_stats(solar_year, solar_month, solar_day, hour, sex, prev_day.year, prev_day.month)
     if stats:
         result["fb_stats"] = stats
     if any(result["dims"].values()):
