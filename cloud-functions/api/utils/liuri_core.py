@@ -8,6 +8,9 @@ v3: 命主档案接入(职业/婚姻/子女/关注领域定制场景) + 昨日�
 v4: 开运元素(色/方位/数字, 规则推导零LLM) + 双盘合参(couple参数) + 月度应验统计(fb_stats)
 v5: 流月按农历月锚定(取代公历月) — 农历初一~晦日为分析周期, 农历十五取流月四化;
     响应附 month_start/month_end 公历区间, 发送时机由调用方按农历初一触发
+v6: 反流水账重构 — 主战场制(四化引动最强的1-2维度深写, 其余一行状态灯) + 维度关切清单
+    (事业答拜访/汇报/商机/稳定性, 财运答偏财进账/新机会/正财稳定, 儿女答学业+身体, 夫妻答争吵/特别事件)
+    + 应验观察点(可验证断语) + 信号强度(强/中/弱) + 今日一件事 + 明日预告 + 近30天应验率(fb_stats_30d)
 """
 import os
 import json
@@ -23,7 +26,16 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v5"
+_LIURI_VER = "v6"
+
+# v6: 各维度必须回答的关切问题(命主定制, 断语对着问题答, 不对着宫位空写)
+_DIM_FOCUS = """各维度断语必须回答命主的具体关切(主战场深答, 其他维度简答):
+- 事业: 今日是否适合外出拜访客户或供应商 / 领导汇报沟通 / 开发新商机; 工作稳定性有无变动信号
+- 财运: 兼职或偏财是否有进账、有无新机会; 正财(工资主业收入)是否稳定
+- 儿女: 学业情况、身体情况(身体只用"注意/关注"句式)
+- 夫妻: 是否易争吵、有无特别事件(共同决策/家庭大额支出/惊喜)
+- 健康: 作息/应酬/体检提醒
+- 父母: 长辈健康与沟通(只用"注意/关注"句式)"""
 
 # 六维度: (中文名, iztro宫名en, 本命宫位中文)
 _DIMS = [
@@ -181,6 +193,35 @@ def fb_stats(solar_year, solar_month, solar_day, hour, sex, year: int, month: in
             return None
         return {"month": f"{year}-{month:02d}", "hit": hit, "miss": miss,
                 "total": total, "rate": round(hit * 100 / total)}
+    except Exception:
+        return None
+
+
+def fb_stats_30d(solar_year, solar_month, solar_day, hour, sex, ref: datetime.date) -> dict:
+    """近30天滚动应验率(每日邮件页脚展示可信度), 无数据返回 None"""
+    if not os.path.exists(_FB_FILE):
+        return None
+    try:
+        with open(_FB_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        ck = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
+        entries = raw.get(ck, {})
+        cutoff = ref - datetime.timedelta(days=30)
+        hit = miss = 0
+        for dstr, v in entries.items():
+            try:
+                d = datetime.date.fromisoformat(dstr)
+            except ValueError:
+                continue
+            if cutoff <= d <= ref:
+                if v.get("v") == "hit":
+                    hit += 1
+                elif v.get("v") == "miss":
+                    miss += 1
+        total = hit + miss
+        if total == 0:
+            return None
+        return {"days": 30, "hit": hit, "miss": miss, "total": total, "rate": round(hit * 100 / total)}
     except Exception:
         return None
 
@@ -385,29 +426,74 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
 
     ptext = _profile_text(profile)
     profile_line = f"命主档案: {ptext}\n" if ptext else ""
+    # 明日干支+四化(明日预告用, 本地计算零LLM)
+    try:
+        h_tmr = chart.horoscope((target + datetime.timedelta(days=1)).isoformat())
+        tmr = _scope_ctx(h_tmr.daily, chart)
+        tmr_line = f"明日{tmr['ganzhi']}日, 四化: 化禄{tmr['sihua']['禄']} 化权{tmr['sihua']['权']} 化科{tmr['sihua']['科']} 化忌{tmr['sihua']['忌']}"
+    except Exception:
+        tmr_line = ""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
 {profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']} | 流月{mon['ganzhi']}
 目标日期: {target.isoformat()} 流日{day['ganzhi']}, 日四化: 化禄{day['sihua']['禄']} 化权{day['sihua']['权']} 化科{day['sihua']['科']} 化忌{day['sihua']['忌']}
+{tmr_line}
 
 流日六维度落宫:
 {_dims_text(day['dims'])}
 
-请输出当日六维度提醒, 每维度1-2句(35-65字), 格式:
-【事业】...
-【财运】...
-【健康】...
-【夫妻】...
-【父母】...
-【儿女】...
+{_DIM_FOCUS}
+
+请按以下结构输出(主战场深写, 其余从简, 禁止六维度平均用力凑字):
+【主战场】选出当日四化引动最强的1-2个维度(化禄/化权/化科/化忌落入或冲照该宫者优先), 每个维度严格三行:
+◆维度名|X    (X只写强/中/弱其中一个字: 强=四化直接引动, 中=星曜组合明显, 弱=借宫或间接; 示例: ◆事业|强)
+第二行写断语80-120字, 必须回答该维度关切问题, 落到具体场景+明确动作
+第三行写 应验观察点: 当天可观察到的具体事件(用于验证此条是否应验, 如"对方给出明确付款时间")
+【其他维度】未入选的维度每维度一行: 维度名 状态(🟢平稳/🟡留意/🔴重点) 10字内提示
+【今日一件事】全天最该做的一件事(20字内, 具体到动作)
 【宜】3件当日适宜做的具体事(用、分隔)
 【忌】3件当日应回避的具体事(用、分隔)
-【指数】当日总运指数(0-100整数, 综合六维度吉凶与四化引动强弱评分, 只输出数字)
-【定调】当日一句话定调(15字内, 点出当日最强信号与核心策略, 如"财星化禄, 宜谈薪签约")
-{_STYLE_RULES}"""
-    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1000, skip_cache=force_refresh)
+【指数】当日总运指数(0-100整数, 只输出数字)
+【定调】当日一句话定调(15字内)
+【明日预告】结合明日干支四化, 一句话(25字内, 点明明日与今日的最大差异及宜忌转向)
+{_STYLE_RULES}
+7. 应验观察点必须是当天可观察的具体事件, 禁止"心情好/感觉顺"式主观描述"""
+    content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1700, skip_cache=force_refresh)
     if not content:
         return {"error": "LLM 生成失败"}
-    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["宜", "忌", "指数", "定调"])
+    sec = _parse_sections(content, ["主战场", "其他维度", "今日一件事", "宜", "忌", "指数", "定调", "明日预告"])
+    dim_names = [d[0] for d in _DIMS]
+    # 主战场结构化(容错: ◆维度|强度(强=...) / 应验观察点可与断语同行)
+    import re as _re
+    main_dims = []
+    for chunk in sec.get("主战场", "").split("◆"):
+        lines = [l.strip() for l in chunk.strip().splitlines() if l.strip()]
+        if not lines:
+            continue
+        head = lines[0]
+        name = _re.split(r"[|｜(（]", head)[0].strip()
+        if name not in dim_names:
+            continue
+        ms = _re.search(r"[强中弱]", head)
+        strength = ms.group() if ms else "中"
+        rest = "\n".join(lines[1:])
+        verify = ""
+        if "应验观察点" in rest:
+            body, _, verify = rest.partition("应验观察点")
+            verify = verify.lstrip(":： ").strip()
+        else:
+            body = rest
+        main_dims.append({"name": name, "strength": strength,
+                          "text": body.strip()[:160], "verify": verify[:60]})
+    main_dims = main_dims[:2]
+    if not main_dims:
+        return {"error": "LLM 输出格式异常(主战场缺失), 请重试"}
+    # 其他维度: "健康 🟢平稳 应酬少饮酒"
+    other_dims = []
+    for l in sec.get("其他维度", "").splitlines():
+        parts = l.strip().lstrip("-· ").split(None, 2)
+        if len(parts) >= 2 and parts[0] in dim_names and parts[0] not in {m["name"] for m in main_dims}:
+            other_dims.append({"name": parts[0], "light": parts[1],
+                               "hint": parts[2] if len(parts) > 2 else ""})
     import re as _re
     m = _re.search(r"\d+", sec.get("指数", ""))
     score = max(0, min(100, int(m.group()))) if m else None
@@ -416,13 +502,21 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
         "day_ganzhi": day["ganzhi"], "month_ganzhi": mon["ganzhi"],
         "yearly_ganzhi": frame["yearly_ganzhi"], "decadal_ganzhi": frame["decadal_ganzhi"],
         "sihua": day["sihua"],
-        "dims": {d[0]: sec.get(d[0], "") for d in _DIMS},
+        "main_dims": main_dims, "other_dims": other_dims,
+        "one_action": sec.get("今日一件事", "")[:30],
+        "tomorrow_preview": sec.get("明日预告", "")[:60],
+        # dims 向后兼容: 主战场=深写断语, 其他=简提示(问答自动化/巡检依赖此字段)
+        "dims": {d[0]: next((x["text"] for x in main_dims if x["name"] == d[0]),
+                            next((x["hint"] for x in other_dims if x["name"] == d[0]), "")) for d in _DIMS},
         "yi": [x for x in sec.get("宜", "").replace("，", "、").split("、") if x][:3],
         "ji": [x for x in sec.get("忌", "").replace("，", "、").split("、") if x][:3],
         "score": score, "headline": sec.get("定调", "")[:20],
         "lucky": lucky_elements(day["gan"]),
         "_ver": _LIURI_VER,
     }
+    fb30 = fb_stats_30d(solar_year, solar_month, solar_day, hour, sex, target)
+    if fb30:
+        result["fb_30d"] = fb30
     if couple:
         main_params = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
         result["couple"] = couple_analysis(main_params, couple, target, day)
@@ -466,7 +560,9 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetim
 
 本农历月每日流日干支(公历日期): {day_table}
 
-请输出本农历月六维度分析, 每维度2-3句(60-110字), 并结合每日干支挑出3-5个该维度相关或整体重要的日期, 格式:
+{_DIM_FOCUS}
+
+请输出本农历月六维度分析, 每维度2-3句(60-110字), 每维度必须覆盖该维度关切问题(如事业要点明本月适合拜访/汇报/拓商机的时段与稳定性走向, 财运要分述偏财兼职与正财), 并结合每日干支挑出3-5个该维度相关或整体重要的日期, 格式:
 【事业】...
 【财运】...
 【健康】...
