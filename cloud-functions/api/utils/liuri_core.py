@@ -11,6 +11,8 @@ v5: 流月按农历月锚定(取代公历月) — 农历初一~晦日为分析�
 v6: 反流水账重构 — 主战场制(四化引动最强的1-2维度深写, 其余一行状态灯) + 维度关切清单
     (事业答拜访/汇报/商机/稳定性, 财运答偏财进账/新机会/正财稳定, 儿女答学业+身体, 夫妻答争吵/特别事件)
     + 应验观察点(可验证断语) + 信号强度(强/中/弱) + 今日一件事 + 明日预告 + 近30天应验率(fb_stats_30d)
+v7: 长期事项跟踪(tracks参数) — 每日仅报新增信号, 每月给四条主线的日期窗口/行动/观察点;
+    健康出行增加迁移宫依据, 无明确信号必须直说, 禁止硬编窗口
 """
 import os
 import json
@@ -26,7 +28,16 @@ def _gan_zhi(stem_en, branch_en) -> str:
     from .ziwei_core import _parse_stem, _parse_branch
     return GAN[_parse_stem(str(stem_en))] + ZHI[_parse_branch(str(branch_en))]
 
-_LIURI_VER = "v6"
+_LIURI_VER = "v7"
+
+# v7: 可订阅的长期事项主线。每日只报新增信号, 月度给窗口, 无依据不得硬写。
+_TRACK_DEFS = {
+    "事业突破": "升职、权责扩大、关键项目、高质量新商机或新岗位机会; 回答何时出现、如何主动承接",
+    "事业风险": "组织调整、领导关系、合同合规、供应商风波等影响工作稳定性的信号; 回答何时需防守",
+    "健康出行": "命主本人身体负荷、应酬作息、差旅与出行安全; 只作提醒, 严禁断病或断言事故",
+    "偏财副业": "咨询兼职、有偿服务、偏财新机会与回款; 必须与主业正财分开判断",
+}
+_TRACK_EXTRA_DIMS = [("出行", "travelPalace", "迁移")]
 
 # v6: 各维度必须回答的关切问题(命主定制, 断语对着问题答, 不对着宫位空写)
 _DIM_FOCUS = """各维度断语必须回答命主的具体关切(主战场深答, 其他维度简答):
@@ -232,6 +243,17 @@ def _couple_hash(couple) -> str:
     return hashlib.md5(",".join(map(str, couple)).encode()).hexdigest()[:8]
 
 
+def _tracks_hash(tracks) -> str:
+    if not tracks:
+        return ""
+    raw = "|".join(x for x in tracks if x in _TRACK_DEFS)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8] if raw else ""
+
+
+def _tracks_text(tracks) -> str:
+    return "\n".join(f"- {x}: {_TRACK_DEFS[x]}" for x in (tracks or []) if x in _TRACK_DEFS)
+
+
 def couple_analysis(main_params, couple_params, target: datetime.date, main_day_ctx: dict) -> str:
     """双盘合参: 双方当日信号交叉 → 一段互动提示(40-70字)。失败返回空串(不拖垮主流程)"""
     try:
@@ -305,7 +327,7 @@ def _scope_ctx(h_item, chart):
     palaces = list(chart.palaces)
     pnames = list(h_item.palace_names or [])
     dims = {}
-    for cn_name, en_name, natal_cn in _DIMS:
+    for cn_name, en_name, natal_cn in _DIMS + _TRACK_EXTRA_DIMS:
         dim = {"host_branch": "", "host_ganzhi": "", "natal_palace": natal_cn,
                "major": [], "minor": [], "sihua_hits": []}
         try:
@@ -404,13 +426,78 @@ def _parse_sections(text: str, keys) -> dict:
     return out
 
 
+def _track_evidence_text(scope: dict) -> str:
+    """事项跟踪专用补充依据: 出行必须看迁移宫, 不仅凭疾厄宫推测。"""
+    d = scope.get("dims", {}).get("出行", {})
+    stars = "、".join(d.get("major", []) or ["无正曜"])
+    minor = "、".join(d.get("minor", [])[:4])
+    hits = "、".join(d.get("sihua_hits", [])) or "无"
+    return f"出行(迁移宫): 落于本命{d.get('host_ganzhi', '?')}宫 | 主星: {stars} | 辅星: {minor or '无'} | 四化引动: {hits}"
+
+
+def _track_raw(content: str, sec: dict) -> str:
+    """LLM 偶尔漏写【事项跟踪】标题: 从首个 ◆ 到下一【段标】兜底截取。"""
+    import re
+    raw = sec.get("事项跟踪", "")
+    if raw or "◆" not in (content or ""):
+        return raw
+    tail = content[content.index("◆"):]
+    m = re.search(r"\n【[^】]+】", tail)
+    return tail[:m.start()] if m else tail
+
+
+def _parse_track_entries(raw: str, allowed, daily=False) -> list:
+    """解析 ◆事项|强度(|类型) + 正文 + 观察点; 容错同行与全角分隔符。"""
+    import re
+    entries = []
+    for chunk in (raw or "").split("◆"):
+        lines = [l.strip() for l in chunk.strip().splitlines() if l.strip()]
+        if not lines:
+            continue
+        parts = re.split(r"[|｜]", lines[0])
+        name = parts[0].strip()
+        if name not in allowed:
+            continue
+        ms = re.search(r"[强中弱]", lines[0])
+        strength = ms.group() if ms else "中"
+        kind = ""
+        if daily and len(parts) >= 3:
+            kind = re.sub(r"[^机会风险提醒]", "", parts[2])[:2] or "提醒"
+        rest = "\n".join(lines[1:])
+        verify = ""
+        if "观察点" in rest:
+            body, _, verify = rest.partition("观察点")
+            verify = verify.lstrip(":： ").strip()
+        else:
+            body = rest
+        window = ""
+        body_lines = []
+        for line in body.strip().splitlines():
+            if not daily and line.startswith("窗口"):
+                window = line.partition(":")[2] or line.partition("：")[2]
+                window = window.strip()
+            else:
+                body_lines.append(line)
+        text = " ".join(body_lines).strip()
+        if not text:
+            continue
+        item = {"name": name, "strength": strength, "text": text[:180], "verify": verify[:70]}
+        if daily:
+            item["kind"] = kind
+        else:
+            item["window"] = window[:40]
+        entries.append(item)
+    return entries
+
+
 def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: datetime.date,
-                   force_refresh=False, profile=None, couple=None) -> dict:
+                   force_refresh=False, profile=None, couple=None, tracks=None) -> dict:
     """流日六维度分析(轻量版)。couple=(年,月,日,时,性别) 时附双盘合参段"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
     ph = _profile_hash(profile)
     ch = _couple_hash(couple)
-    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{ph}:{ch}:{target.isoformat()}"
+    th = _tracks_hash(tracks)
+    rkey = f"liuri-{_LIURI_VER}:{chart_key}:{ph}:{ch}:{th}:{target.isoformat()}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_DAILY)
         if hit:
@@ -433,9 +520,24 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
         tmr_line = f"明日{tmr['ganzhi']}日, 四化: 化禄{tmr['sihua']['禄']} 化权{tmr['sihua']['权']} 化科{tmr['sihua']['科']} 化忌{tmr['sihua']['忌']}"
     except Exception:
         tmr_line = ""
+    yearly = _scope_ctx(h.yearly, chart)
+    yearly_line = f"流年四化: 化禄{yearly['sihua']['禄']} 化权{yearly['sihua']['权']} 化科{yearly['sihua']['科']} 化忌{yearly['sihua']['忌']}"
+    track_prompt = ""
+    if tracks:
+        track_prompt = f"""
+长期跟踪事项(只回答以下主线):
+{_tracks_text(tracks)}
+事项跟踪补充依据: {_track_evidence_text(day)}
+
+【事项跟踪】只列当日有明确新增信号的1-2条, 且须能由流年/流月/流日四化或对应宫位直接支撑; 无则只写"无新增信号", 禁止每天硬凑。每条严格三行:
+◆事项名|强/中/弱|机会/风险/提醒
+第二行40-70字: 今日对这条主线的具体判断与动作, 不得把趋势说成必然事件
+第三行写 观察点: 当天可核对的客观事件
+"""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
 {profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']} | 流月{mon['ganzhi']}
 目标日期: {target.isoformat()} 流日{day['ganzhi']}, 日四化: 化禄{day['sihua']['禄']} 化权{day['sihua']['权']} 化科{day['sihua']['科']} 化忌{day['sihua']['忌']}
+{yearly_line}
 {tmr_line}
 
 流日六维度落宫:
@@ -450,6 +552,7 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
 第三行写 应验观察点: 当天可观察到的具体事件(用于验证此条是否应验, 如"对方给出明确付款时间")
 【其他维度】未入选的维度每维度一行: 维度名 状态(🟢平稳/🟡留意/🔴重点) 10字内提示
 【今日一件事】全天最该做的一件事(20字内, 具体到动作)
+{track_prompt}【宜】3件当日适宜做的具体事(用、分隔)
 【宜】3件当日适宜做的具体事(用、分隔)
 【忌】3件当日应回避的具体事(用、分隔)
 【指数】当日总运指数(0-100整数, 只输出数字)
@@ -460,7 +563,7 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
     content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1700, skip_cache=force_refresh)
     if not content:
         return {"error": "LLM 生成失败"}
-    sec = _parse_sections(content, ["主战场", "其他维度", "今日一件事", "宜", "忌", "指数", "定调", "明日预告"])
+    sec = _parse_sections(content, ["主战场", "其他维度", "今日一件事", "事项跟踪", "宜", "忌", "指数", "定调", "明日预告"])
     dim_names = [d[0] for d in _DIMS]
     # 主战场结构化(容错: ◆维度|强度(强=...) / 应验观察点可与断语同行)
     import re as _re
@@ -517,6 +620,8 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
     fb30 = fb_stats_30d(solar_year, solar_month, solar_day, hour, sex, target)
     if fb30:
         result["fb_30d"] = fb30
+    if tracks:
+        result["track_updates"] = _parse_track_entries(_track_raw(content, sec), tracks, daily=True)[:2]
     if couple:
         main_params = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
         result["couple"] = couple_analysis(main_params, couple, target, day)
@@ -526,15 +631,16 @@ def daily_analysis(solar_year, solar_month, solar_day, hour, sex, target: dateti
 
 
 def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetime.date,
-                     force_refresh=False, profile=None) -> dict:
+                     force_refresh=False, profile=None, tracks=None) -> dict:
     """流月六维度分析(深度版, 含当月重点日)。
     v5: 按农历月锚定 — ref(公历)落在哪个农历月就分析哪个农历月,
         周期=农历初一~晦日, 与 daily 的 month_ganzhi(iztro lunar)严格一致。"""
     chart_key = f"{solar_year}:{solar_month}:{solar_day}:{hour}:{sex}"
     ph = _profile_hash(profile)
+    th = _tracks_hash(tracks)
     first, last, lyear, lmonth, isleap = _lunar_month_range(ref)
     month_label = f"农历{lyear}年{'闰' if isleap else ''}{lmonth}月"
-    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{ph}:{lyear}-{lmonth:02d}{'r' if isleap else ''}"
+    rkey = f"liuyue-{_LIURI_VER}:{chart_key}:{ph}:{th}:{lyear}-{lmonth:02d}{'r' if isleap else ''}"
     if not force_refresh:
         hit = _get_liuri_cache(rkey, _LIURI_TTL_MONTHLY)
         if hit:
@@ -551,9 +657,26 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetim
 
     ptext = _profile_text(profile)
     profile_line = f"命主档案: {ptext}\n" if ptext else ""
+    yearly = _scope_ctx(h.yearly, chart)
+    yearly_line = f"流年四化: 化禄{yearly['sihua']['禄']} 化权{yearly['sihua']['权']} 化科{yearly['sihua']['科']} 化忌{yearly['sihua']['忌']}"
+    track_prompt = ""
+    if tracks:
+        track_prompt = f"""
+长期跟踪事项(必须逐条回应):
+{_tracks_text(tracks)}
+事项跟踪补充依据: {_track_evidence_text(mon)}
+
+【事项跟踪】四条主线全部输出, 每条严格四行:
+◆事项名|强/中/弱
+窗口: 本农历月内的公历具体日期或区间; 没有明确信号就写"本月无清晰窗口", 禁止硬编日期
+判断与行动: 50-90字, 说明是机会还是风险、该主动做什么或防什么; 日期必须能在本农历月每日干支表中找到
+日期规则: 优先列1-3个具体公历日期; 跨多日区间不得把某一天的四化套用整个区间, 无连续依据就拆成具体日期
+观察点: 本月可核对的客观事件
+"""
     prompt = f"""你是紫微斗数分析师。命主{sex}, {solar_year}年生, 当前虚岁{frame['nominal_age']}。
 {profile_line}当前框架: 大限{frame['decadal_ganzhi']} | 流年{frame['yearly_ganzhi']}
 目标月份: {month_label}（公历{first.isoformat()}至{last.isoformat()}）流月{mon['ganzhi']}, 月四化: 化禄{mon['sihua']['禄']} 化权{mon['sihua']['权']} 化科{mon['sihua']['科']} 化忌{mon['sihua']['忌']}
+{yearly_line}
 
 流月六维度落宫:
 {_dims_text(mon['dims'])}
@@ -569,7 +692,7 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetim
 【夫妻】...
 【父母】...
 【儿女】...
-【重点日】每行一条: M月D日 具体事项(12字内, 点明做什么; 日期为公历且必须在{first.isoformat()}至{last.isoformat()}范围内, 如"3月8日 宜提交晋升申请")
+{track_prompt}【重点日】每行一条: M月D日 具体事项(12字内, 点明做什么; 日期为公历且必须在{first.isoformat()}至{last.isoformat()}范围内, 如"3月8日 宜提交晋升申请")
 【总纲】本月一句话总策略(30字内)
 【指数】本月总运指数(0-100整数, 综合六维度吉凶与月四化引动强弱评分, 只输出数字)
 【定调】本月一句话定调(15字内, 点出本月最强信号, 如"太阴化权, 事业进取月")
@@ -577,7 +700,7 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetim
     content = llm_call(prompt, cache_key=f"llm:{rkey}", max_tokens=1700, skip_cache=force_refresh)
     if not content:
         return {"error": "LLM 生成失败"}
-    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["重点日", "总纲", "指数", "定调"])
+    sec = _parse_sections(content, [d[0] for d in _DIMS] + ["事项跟踪", "重点日", "总纲", "指数", "定调"])
     key_days = []
     for ln in sec.get("重点日", "").splitlines():
         for item in ln.replace(";", "；").split("；"):
@@ -604,6 +727,8 @@ def monthly_analysis(solar_year, solar_month, solar_day, hour, sex, ref: datetim
     stats = fb_stats(solar_year, solar_month, solar_day, hour, sex, prev_day.year, prev_day.month)
     if stats:
         result["fb_stats"] = stats
+    if tracks:
+        result["track_outlook"] = _parse_track_entries(_track_raw(content, sec), tracks, daily=False)
     if any(result["dims"].values()):
         _save_liuri_cache(rkey, result)
     return result
