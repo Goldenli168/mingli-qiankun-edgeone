@@ -541,6 +541,14 @@ def liuri_api():
             if k and v:
                 profile[k] = v[:30]
         profile = profile or None
+    # P96-v7: 长期事项跟踪(白名单, 逗号/竖线分隔)
+    tracks = None
+    traw = request.args.get("tracks", "").strip()
+    if traw:
+        import re as _re_tracks
+        allowed_tracks = {"事业突破", "事业风险", "健康出行", "偏财副业"}
+        tracks = list(dict.fromkeys(x.strip() for x in _re_tracks.split(r"[,，|；;]", traw)
+                                    if x.strip() in allowed_tracks)) or None
     # P93-v4: 双盘合参(伴侣命盘, 格式: 年,月,日,时,性别 如 1987,7,17,6,女)
     couple = None
     craw = request.args.get("couple", "").strip()
@@ -557,12 +565,12 @@ def liuri_api():
             dstr_m = request.args.get("date")
             ref = _dt_lr.date.fromisoformat(dstr_m) if dstr_m else _dt_lr.date.today()
             result = monthly_analysis(year, month, day, hour, sex, ref,
-                                      force_refresh=refresh, profile=profile)
+                                      force_refresh=refresh, profile=profile, tracks=tracks)
         else:
             dstr = request.args.get("date")
             target = _dt_lr.date.fromisoformat(dstr) if dstr else _dt_lr.date.today()
             result = daily_analysis(year, month, day, hour, sex, target,
-                                    force_refresh=refresh, profile=profile, couple=couple)
+                                    force_refresh=refresh, profile=profile, couple=couple, tracks=tracks)
             # 昨日回顾 + 一键反馈 token(只对 daily 有意义)
             if not result.get("error"):
                 yd = target - _dt_lr.timedelta(days=1)
@@ -1086,5 +1094,5 @@ def health():
             network_test["google"] = f"ok ({_time.time()-start:.1f}s)"
     except Exception as e:
         network_test["google"] = f"fail ({str(e)[:50]})"
-    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.69-liuri-v6", "has_liuri": True, "liuri_v2": True, "liuri_v3": True, "liuri_v4": True, "liuri_v5": True, "liuri_v6": True, "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
+    return jsonify({"status": "ok", "service": "命理乾坤 API", "version": "v9.70-liuri-v7", "has_liuri": True, "liuri_v2": True, "liuri_v3": True, "liuri_v4": True, "liuri_v5": True, "liuri_v6": True, "liuri_v7": True, "has_light_chart": True, "verify_cache_v53": True, "family_cache_v4": True, "has_family": True, "has_spouse": True, "spouse_cache_v3": True, "has_bazi_cache": True, "bazi_single_flight": True,"has_split_parser": True, "has_palace_sihua": True, "has_liunian_md_parser": True, "has_miaowang": True, "has_pattern_activation": True, "has_cexiang": True, "has_changsheng": True, "has_feihua_chain": True, "has_laiyin_narrative": True, "has_ziwei_llm": True, "has_cache": True, "cache_v19": True, "has_verify": True, "has_verify_feedback": True, "llm_cache_v33": True, "llm_debug": _last_llm_debug, "network_test": network_test})
 # REBUILD_FORCE: 2026-07-27 18:55 CST — v8.35 飞化串联+来因宫叙事
