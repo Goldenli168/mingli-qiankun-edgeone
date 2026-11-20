@@ -334,7 +334,8 @@
       <div class="form-group">
         <label>出生时辰</label>
         <select id="hour">
-          <option value="0">子时 (23-01点)</option>
+          <option value="23">晚子时 (23-00点)</option>
+          <option value="0">早子时 (00-01点)</option>
           <option value="1">丑时 (01-03点)</option>
           <option value="3">寅时 (03-05点)</option>
           <option value="5">卯时 (05-07点)</option>
@@ -468,7 +469,7 @@ var _profileKey = 'noprof';
 
 // 页面加载时恢复上次分析结果（切页不回空白）
 // 缓存版本：评分维度从4维升级到5维时必须清除旧缓存
-var ZIWEI_CACHE_VERSION = 'v7.3';
+var ZIWEI_CACHE_VERSION = 'v7.4-late-zi';
 (function restoreResult() {
   try {
     var ver = localStorage.getItem('mingli_ziwei_ver');
@@ -485,7 +486,7 @@ var ZIWEI_CACHE_VERSION = 'v7.3';
     if (cached.year) document.getElementById('year').value = cached.year;
     if (cached.month) document.getElementById('month').value = cached.month;
     if (cached.day) document.getElementById('day').value = cached.day;
-    if (cached.hour) document.getElementById('hour').value = cached.hour;
+    if (cached.hour !== undefined && cached.hour !== null) document.getElementById('hour').value = cached.hour;
     if (cached.sex) {
       currentSex = cached.sex;
       document.querySelectorAll('.sex-btn').forEach(function(b) {
@@ -542,7 +543,8 @@ function timeLabel(h, m) {
   var idx = (hh === 23) ? 0 : Math.floor((hh + 1) / 2);
   if (idx < 0 || idx > 11) idx = 0;
   var minStr = m ? ':' + String(m).padStart(2,'0') : ':00';
-  return labels[idx] + ' ' + h + minStr + ranges[idx];
+  var label = hh === 23 ? '晚子时' : (hh === 0 ? '早子时' : labels[idx]);
+  return label + ' ' + h + minStr + ranges[idx];
 }
 
 function useSyncedBirth() {
@@ -553,7 +555,8 @@ function useSyncedBirth() {
   // 将精确小时映射到十二时辰值（八字页真太阳时可能产出精确小时）
   var rawHour = _syncedBirth.hour;
   var shichen = rawHour;
-  if (rawHour === 23 || rawHour === 0) shichen = 0;
+  if (rawHour === 23) shichen = 23;
+  else if (rawHour === 0) shichen = 0;
   else if (rawHour % 2 === 0) shichen = rawHour - 1;
   document.getElementById('hour').value = shichen;
   currentSex = _syncedBirth.sex || '男';
