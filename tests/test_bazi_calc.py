@@ -1,8 +1,9 @@
 """
 测试：八字四柱计算 + 大运排盘
 """
-from utils.bazi_core import get_four_pillars, calc_dayun, full_analysis
+from utils.bazi_core import get_four_pillars, calc_dayun, full_analysis, day_pillar
 from utils.bazi_data import GAN, ZHI, SHISHEN
+from utils.ziwei_core import _hour_to_time_index
 
 
 class TestFourPillars:
@@ -38,6 +39,36 @@ class TestFourPillars:
         for m in range(1, 13):
             result = get_four_pillars(2000, m, 15, 12)
             assert result["month"][0] in GAN
+
+
+class TestZiHourBoundary:
+    """早晚子时与分钟边界"""
+
+    def test_late_zi_uses_next_day(self):
+        early = get_four_pillars(2000, 1, 1, 0)
+        late = get_four_pillars(2000, 1, 1, 23)
+        assert early["day"] == day_pillar(2000, 1, 1)
+        assert late["day"] == day_pillar(2000, 1, 2)
+        assert late["day"] != early["day"]
+        assert late["hour"][1] == "子"
+
+    def test_minute_is_not_rounded_into_next_shichen(self):
+        result = get_four_pillars(2000, 1, 1, 22, minute=30)
+        assert result["day"] == day_pillar(2000, 1, 1)
+        assert result["hour"][1] == "亥"
+
+    def test_iztro_late_zi_index(self):
+        assert _hour_to_time_index(23) == 12
+        assert _hour_to_time_index(0) == 0
+        assert _hour_to_time_index(1) == 1
+        assert _hour_to_time_index(22) == 11
+
+    def test_iztro_late_zi_label(self):
+        from iztro_py import astro
+        late = astro.by_solar("2000-01-01", _hour_to_time_index(23), "男", True, "zh-CN")
+        early = astro.by_solar("2000-01-01", _hour_to_time_index(0), "男", True, "zh-CN")
+        assert str(late.time) == "晚子时"
+        assert str(early.time) == "早子时"
 
 
 class TestDayun:
