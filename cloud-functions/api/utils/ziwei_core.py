@@ -27,9 +27,11 @@ def _get_miaowang_coeff(star_name, zhi_name):
 
 # ---- 工具函数 ----
 def _hour_to_time_index(hour):
-    """将24小时制转为iztro的时辰索引(0-12)"""
-    if hour >= 23 or hour < 1:
-        return 0   # 子时
+    """将24小时制转为iztro时辰索引：23点晚子时=12，0点早子时=0"""
+    if hour >= 23:
+        return 12  # 晚子时
+    elif hour < 1:
+        return 0   # 早子时
     elif hour < 3:
         return 1   # 丑时
     elif hour < 5:
