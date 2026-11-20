@@ -402,12 +402,13 @@ def get_four_pillars(year, month, day, hour, birthplace="", minute=0):
     lon, lat = lookup_coords(birthplace)
     true_hour, true_minute, crossed_day, day_offset = adjust_to_solar_time(hour, minute, lon, year, month, day)
 
-    # 如果跨日，调整日期
+    # 真太阳时跨日或晚子时(23:00-23:59)都按次日排四柱
     actual_year, actual_month, actual_day = year, month, day
-    if day_offset != 0:
+    late_zi = true_hour >= 23
+    if day_offset != 0 or late_zi:
         try:
             orig_date = datetime.date(year, month, day)
-            adjusted_date = orig_date + datetime.timedelta(days=day_offset)
+            adjusted_date = orig_date + datetime.timedelta(days=day_offset + (1 if late_zi else 0))
             actual_year = adjusted_date.year
             actual_month = adjusted_date.month
             actual_day = adjusted_date.day
@@ -417,7 +418,7 @@ def get_four_pillars(year, month, day, hour, birthplace="", minute=0):
     y = year_pillar(actual_year, actual_month, actual_day)
     m = month_pillar(y[0], actual_month, actual_day, actual_year)
     d = day_pillar(actual_year, actual_month, actual_day)
-    h = hour_pillar(d[0], int(round(true_hour)))
+    h = hour_pillar(d[0], int(true_hour))
 
     result = {"year": y, "month": m, "day": d, "hour": h}
 
@@ -428,7 +429,9 @@ def get_four_pillars(year, month, day, hour, birthplace="", minute=0):
             "北京时间": f"{hour}:00",
             "真太阳时": f"{int(true_hour):02d}:{int(round((true_hour % 1) * 60)):02d}",
             "时差分钟": round((lon - 120) * 4, 1),
-            "是否跨日": crossed_day
+            "是否跨日": crossed_day or late_zi,
+            "晚子时": late_zi,
+            "日偏移": day_offset + (1 if late_zi else 0)
         }
 
     return result
@@ -2226,11 +2229,10 @@ def full_analysis(year, month, day, hour, sex, birthplace="", minute=0, force_re
     fp = get_four_pillars(year, month, day, hour, birthplace, minute)
     # 提取真太阳时校正后的实际日期（可能因跨日而不同）
     solar_info = fp.pop("_solar_info", None)
-    actual_year = year
-    actual_month = month
-    actual_day = day
-    # 若有跨日调整，从四柱中日柱的排定逆推实际日期
-    # 简化处理：直接使用原始日期即可（大运起运以节气距出生日计算，误差极小可忽略）
+    day_delta = (solar_info or {}).get("日偏移", 1 if hour >= 23 else 0)
+    effective_date = datetime.date(year, month, day) + datetime.timedelta(days=day_delta)
+    actual_year, actual_month, actual_day = effective_date.year, effective_date.month, effective_date.day
+    # 大运起运与四柱使用同一有效日期，避免晚子时日柱已跨日而起运仍停在原日
     fp2 = {k: list(v) for k, v in fp.items()}
     bz = analyze_bazi(fp, sex)
     qi, dl = calc_dayun(sex, fp["year"][0], tuple(fp["month"]), actual_year, actual_month, actual_day)
